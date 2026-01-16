@@ -1,0 +1,141 @@
+/* Accessibility Styles */
+
+/* High Contrast Mode */
+.high-contrast {
+  --text-primary: #000000;
+  --text-secondary: #333333;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --border-color: #000000;
+  --link-color: #0000ff;
+  --link-hover: #0000cc;
+}
+
+.high-contrast * {
+  border-color: var(--border-color) !important;
+}
+
+.high-contrast a {
+  color: var(--link-color) !important;
+  text-decoration: underline !important;
+}
+
+.high-contrast a:hover {
+  color: var(--link-hover) !important;
+}
+
+/* Reduced Motion */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Color Blind Modes */
+[data-colorblind="protanopia"] {
+  filter: url('#protanopia-filter');
+}
+
+[data-colorblind="deuteranopia"] {
+  filter: url('#deuteranopia-filter');
+}
+
+[data-colorblind="tritanopia"] {
+  filter: url('#tritanopia-filter');
+}
+
+/* Focus Indicators */
+*:focus {
+  outline: 3px solid #4F46E5;
+  outline-offset: 2px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 3px solid #4F46E5;
+  outline-offset: 2px;
+}
+
+/* Screen Reader Only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only.focus-within\:not-sr-only:focus-within {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Keyboard Navigation Helpers */
+[tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* Skip Link Styles */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #4F46E5;
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Animation for accessibility toolbar */
+@keyframes slide-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in-up {
+  animation: slide-in-up 0.3s ease-out;
+}
+
+/* Ensure readable text at different font sizes */
+@media (min-width: 640px) {
+  html[style*="font-size: 75%"] {
+    font-size: 75% !important;
+  }
+  html[style*="font-size: 150%"] {
+    font-size: 150% !important;
+  }
+}
+
+/* Color Blind SVG Filters */
+svg.colorblind-filters {
+  position: absolute;
+  width: 0;
+  height: 0;
+}

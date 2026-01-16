@@ -1,0 +1,16 @@
+src/app/payment/[id]/page.tsx(17,48): error TS2339: Property 'getById' does not exist on type '{ getProducts(filters?: ProductFilters | undefined): Promise<PaginatedResponse<Product>>; getProductById(id: string): Promise<...>; ... 9 more ...; incrementViewCount(productId: string): Promise<...>; }'.
+src/components/bidding/BiddingAnalytics.tsx(150,79): error TS18048: 'percent' is possibly 'undefined'.
+src/components/dashboard/buyer/SpendingAnalytics.tsx(61,33): error TS2322: Type 'SpendingData[]' is not assignable to type 'ChartDataInput[]'.
+  Type 'SpendingData' is not assignable to type 'ChartDataInput'.
+    Index signature for type 'string' is missing in type 'SpendingData'.
+src/components/layout/Header.tsx(33,38): error TS18047: 'user' is possibly 'null'.
+src/components/layout/Header.tsx(33,55): error TS18047: 'user' is possibly 'null'.
+src/components/layout/Header.tsx(37,34): error TS18047: 'user' is possibly 'null'.
+src/components/layout/Header.tsx(37,51): error TS18047: 'user' is possibly 'null'.
+src/components/layout/Header.tsx(55,47): error TS2322: Type 'import("C:/Users/user/Desktop/CSE_ALL/Capstone/swapaholic.20/swapaholic-frontend/src/types/api").User | null' is not assignable to type 'User | null'.
+  Property 'name' is missing in type 'import("C:/Users/user/Desktop/CSE_ALL/Capstone/swapaholic.20/swapaholic-frontend/src/types/api").User' but required in type 'User'.
+src/features/buyer/BidPanel.tsx(70,9): error TS18047: 'socket' is possibly 'null'.
+src/features/buyer/BidPanel.tsx(74,26): error TS18047: 'user' is possibly 'null'.
+src/features/buyer/BidPanel.tsx(74,44): error TS18047: 'user' is possibly 'null'.
+src/features/buyer/MyReviews.tsx(115,33): error TS2322: Type '{ children: string; href: string; }' is not assignable to type 'IntrinsicAttributes & ButtonProps'.
+  Property 'href' does not exist on type 'IntrinsicAttributes & ButtonProps'.

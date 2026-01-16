@@ -1,0 +1,12 @@
+'use client';
+
+import { Suspense } from 'react';
+import { OAuthCallback } from '../../../features/auth/OAuthCallback';
+
+export default function OAuthCallbackPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <OAuthCallback />
+        </Suspense>
+    );
+}

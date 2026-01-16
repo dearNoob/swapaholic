@@ -1,0 +1,33 @@
+
+> swapaholic-frontend@0.1.0 build
+> next build
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\user\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * C:\Users\user\Desktop\CSE_ALL\Capstone\swapaholic.20\swapaholic-frontend\package-lock.json
+
+   ▲ Next.js 16.0.3 (Turbopack)
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+ ✓ Compiled successfully in 14.1s
+   Running TypeScript ...
+Failed to compile.
+
+./src/app/payments/[orderId]/page.tsx:152:47
+Type error: Type '{ onPay: () => Promise<void>; }' is not assignable to type 'IntrinsicAttributes & StripeCheckoutButtonProps'.
+  Property 'onPay' does not exist on type 'IntrinsicAttributes & StripeCheckoutButtonProps'.
+
+[0m [90m 150 |[39m                     [33m<[39m[33mPaymentMethodSelector[39m onSelect[33m=[39m{handleMethodSelect} selected[33m=[39m{selectedMethod} [33m/[39m[33m>[39m
+ [90m 151 |[39m                     {selectedMethod [33m===[39m [32m'stripe'[39m [33m&&[39m (
+[31m[1m>[22m[39m[90m 152 |[39m                         [33m<[39m[33mStripeCheckoutButton[39m onPay[33m=[39m{startStripePayment} [33m/[39m[33m>[39m
+ [90m     |[39m                                               [31m[1m^[22m[39m
+ [90m 153 |[39m                     )}
+ [90m 154 |[39m                     {selectedMethod [33m===[39m [32m'paypal'[39m [33m&&[39m (
+ [90m 155 |[39m                         [33m<[39m[33mPayPalButton[39m onPay[33m=[39m{startPayPalPayment} [33m/[39m[33m>[39m[0m
+Next.js build worker exited with code: 1 and signal: null
