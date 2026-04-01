@@ -4,20 +4,29 @@ import { useState, useEffect } from 'react';
 import { FaFlag, FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { reportsApi } from '../../../api/reports';
+import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
 
 export default function ReportsQueuePage() {
     const [reports, setReports] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    // Protect route with admin auth
+    const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
+    const [isDataLoading, setIsDataLoading] = useState(true);
+
+    // Combined loading state
+    const isLoading = isAuthLoading || isDataLoading;
+
     const [filter, setFilter] = useState({ status: 'all', type: 'all' });
     const [selectedReport, setSelectedReport] = useState<any>(null);
 
     useEffect(() => {
-        fetchReports();
-    }, [filter]);
+        if (isAdmin) {
+            fetchReports();
+        }
+    }, [filter, isAdmin]);
 
     const fetchReports = async () => {
         try {
-            setIsLoading(true);
+            setIsDataLoading(true);
             const params: any = {};
             if (filter.status !== 'all') params.status = filter.status;
             if (filter.type !== 'all') params.type = filter.type;
@@ -39,7 +48,7 @@ export default function ReportsQueuePage() {
                 createdAt: new Date(Date.now() - Math.random() * 86400000 * 30).toISOString(),
             })));
         } finally {
-            setIsLoading(false);
+            setIsDataLoading(false);
         }
     };
 
@@ -98,8 +107,8 @@ export default function ReportsQueuePage() {
                                     key={status}
                                     onClick={() => setFilter({ ...filter, status })}
                                     className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter.status === status
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                         }`}
                                 >
                                     {status.toUpperCase()}
@@ -115,8 +124,8 @@ export default function ReportsQueuePage() {
                                     key={type}
                                     onClick={() => setFilter({ ...filter, type })}
                                     className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter.type === type
-                                            ? 'bg-purple-600 text-white'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                         }`}
                                 >
                                     {type.toUpperCase()}

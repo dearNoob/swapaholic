@@ -21,6 +21,15 @@ export interface AddPaymentMethodData {
     cardholderName: string;
 }
 
+export interface Transaction {
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    type: 'payment' | 'payout';
+    status: 'completed' | 'pending' | 'failed';
+}
+
 export const paymentsApi = {
     // Initiate a payment for an order
     async initiate(data: { orderId: string; method: 'card' | 'paypal' | 'stripe' | 'bkash' | 'rocket' | 'nagad' }): Promise<Payment> {
@@ -37,6 +46,12 @@ export const paymentsApi = {
     // Get payment details by ID
     async getPayment(paymentId: string): Promise<Payment> {
         const response = await apiClient.get<ApiResponse<Payment>>(`/payments/${paymentId}`);
+        return response.data.data;
+    },
+
+    // Get user's transaction history
+    async getTransactions(): Promise<Transaction[]> {
+        const response = await apiClient.get<ApiResponse<Transaction[]>>('/payments/history');
         return response.data.data;
     },
 
@@ -92,5 +107,38 @@ export const paymentsApi = {
     async generateInvoice(paymentId: string): Promise<Blob> {
         const response = await apiClient.get(`/payments/${paymentId}/invoice`, { responseType: 'blob' });
         return response.data;
+    },
+
+    // ═══════════════════════════════════════════════
+    // ADMIN PAYOUT MANAGEMENT
+    // ═══════════════════════════════════════════════
+
+    /**
+     * Get all pending payouts (admin only)
+     */
+    async getPendingPayouts(): Promise<PendingPayout[]> {
+        const response = await apiClient.get<{ success: boolean; data: PendingPayout[]; total: number }>('/payments/admin/pending-payouts');
+        return response.data.data;
+    },
+
+    /**
+     * Admin manually releases escrowed payment to seller
+     */
+    async adminReleasePayout(orderId: string): Promise<{ message: string; payment: any }> {
+        const response = await apiClient.post(`/payments/admin/release/${orderId}`);
+        return response.data;
     }
 };
+
+export interface PendingPayout {
+    orderId: string;
+    product: { id: string; title: string; images: string[] } | null;
+    buyer: { id: string; name: string; email: string } | null;
+    seller: { id: string; name: string; email: string } | null;
+    amount: number;
+    platformFee: number;
+    netAmount: number;
+    deliveredAt: string;
+    hoursSinceDelivery: number;
+    autoReleaseEligible: boolean;
+}

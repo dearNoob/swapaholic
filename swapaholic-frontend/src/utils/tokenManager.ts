@@ -1,7 +1,6 @@
 // Token Management Utility
 
-const ACCESS_TOKEN_KEY = 'access_token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
+const ACCESS_TOKEN_KEY = 'accessToken';
 
 export const tokenManager = {
     // Get access token
@@ -12,25 +11,21 @@ export const tokenManager = {
         return token;
     },
 
-    // Get refresh token
+    // Get refresh token (not stored in localStorage as it's an HTTP-only cookie)
     getRefreshToken(): string | null {
-        if (typeof window === 'undefined') return null;
-        return localStorage.getItem(REFRESH_TOKEN_KEY);
+        return null; // The backend handles it via cookie
     },
 
     // Set tokens
-    setTokens(accessToken: string, refreshToken: string): void {
+    setTokens(accessToken: string): void {
         if (typeof window === 'undefined') return;
-        console.log('🔐 tokenManager setTokens called');
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
     },
 
     // Clear tokens
     clearTokens(): void {
         if (typeof window === 'undefined') return;
         localStorage.removeItem(ACCESS_TOKEN_KEY);
-        localStorage.removeItem(REFRESH_TOKEN_KEY);
     },
 
     // Check if token is expired (simple check based on JWT structure)

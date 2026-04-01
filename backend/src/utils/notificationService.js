@@ -83,13 +83,13 @@ class NotificationService {
         data,
         timestamp: new Date()
       });
-      
+
       // Also emit specific event for better client handling
       this.io.to(socketId).emit(eventType, {
         data,
         timestamp: new Date()
       });
-      
+
       logger.info(`Notification sent to user ${userId}: ${eventType}`);
       return true;
     } catch (error) {
@@ -440,6 +440,126 @@ class NotificationService {
    */
   isUserOnline(userId) {
     return userId.toString() in this.userConnections;
+  }
+  async notifyNewMessage(recipientId, message) {
+    // Send specific 'new-message' event for overall inbox updates
+    const sent = this.sendToUser(recipientId.toString(), 'new-message', message);
+    
+    // Send specific 'message:id' event for active ChatWindow live bubbling
+    if (message.conversationId) {
+       this.sendToUser(recipientId.toString(), `message:${message.conversationId}`, message);
+    }
+
+    // Also trigger a push notification if needed (optional)
+    if (!sent) {
+      logger.debug(`User ${recipientId} offline, message stored in DB`);
+    }
+
+    return sent;
+  }
+
+  // ═══════════════════════════════════════════════
+  // POST-AUCTION WORKFLOW NOTIFICATIONS
+  // ═══════════════════════════════════════════════
+
+  /**
+   * Notification helper: Auction won
+   */
+  async notifyAuctionWon(bidId, productId, productTitle, winningPrice, buyerId) {
+    await this.createAndSend({
+      recipientId: buyerId,
+      type: 'auction_won',
+      title: '🎉 You Won the Auction!',
+      message: `You won the auction for "${productTitle}" at ৳${winningPrice}. Confirm within 3 hours!`,
+      data: {
+        relatedId: bidId,
+        relatedType: 'Bid',
+        productId,
+        productTitle,
+        amount: winningPrice
+      },
+      priority: 'urgent',
+      actionUrl: `/my-bids/won`
+    });
+  }
+
+  /**
+   * Notification helper: Confirmation reminder
+   */
+  async notifyConfirmationReminder(bidId, productTitle, buyerId, timeLeft) {
+    await this.createAndSend({
+      recipientId: buyerId,
+      type: 'auction_confirmation_reminder',
+      title: `⏰ ${timeLeft} left to confirm!`,
+      message: `You have ${timeLeft} left to confirm your purchase of "${productTitle}". Don't miss out!`,
+      data: {
+        relatedId: bidId,
+        relatedType: 'Bid',
+        productTitle,
+        timeLeft
+      },
+      priority: 'urgent',
+      actionUrl: `/my-bids/won`
+    });
+  }
+
+  /**
+   * Notification helper: Confirmation expired
+   */
+  async notifyConfirmationExpired(productTitle, buyerId) {
+    await this.createAndSend({
+      recipientId: buyerId,
+      type: 'auction_confirmation_expired',
+      title: '⚠️ Confirmation Expired',
+      message: `Your confirmation window for "${productTitle}" has expired. Your buyer rating has been reduced by 0.5.`,
+      data: {
+        productTitle
+      },
+      priority: 'high',
+      actionUrl: `/my-bids`
+    });
+  }
+
+  /**
+   * Notification helper: Second chance bid
+   */
+  async notifySecondChanceBid(bidId, productId, productTitle, price, buyerId) {
+    await this.createAndSend({
+      recipientId: buyerId,
+      type: 'auction_second_chance',
+      title: '🔔 Second Chance — Product Available!',
+      message: `The previous winner didn't confirm. You can now buy "${productTitle}" at ৳${price}. Confirm within 3 hours!`,
+      data: {
+        relatedId: bidId,
+        relatedType: 'Bid',
+        productId,
+        productTitle,
+        amount: price
+      },
+      priority: 'urgent',
+      actionUrl: `/my-bids/won`
+    });
+  }
+
+  /**
+   * Notification helper: Seller payout
+   */
+  async notifySellerPayout(orderId, sellerId, amount, platformFee) {
+    const netAmount = amount - platformFee;
+    await this.createAndSend({
+      recipientId: sellerId,
+      type: 'seller_payout',
+      title: '💰 Payment Received!',
+      message: `৳${netAmount} has been released to your account (৳${amount} - ৳${platformFee} platform fee).`,
+      data: {
+        relatedId: orderId,
+        relatedType: 'Order',
+        amount: netAmount,
+        platformFee
+      },
+      priority: 'high',
+      actionUrl: `/orders/${orderId}`
+    });
   }
 }
 

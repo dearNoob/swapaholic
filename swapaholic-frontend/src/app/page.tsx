@@ -1,64 +1,33 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import { FaGavel, FaShieldAlt, FaTruck, FaStar, FaUsers, FaCheckCircle, FaArrowRight, FaSearch, FaHeart } from 'react-icons/fa';
+import Image from 'next/image';
+import { 
+  FaGavel, FaShieldAlt, FaTruck, FaStar, FaUsers, 
+  FaCheckCircle, FaArrowRight, FaSearch, FaCamera, FaClock 
+} from 'react-icons/fa';
 import { productsApi } from '../api/products';
-import { RatingStars } from '../components/ui/RatingStars';
+import AuthRedirect from '../components/auth/AuthRedirect';
+import RecentlyViewed from '../components/RecentlyViewed';
 
-export default function HomePage() {
-  const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
-  const [stats, setStats] = useState({
-    totalUsers: 12500,
-    totalAuctions: 8430,
-    averageRating: 4.8,
-  });
-
-  useEffect(() => {
-    fetchFeaturedProducts();
-  }, []);
-
-  const fetchFeaturedProducts = async () => {
-    try {
-      // Fetch featured/trending products
-      const products = await productsApi.getFeaturedProducts(6);
-      setFeaturedProducts(products);
-    } catch (error) {
-      console.error('Error fetching featured products:', error);
-      // Mock featured products
-      setFeaturedProducts([
-        {
-          id: '1',
-          title: 'Vintage Canon AE-1 Camera',
-          currentBid: 175.00,
-          images: ['https://via.placeholder.com/300'],
-          auctionEndTime: new Date(Date.now() + 86400000).toISOString(),
-        },
-        {
-          id: '2',
-          title: 'Apple MacBook Pro 2019',
-          currentBid: 800.00,
-          images: ['https://via.placeholder.com/300'],
-          auctionEndTime: new Date(Date.now() + 86400000 * 2).toISOString(),
-        },
-        {
-          id: '3',
-          title: 'Nike Air Jordan 1 Retro',
-          currentBid: 220.00,
-          images: ['https://via.placeholder.com/300'],
-          auctionEndTime: new Date(Date.now() + 86400000 * 3).toISOString(),
-        },
-      ]);
-    }
-  };
+// Server Components can be async
+export default async function HomePage() {
+  let featuredProducts: any[] = [];
+  
+  try {
+    // Fetch featured/trending products on the server
+    featuredProducts = await productsApi.getFeaturedProducts(6);
+  } catch (error) {
+    console.error('Error fetching featured products on server:', error);
+    // Keep it empty, UI handles empty state
+  }
 
   const categories = [
-    { name: 'Electronics', icon: '💻', count: 1250 },
-    { name: 'Fashion', icon: '👗', count: 980 },
-    { name: 'Home & Garden', icon: '🏡', count: 750 },
-    { name: 'Sports', icon: '⚽', count: 620 },
-    { name: 'Collectibles', icon: '🎨', count: 540 },
-    { name: 'Automotive', icon: '🚗', count: 430 },
+    { name: 'Electronics', icon: '💻' },
+    { name: 'Fashion', icon: '👗' },
+    { name: 'Home & Garden', icon: '🏡' },
+    { name: 'Sports', icon: '⚽' },
+    { name: 'Collectibles', icon: '🎨' },
+    { name: 'Automotive', icon: '🚗' },
   ];
 
   const howItWorks = [
@@ -102,125 +71,174 @@ export default function HomePage() {
     return `${hours}h`;
   };
 
+  const sectionClass = "md:sticky md:top-0 md:h-[100dvh] w-full relative overflow-y-auto overflow-x-hidden scrollbar-hide";
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 relative selection:bg-indigo-200">
+      {/* Client-side logic for role-based redirect */}
+      <AuthRedirect />
+
       {/* Hero Section */}
-      <section className="relative bg-linear-to-br from-indigo-600 via-purple-600 to-pink-500 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-black opacity-10"></div>
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMzLjMxNCAwIDYgMi42ODYgNiA2cy0yLjY4NiA2LTYgNi02LTIuNjg2LTYtNiAyLjY4Ni02IDYtNnptMCA0YzEuMTA1IDAgMiAuODk1IDIgMnMtLjg5NSAyLTIgMi0yLS44OTUtMi0yIC44OTUtMiAyLTJ6IiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIuMSIvPjwvZz48L3N2Zz4=')] opacity-20"></div>
+      <section className={`${sectionClass} z-[1] bg-slate-50 dark:bg-slate-950 flex flex-col justify-center`}>
+        {/* Subtle mesh background element */}
+        <div className="absolute inset-0 z-0 opacity-40 pointer-events-none">
+          <div className="absolute top-0 -left-1/4 w-1/2 h-full bg-linear-to-tr from-indigo-100 to-purple-50 blur-[100px] rounded-full mix-blend-multiply dark:mix-blend-soft-light"></div>
+          <div className="absolute bottom-0 -right-1/4 w-1/2 h-full bg-linear-to-bl from-pink-100 to-indigo-100 blur-[100px] rounded-full mix-blend-multiply dark:mix-blend-soft-light"></div>
+        </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
-          <div className="text-center">
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 leading-tight">
-              Discover Amazing Deals<br />
-              <span className="text-yellow-300">Win Big on Auctions</span>
-            </h1>
-            <p className="text-xl md:text-2xl mb-8 text-indigo-100 max-w-3xl mx-auto">
-              Buy and sell second-hand items with confidence. Join thousands of happy users in the most trusted auction marketplace.
-            </p>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center flex flex-col items-center animate-fade-in">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-sm font-medium text-slate-600 dark:text-slate-400 mb-8 hover:shadow-md transition-shadow cursor-default">
+            <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+            The Premium Marketplace for Second-hand Treasures
+          </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link href="/products">
-                <button className="px-8 py-4 bg-white text-indigo-600 rounded-lg font-bold text-lg hover:bg-indigo-50 transition transform hover:scale-105 shadow-xl flex items-center gap-2">
-                  Browse Auctions <FaArrowRight />
-                </button>
-              </Link>
-              <Link href="/seller/create-listing">
-                <button className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg font-bold text-lg hover:bg-white hover:text-indigo-600 transition transform hover:scale-105 flex items-center gap-2">
-                  Start Selling <FaGavel />
-                </button>
-              </Link>
+          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 text-slate-900 dark:text-white leading-[1.1]">
+            Curated Deals.<br />
+            <span className="bg-clip-text text-transparent bg-linear-to-r from-indigo-600 via-purple-600 to-indigo-600 animate-gradient-x">
+              Extraordinary Finds.
+            </span>
+          </h1>
+
+          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-10 font-light leading-relaxed">
+            Experience the future of re-commerce. Join our exclusive community to buy, sell, and discover unique items with uncompromised trust.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full max-w-md mx-auto">
+            <Link href="/products" className="w-full sm:w-auto">
+              <button className="w-full px-8 py-4 bg-slate-900 text-white rounded-2xl font-semibold text-lg hover:bg-slate-800 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.2)] hover:-translate-y-0.5 flex items-center justify-center gap-2 group">
+                Explore Auctions <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            </Link>
+            <Link href="/seller/create-listing" className="w-full sm:w-auto">
+              <button className="w-full px-8 py-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl font-semibold text-lg hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 transition-all flex items-center justify-center gap-2 shadow-sm">
+                Start Selling <FaGavel className="text-slate-500 dark:text-slate-400" />
+              </button>
+            </Link>
+          </div>
+
+          {/* Trust Indicators */}
+          <div className="mt-20 flex flex-wrap justify-center gap-8 md:gap-16 pt-10 border-t border-slate-200/60 dark:border-slate-800/60 w-full max-w-3xl">
+            <div className="flex items-center gap-3">
+              <FaShieldAlt className="text-indigo-500 text-xl" />
+              <div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">Verified Sellers</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Every seller is vetted</div>
+              </div>
             </div>
 
-            {/* Trust Indicators */}
-            <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-              <div className="text-center">
-                <div className="text-4xl font-bold text-yellow-300">{stats.totalUsers.toLocaleString()}+</div>
-                <div className="text-indigo-200 mt-2">Happy Users</div>
+            <div className="flex items-center gap-3">
+              <FaCheckCircle className="text-emerald-500 text-xl" />
+              <div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">Quality Checked</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Items inspected before delivery</div>
               </div>
-              <div className="text-center">
-                <div className="text-4xl font-bold text-yellow-300">{stats.totalAuctions.toLocaleString()}+</div>
-                <div className="text-indigo-200 mt-2">Successful Auctions</div>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-4xl font-bold text-yellow-300">{stats.averageRating}</span>
-                  <FaStar className="text-yellow-300 text-3xl" />
-                </div>
-                <div className="text-indigo-200 mt-2">Average Rating</div>
+            </div>
+            <div className="flex items-center gap-3">
+              <FaTruck className="text-amber-500 text-xl" />
+              <div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">Tracked Shipping</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Real-time delivery updates</div>
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Wave divider */}
-        <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0 120L60 105C120 90 240 60 360 45C480 30 600 30 720 37.5C840 45 960 60 1080 67.5C1200 75 1320 75 1380 75L1440 75V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0Z" fill="white" />
-          </svg>
         </div>
       </section>
 
       {/* Featured Auctions */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">🔥 Trending Auctions</h2>
-            <p className="text-xl text-gray-600">Don't miss out on these hot items!</p>
+      <section className={`${sectionClass} z-[2] bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shadow-[0_-20px_50px_rgba(0,0,0,0.03)]`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
+            <div>
+              <h2 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight mb-3">Trending Now</h2>
+              <p className="text-lg text-slate-500 dark:text-slate-400 font-light">Handpicked auctions ending soon</p>
+            </div>
+
+            <Link href="/products" className="group flex items-center gap-2 text-indigo-600 font-semibold hover:text-indigo-700 transition-colors">
+              View All <FaArrowRight className="group-hover:translate-x-1 transition-transform text-sm" />
+            </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {featuredProducts.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {featuredProducts.map((product) => (
-              <Link key={product.id} href={`/products/${product.id}`}>
-                <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow group cursor-pointer">
-                  <div className="relative">
-                    <img src={product.images[0]} alt={product.title} className="w-full h-48 object-cover group-hover:scale-105 transition-transform" />
-                    <div className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold animate-pulse">
+              <Link key={product.id} href={`/products/${product.id}`} className="block group">
+                <div className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden border border-slate-100 dark:border-slate-700 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">
+                    <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-900 p-6 flex items-center justify-center">
+                      {product.images?.[0] ? (
+                        <Image
+                          src={product.images[0]}
+                          alt={product.title}
+                          fill
+                          className="object-contain p-6 group-hover:scale-105 transition-transform duration-500 mix-blend-multiply dark:mix-blend-normal"
+                          sizes="(max-width: 768px) 100vw, 33vw"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-slate-300">
+                          <FaCamera className="w-12 h-12 mb-2" />
+                          <span className="text-xs font-medium">No Image</span>
+                        </div>
+                      )}
+                    <div className="absolute top-4 right-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md text-slate-900 dark:text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
                       {getTimeRemaining(product.auctionEndTime)}
                     </div>
                   </div>
-                  <div className="p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">{product.title}</h3>
-                    <div className="flex justify-between items-center">
+                  <div className="p-6 flex flex-col flex-grow">
+                    <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-4 line-clamp-2 leading-tight group-hover:text-indigo-600 transition-colors">{product.title}</h3>
+                    <div className="mt-auto flex justify-between items-end pt-4 border-t border-slate-100 dark:border-slate-700">
                       <div>
-                        <p className="text-sm text-gray-500">Current Bid</p>
-                        <p className="text-2xl font-bold text-indigo-600">৳{product.currentBid.toFixed(2)}</p>
+                        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Current Bid</p>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-white">৳{product.currentBid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                       </div>
-                      <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
-                        Bid Now
-                      </button>
+
+                      <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors text-slate-400">
+                        <FaArrowRight className="-rotate-45" />
+                      </div>
                     </div>
                   </div>
                 </div>
               </Link>
             ))}
           </div>
-
-          <div className="text-center">
-            <Link href="/products">
-              <button className="px-8 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition">
-                View All Auctions
-              </button>
-            </Link>
-          </div>
+          ) : (
+            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+              <FaGavel className="text-4xl text-slate-300 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-slate-700 dark:text-white mb-2">No auctions right now</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-6">Check back soon for exciting new listings!</p>
+              <Link href="/products" className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 transition-all">
+                Browse All Products <FaArrowRight />
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* Categories */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Browse by Category</h2>
-            <p className="text-xl text-gray-600">Find exactly what you're looking for</p>
+      {/* Recently Viewed (Client Component) */}
+      <RecentlyViewed />
+
+      {/* Categories Bento Grid */}
+      <section className={`${sectionClass} z-[3] bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 shadow-[0_-20px_50px_rgba(0,0,0,0.03)]`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">Explore Categories</h2>
+            <p className="text-lg text-slate-500 dark:text-slate-400 font-light max-w-2xl mx-auto">Discover a world of pre-loved items across our most popular departments</p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 animate-fade-in">
             {categories.map((category) => (
-              <Link key={category.name} href={`/products?category=${category.name}`}>
-                <div className="bg-linear-to-br from-indigo-50 to-purple-50 rounded-lg p-6 text-center hover:shadow-lg transition-all cursor-pointer group border-2 border-transparent hover:border-indigo-500">
-                  <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">{category.icon}</div>
-                  <h3 className="font-semibold text-gray-900 mb-1">{category.name}</h3>
-                  <p className="text-sm text-gray-500">{category.count} items</p>
+              <Link 
+                key={category.name} 
+                href={`/products?category=${category.name}`}
+                className="group relative overflow-hidden rounded-3xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 p-6 flex flex-col justify-between"
+              >
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-indigo-50 dark:bg-indigo-950/30 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                <div className="text-4xl mb-4 transform group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300 origin-bottom-left relative z-10">
+                  {category.icon}
+                </div>
+                <div className="relative z-10">
+                  <h3 className="font-bold text-slate-900 dark:text-white text-lg tracking-tight mb-1">{category.name}</h3>
+                  <p className="text-sm font-medium text-indigo-500 group-hover:text-indigo-600 transition-colors">Explore →</p>
                 </div>
               </Link>
             ))}
@@ -229,24 +247,25 @@ export default function HomePage() {
       </section>
 
       {/* How It Works */}
-      <section className="py-16 bg-linear-to-br from-gray-50 to-indigo-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">How It Works</h2>
-            <p className="text-xl text-gray-600">Start buying and selling in 4 easy steps</p>
+      <section className={`${sectionClass} z-[4] bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shadow-[0_-20px_50px_rgba(0,0,0,0.03)]`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">The Swapaholic Way</h2>
+            <p className="text-lg text-slate-500 dark:text-slate-400 font-light">A seamless process designed for trust and simplicity</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative">
+            <div className="hidden md:block absolute top-12 left-[10%] right-[10%] h-0.5 bg-linear-to-r from-slate-100 via-indigo-100 to-slate-100 dark:from-slate-800 dark:via-indigo-900 dark:to-slate-800 z-0"></div>
+
             {howItWorks.map((item) => (
-              <div key={item.step} className="text-center group">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-indigo-600 text-white text-3xl mb-4 group-hover:scale-110 transition-transform shadow-lg">
-                  <item.icon />
+              <div key={item.step} className="relative z-10 flex flex-col items-center text-center group">
+                <div className="w-24 h-24 rounded-3xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-3xl mb-6 group-hover:-translate-y-2 transition-transform duration-300 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-indigo-50/50 dark:bg-indigo-900/50 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                  <item.icon className="relative z-10" />
                 </div>
-                <div className="absolute -mt-10 ml-16 w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">
-                  {item.step}
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
-                <p className="text-gray-600">{item.description}</p>
+                <div className="text-xs font-bold text-indigo-600 tracking-widest uppercase mb-2">Step 0{item.step}</div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mb-3">{item.title}</h3>
+                <p className="text-slate-500 dark:text-slate-400 font-light leading-relaxed">{item.description}</p>
               </div>
             ))}
           </div>
@@ -254,60 +273,103 @@ export default function HomePage() {
       </section>
 
       {/* Why Choose Us */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Why Choose Swapaholic?</h2>
-            <p className="text-xl text-gray-600">The trusted marketplace for second-hand treasures</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-linear-to-br from-green-50 to-emerald-50 rounded-lg p-8 border-2 border-green-200">
-              <FaShieldAlt className="text-5xl text-green-600 mb-4" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Secure Transactions</h3>
-              <p className="text-gray-700">
-                Your payments are protected with escrow services and buyer protection guarantees.
+      <section className={`${sectionClass} z-[5] bg-slate-900 border-t border-slate-800 shadow-[0_-20px_50px_rgba(0,0,0,0.2)] text-white`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div>
+              <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6 leading-tight">
+                Built on <span className="text-indigo-400">Trust</span>.<br />
+                Designed for <span className="text-purple-400">You</span>.
+              </h2>
+              <p className="text-lg text-slate-400 font-light mb-8 max-w-lg leading-relaxed">
+                We've engineered every aspect of Swapaholic to provide a secure, transparent, and joyful experience. Your peace of mind is our core feature.
               </p>
+
+              <div className="space-y-8">
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-green-400 border border-slate-700">
+                    <FaShieldAlt className="text-xl" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold mb-1">Secure Escrow Payments</h3>
+                    <p className="text-slate-400 font-light">Funds are held safely until the item is received and approved.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-blue-400 border border-slate-700">
+                    <FaUsers className="text-xl" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold mb-1">Verified Community</h3>
+                    <p className="text-slate-400 font-light">Mandatory identity verification keeps scammers off the platform.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-purple-400 border border-slate-700">
+                    <FaTruck className="text-xl" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold mb-1">Integrated Logistics</h3>
+                    <p className="text-slate-400 font-light">Door-to-door tracking with our premium delivery partners.</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="bg-linear-to-br from-blue-50 to-indigo-50 rounded-lg p-8 border-2 border-blue-200">
-              <FaUsers className="text-5xl text-blue-600 mb-4" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Verified Sellers</h3>
-              <p className="text-gray-700">
-                All sellers are verified and rated by our community for your peace of mind.
-              </p>
-            </div>
+            <div className="relative hidden lg:block h-[500px]">
+              <div className="absolute inset-0 bg-linear-to-br from-indigo-500/20 to-purple-500/20 rounded-3xl border border-white/10 backdrop-blur-3xl overflow-hidden flex items-center justify-center">
+                <div className="w-64 h-64 bg-indigo-500/30 rounded-full blur-[80px]"></div>
+                <div className="absolute w-full h-full border border-white/5 rounded-3xl"></div>
 
-            <div className="bg-linear-to-br from-purple-50 to-pink-50 rounded-lg p-8 border-2 border-purple-200">
-              <FaTruck className="text-5xl text-purple-600 mb-4" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Fast Shipping</h3>
-              <p className="text-gray-700">
-                Track your orders in real-time with reliable, fast delivery to your doorstep.
-              </p>
+                <div className="absolute bg-slate-900/80 backdrop-blur-xl border border-slate-700 w-72 rounded-2xl p-6 shadow-2xl transform rotate-3 -translate-y-4">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center"><FaCheckCircle className="text-green-400 text-xl" /></div>
+                    <div>
+                      <div className="font-bold text-white">Payment Secured</div>
+                      <div className="text-xs text-slate-400">Escrow activated</div>
+                    </div>
+                  </div>
+                  <div className="h-2 bg-slate-800 rounded-full w-full overflow-hidden">
+                    <div className="h-full bg-green-400 w-full"></div>
+                  </div>
+                </div>
+
+                <div className="absolute bg-slate-900/80 backdrop-blur-xl border border-slate-700 w-64 rounded-2xl p-4 shadow-2xl transform -rotate-6 translate-y-24 -translate-x-12">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-slate-300">Seller Trust Score</span>
+                    <span className="text-sm font-bold text-white">4.9/5.0</span>
+                  </div>
+                  <div className="flex gap-1 mt-2 text-amber-400 text-xs">
+                    <FaStar /><FaStar /><FaStar /><FaStar /><FaStar />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 bg-linear-to-r from-indigo-600 to-purple-600 text-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl md:text-5xl font-bold mb-6">Ready to Start Your Journey?</h2>
-          <p className="text-xl mb-8 text-indigo-100">
-            Join thousands of users buying and selling amazing items every day
+      <section className={`${sectionClass} z-[6] bg-slate-950 dark:bg-black flex items-center justify-center`}>
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-600/20 rounded-full blur-[120px]"></div>
+        </div>
+
+        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
+          <h2 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6">
+            Ready to dive in?
+          </h2>
+          <p className="text-xl mb-10 text-slate-400 max-w-2xl mx-auto font-light leading-relaxed">
+            Join thousands of users turning unneeded items into cash, and finding premium pre-loved deals every day.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link href="/register">
-              <button className="px-8 py-4 bg-white text-indigo-600 rounded-lg font-bold text-lg hover:bg-indigo-50 transition transform hover:scale-105 shadow-xl">
-                Sign Up Free
-              </button>
-            </Link>
-            <Link href="/products">
-              <button className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg font-bold text-lg hover:bg-white hover:text-indigo-600 transition transform hover:scale-105">
-                Explore Now
+              <button className="px-10 py-5 bg-white dark:bg-slate-900 text-slate-950 dark:text-white rounded-2xl font-bold text-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shadow-[0_0_40px_rgba(255,255,255,0.2)] hover:shadow-[0_0_60px_rgba(255,255,255,0.3)]">
+                Create Free Account
               </button>
             </Link>
           </div>
+          <p className="mt-8 text-sm text-slate-500 font-medium">No credit card required. Setup takes 2 minutes.</p>
         </div>
       </section>
     </div>

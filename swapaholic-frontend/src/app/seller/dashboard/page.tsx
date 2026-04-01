@@ -12,7 +12,9 @@ import RecentOrders from '../../../components/seller/RecentOrders';
 import PerformanceMetrics from '../../../components/seller/PerformanceMetrics';
 import QuickActions from '../../../components/seller/QuickActions';
 import EarningsSummary from '../../../components/seller/EarningsSummary';
+import RecentBids from '../../../components/seller/RecentBids';
 import { sellerApi } from '../../../api/seller';
+import { productsApi } from '../../../api/products';
 import { socketService } from '../../../utils/socket';
 import { emailApi } from '../../../api/email';
 
@@ -33,6 +35,7 @@ export default function SellerDashboardPage() {
         listings: any[];
         salesData: any[];
         recentOrders: any[];
+        recentBids: any[];
         performance: {
             averageRating: number;
             totalViews: number;
@@ -63,6 +66,7 @@ export default function SellerDashboardPage() {
         listings: [],
         salesData: [],
         recentOrders: [],
+        recentBids: [],
         performance: {
             averageRating: 0,
             totalViews: 0,
@@ -85,11 +89,12 @@ export default function SellerDashboardPage() {
                 setError(null);
 
                 // Fetch all data in parallel
-                const [dashboardStats, listings, analytics, recentOrders, performance, earnings] = await Promise.all([
+                const [dashboardStats, listings, analytics, recentOrders, recentBids, performance, earnings] = await Promise.all([
                     sellerApi.getDashboardData(),
                     sellerApi.getListings(),
                     sellerApi.getSalesAnalytics('30d'),
                     sellerApi.getRecentOrders(5),
+                    sellerApi.getRecentBids(5),
                     sellerApi.getPerformanceMetrics(),
                     sellerApi.getEarningsSummary(),
                 ]);
@@ -99,6 +104,7 @@ export default function SellerDashboardPage() {
                     listings: listings.listings,
                     salesData: analytics.salesData,
                     recentOrders: recentOrders.orders || [],
+                    recentBids: recentBids.bids || [],
                     performance: performance,
                     earnings: earnings,
                 });
@@ -132,13 +138,33 @@ export default function SellerDashboardPage() {
         // Listen for new bids
         socketService.on('bid_received', (data: any) => {
             console.log('New bid received:', data);
-            toast.info(`New bid of $৳{data.data.bidAmount} on "${data.data.productTitle}"`);
+            toast.info(`New bid of ৳${data.data.bidAmount} on "${data.data.productTitle}"`);
 
-            // Refresh dashboard stats
+            // Refresh dashboard stats and update recent bids
             sellerApi.getDashboardData().then(stats => {
                 setDashboardData(prev => ({
                     ...prev,
                     revenue: stats.revenue,
+                    // Prepend new bid to recentBids
+                    recentBids: [
+                        {
+                            id: data.data.bidId || Date.now().toString(), // Fallback ID if not provided
+                            product: {
+                                id: data.data.productId,
+                                title: data.data.productTitle,
+                                image: data.data.productImage || '/products/placeholder.png'
+                            },
+                            bidder: {
+                                name: data.data.bidderName,
+                                image: data.data.bidderImage || '/default-avatar.png',
+                                id: data.data.bidderId
+                            },
+                            amount: data.data.bidAmount,
+                            time: new Date().toISOString(),
+                            status: 'active'
+                        },
+                        ...prev.recentBids
+                    ].slice(0, 5) // Keep only top 5
                 }));
             });
         });
@@ -239,6 +265,23 @@ export default function SellerDashboardPage() {
         );
     }
 
+    const handleDeleteListing = async (id: string) => {
+        try {
+            await productsApi.deleteProduct(id);
+            toast.success('Listing deleted successfully');
+
+            // Refresh listings
+            const response = await sellerApi.getListings();
+            setDashboardData(prev => ({
+                ...prev,
+                listings: response.listings
+            }));
+        } catch (error) {
+            console.error('Delete error:', error);
+            toast.error('Failed to delete listing');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -297,17 +340,22 @@ export default function SellerDashboardPage() {
                     />
                 </div>
 
-                {/* Two Column Layout for Chart and Orders */}
+                {/* Two Column Layout for Chart, Bids and Orders */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                     {/* Sales Chart */}
-                    <SalesChart data={dashboardData.salesData} />
+                    <div className="col-span-1 lg:col-span-2">
+                        <SalesChart data={dashboardData.salesData} />
+                    </div>
+
+                    {/* Recent Bids */}
+                    <RecentBids bids={dashboardData.recentBids || []} />
 
                     {/* Recent Orders */}
                     <RecentOrders orders={dashboardData.recentOrders} />
                 </div>
 
                 {/* Active Listings */}
-                <ActiveListings listings={dashboardData.listings} />
+                <ActiveListings listings={dashboardData.listings} onDelete={handleDeleteListing} />
 
                 {/* Floating Action Button - Create New Listing */}
                 <Link

@@ -16,10 +16,12 @@ export default function TwoFactorAuth() {
     const handleEnable2FA = async () => {
         try {
             const data = await authApi.generate2FA();
+
             setSecret(data.secret);
             setQrCode(data.qrCode);
             setStep('setup');
         } catch (error) {
+            console.error('2FA Generation Error:', error);
             toast.error('Failed to generate 2FA secret');
         }
     };
@@ -36,6 +38,10 @@ export default function TwoFactorAuth() {
             setStep('verify');
             toast.success('2FA verified successfully!');
         } catch (error) {
+            console.error('2FA Verification Error:', error);
+            if (error && typeof error === 'object' && 'response' in error) {
+                console.error('Server Response:', (error as any).response?.data);
+            }
             toast.error('Invalid verification code');
         }
     };
@@ -206,18 +212,13 @@ export default function TwoFactorAuth() {
                                     <input
                                         type="text"
                                         maxLength={6}
+                                        style={{ color: 'black' }}
                                         value={verificationCode}
                                         onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
                                         placeholder="000000"
                                         className="w-40 px-4 py-3 border border-gray-300 rounded-lg text-center text-2xl font-mono tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                     />
-                                    <button
-                                        onClick={handleVerify}
-                                        disabled={verificationCode.length !== 6}
-                                        className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        Verify
-                                    </button>
+
                                 </div>
                             </div>
                         </div>
@@ -228,9 +229,17 @@ export default function TwoFactorAuth() {
                                     setStep('disabled');
                                     setVerificationCode('');
                                 }}
-                                className="px-6 py-3 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
+                                className="px-6 py-3 border border-gray-300 rounded-lg font-bold hover:bg-blue-700 transition"
+                                style={{ color: 'white', backgroundColor: '#900808ff' }}
                             >
                                 Cancel
+                            </button>
+                            <button
+                                onClick={handleVerify}
+                                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
+                                style={{ color: 'white', backgroundColor: 'blue' }}
+                            >
+                                Verify
                             </button>
                         </div>
                     </div>

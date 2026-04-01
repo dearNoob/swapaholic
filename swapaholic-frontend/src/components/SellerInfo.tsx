@@ -12,9 +12,10 @@ interface SellerInfoProps {
         totalSales: number;
         joinedDate?: string;
     };
+    onContactSeller?: () => void;
 }
 
-export default function SellerInfo({ seller }: SellerInfoProps) {
+export default function SellerInfo({ seller, onContactSeller }: SellerInfoProps) {
     const renderStars = (rating: number) => {
         return Array.from({ length: 5 }).map((_, index) => (
             <FaStar
@@ -74,7 +75,10 @@ export default function SellerInfo({ seller }: SellerInfoProps) {
 
                 {/* Actions */}
                 <div className="space-y-2 pt-4 border-t">
-                    <button className="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                    <button
+                        onClick={seller.id ? onContactSeller : undefined}
+                        className="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center gap-2"
+                    >
                         <FaEnvelope />
                         Contact Seller
                     </button>

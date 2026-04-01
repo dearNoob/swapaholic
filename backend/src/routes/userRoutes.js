@@ -28,4 +28,13 @@ router.get('/:id/ratings', userController.getUserRatings);
 // @access  Private
 router.delete('/:id', authMiddleware, userController.deleteUserAccount);
 
+// @route   POST /api/users/:id/follow
+// @desc    Follow a user
+router.post('/:id/follow', authMiddleware, userController.followUser);
+
+// @route   DELETE /api/users/:id/follow
+// @desc    Unfollow a user
+router.delete('/:id/follow', authMiddleware, userController.unfollowUser);
+
+
 module.exports = router;

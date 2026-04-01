@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FaHome, FaChevronRight, FaShare, FaFlag, FaCheckCircle, FaClock } from 'react-icons/fa';
+import { toast } from 'react-toastify';
 import { productsApi, Product } from '../../../api/products';
 import { bidsApi, Bid } from '../../../api/bids';
 
@@ -11,6 +12,8 @@ interface BidPlacedEvent {
     productId: string;
     bid: Bid;
 }
+import { messagesApi } from '../../../api/messages';
+import { useAuth } from '../../../hooks/useAuth';
 import { socketService } from '../../../utils/socket';
 import ImageCarousel from '../../../components/ImageCarousel';
 import BiddingInterface from '../../../components/BiddingInterface';
@@ -33,7 +36,7 @@ export default function ProductDetailPage() {
         try {
             const [productData, bidData] = await Promise.all([
                 productsApi.getProductById(productId),
-                bidsApi.getProductBids(productId)
+                bidsApi.getProductBids(productId).catch(() => [] as Bid[])
             ]);
 
             setProduct(productData);
@@ -43,6 +46,28 @@ export default function ProductDetailPage() {
             if (productData.category) {
                 // const similarData = await productsApi.getSimilar(productData.category);
                 // setSimilarProducts(similarData);
+            }
+
+            // Save to recently viewed
+            try {
+                const recentStr = localStorage.getItem('swapaholic_recently_viewed');
+                let recent: any[] = recentStr ? JSON.parse(recentStr) : [];
+                // Remove if already exists to move it to the front
+                recent = recent.filter((p: any) => p.id !== productData.id);
+                recent.unshift({
+                    id: productData.id,
+                    title: productData.title,
+                    image: productData.images?.[0] || '',
+                    price: productData.price,
+                    currentBid: productData.currentBid || productData.price,
+                    auctionEndTime: productData.auctionEndTime,
+                    condition: productData.condition
+                });
+                // Keep only last 10
+                recent = recent.slice(0, 10);
+                localStorage.setItem('swapaholic_recently_viewed', JSON.stringify(recent));
+            } catch (e) {
+                console.error('Could not save to recently viewed', e);
             }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to load product');
@@ -89,7 +114,33 @@ export default function ProductDetailPage() {
             });
         } else {
             navigator.clipboard.writeText(window.location.href);
-            alert('Link copied to clipboard!');
+            toast.success('Link copied to clipboard!');
+        }
+    };
+
+    // Add auth check
+    const { user, isAuthenticated } = useAuth();
+
+    const handleMessageSeller = async () => {
+        if (!isAuthenticated) {
+            router.push(`/login?redirect=/products/${productId}`);
+            return;
+        }
+
+        if (!product || !product.sellerId) return;
+
+        if (user?.id === product.sellerId) {
+            toast.warning("You cannot message yourself!");
+            return;
+        }
+
+        try {
+            // Create or get conversation
+            const conversation = await messagesApi.startConversation(product.sellerId);
+            router.push(`/messages?conversationId=${conversation._id}`);
+        } catch (error) {
+            console.error('Failed to start conversation:', error);
+            toast.error('Failed to start conversation. Please try again.');
         }
     };
 
@@ -229,14 +280,14 @@ export default function ProductDetailPage() {
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-600">Starting Price</p>
-                                    <p className="text-lg font-semibold text-gray-900">৳{product.price}</p>
+                                    <p className="text-lg font-semibold text-gray-900">৳{product.price || (product as any).basePrice || 0}</p>
                                 </div>
-                                {product.auctionEndTime && (
+                                {(product.auctionEndTime || (product as any).bidEndDate) && (
                                     <div>
                                         <p className="text-sm text-gray-600">Auction Ends</p>
                                         <p className="text-lg font-semibold text-gray-900 flex items-center gap-1">
                                             <FaClock className="text-orange-500" />
-                                            {new Date(product.auctionEndTime!).toLocaleDateString()}
+                                            {new Date((product.auctionEndTime || (product as any).bidEndDate)!).toLocaleDateString()}
                                         </p>
                                     </div>
                                 )}
@@ -244,10 +295,10 @@ export default function ProductDetailPage() {
                         </div>
 
                         {/* Bid History */}
-                        <BidHistory bids={bids.map(bid => ({
-                            id: bid.id,
-                            bidderName: bid.username,
-                            amount: bid.amount,
+                        <BidHistory bids={(bids || []).map((bid: any) => ({
+                            id: bid.id || bid._id,
+                            bidderName: bid.username || (bid.buyerId ? `${bid.buyerId.firstName} ${bid.buyerId.lastName}`.trim() : 'Anonymous Buyer'),
+                            amount: bid.amount || bid.bidAmount || 0,
                             timestamp: bid.createdAt,
                             isCurrentUser: false // TODO: determine if current user
                         }))} maxDisplay={5} />
@@ -258,25 +309,27 @@ export default function ProductDetailPage() {
                         {/* Bidding Interface */}
                         <BiddingInterface
                             productId={productId}
-                            currentBid={product.currentBid || 0}
-                            startingPrice={product.price}
+                            currentBid={product.currentBid || (product as any).highestBidAmount || 0}
+                            startingPrice={product.price || (product as any).basePrice || 0}
                             minimumIncrement={5}
-                            endTime={product.auctionEndTime}
+                            endTime={product.auctionEndTime || (product as any).bidEndDate}
                             totalBids={bids.length}
                             productName={product.title}
+                            sellerId={(product.sellerId as any)?._id || (typeof product.sellerId === 'string' ? product.sellerId : '1')}
                             onBidPlaced={handleBidPlaced}
                         />
 
                         {/* Seller Info */}
                         <SellerInfo
                             seller={{
-                                id: product.sellerId || '1',
-                                name: product.sellerName || 'Seller Name',
-                                avatar: undefined,
-                                rating: 4.5,
-                                totalSales: 24,
-                                joinedDate: '2023-01-01',
+                                id: (product.sellerId as any)?._id || product.sellerId || '1',
+                                name: `${(product.sellerId as any)?.firstName || ''} ${(product.sellerId as any)?.lastName || ''}`.trim() || product.sellerName || 'Seller Name',
+                                avatar: (product.sellerId as any)?.profilePicture || undefined,
+                                rating: (product.sellerId as any)?.ratingAverage || 0,
+                                totalSales: (product.sellerId as any)?.totalTransactions || 0,
+                                joinedDate: (product.sellerId as any)?.createdAt || '2023-01-01',
                             }}
+                            onContactSeller={handleMessageSeller}
                         />
                     </div>
                 </div>
@@ -287,19 +340,7 @@ export default function ProductDetailPage() {
                     <h2 className="text-2xl font-bold text-gray-900 mb-6">Customer Reviews</h2>
 
                     {/* Review List */}
-                    <ReviewList productId={productId} />
-
-                    {/* Review Form - Only show if user has purchased */}
-                    <div className="mt-8">
-                        <ReviewForm
-                            productId={productId}
-                            sellerId={product?.sellerId || ''}
-                            onSuccess={() => {
-                                // Refresh reviews after submission
-                                window.location.reload();
-                            }}
-                        />
-                    </div>
+                    <ReviewList sellerId={(product.sellerId as any)?._id || (typeof product.sellerId === 'string' ? product.sellerId : '')} />
                 </div>
             </div>
         </div>

@@ -1,0 +1,18 @@
+# Handle line endings automatically for files detected as text
+# and leave binary files untouched.
+* text=auto
+
+# Explicitly declare text files you want to always be LF or CRLF
+*.js text
+*.ts text
+*.tsx text
+*.css text
+*.html text
+*.json text
+*.md text
+*.yml text
+*.yaml text
+*.xml text
+*.svg text
+*.sh text eol=lf
+*.bat text eol=crlf

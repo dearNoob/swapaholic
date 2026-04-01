@@ -327,6 +327,67 @@ exports.getRecentOrders = async (req, res) => {
 };
 
 /**
+ * @route   GET /api/seller/bids/recent
+ * @desc    Get recent bids on seller's products (with optional pagination)
+ * @access  Private - Seller only
+ */
+exports.getRecentBids = async (req, res) => {
+    try {
+        const sellerId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 5;
+        const skip = (page - 1) * limit;
+
+        // 1. Find all products by this seller
+        const products = await Product.find({ sellerId }).select('_id');
+        const productIds = products.map(p => p._id);
+
+        // 2. Find bids on these products
+        const query = { productId: { $in: productIds } };
+        
+        const bids = await Bid.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .populate('buyerId', 'firstName lastName profileImage')
+            .populate('productId', 'title images basePrice');
+
+        const total = await Bid.countDocuments(query);
+
+        // 3. Format response
+        const formattedBids = bids.map(bid => ({
+            id: bid._id,
+            product: {
+                id: bid.productId?._id,
+                title: bid.productId?.title || 'Unknown Product',
+                image: bid.productId?.images?.[0] || '/products/placeholder.png'
+            },
+            bidder: {
+                name: `${bid.buyerId?.firstName || 'Unknown'} ${bid.buyerId?.lastName || ''}`,
+                image: bid.buyerId?.profileImage || '/default-avatar.png',
+                id: bid.buyerId?._id
+            },
+            amount: bid.bidAmount,
+            time: bid.createdAt,
+            status: bid.status
+        }));
+
+        res.json({ 
+            bids: formattedBids,
+            pagination: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        logger.error('Error fetching recent bids:', error);
+        res.status(500).json({ message: 'Server error fetching recent bids' });
+    }
+};
+
+/**
  * @route   GET /api/seller/performance
  * @desc    Get seller performance metrics
  * @access  Private - Seller only

@@ -23,7 +23,7 @@ describe('Advanced Search & Filtering', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `search_seller_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'seller'
+        role: 'user'
       });
     seller = sellerRes.body.user;
     sellerToken = sellerRes.body.token;
@@ -37,7 +37,7 @@ describe('Advanced Search & Filtering', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `search_buyer_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'buyer'
+        role: 'user'
       });
     buyer = buyerRes.body.user;
     buyerToken = buyerRes.body.token;

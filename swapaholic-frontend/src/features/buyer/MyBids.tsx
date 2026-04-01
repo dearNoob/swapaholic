@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
-import { FaTrophy, FaClock, FaHeart, FaDollarSign, FaCheck, FaTimes, FaExclamationTriangle } from 'react-icons/fa';
-import { bidsApi } from '../../api/bids';
+import { FaTrophy, FaClock, FaHeart, FaDollarSign, FaCheck, FaTimes, FaExclamationTriangle, FaBell } from 'react-icons/fa';
+import { bidsApi, WonBid } from '../../api/bids';
 import { Button } from '../../components/ui/Button';
 
 interface Bid {
@@ -34,10 +34,21 @@ export const MyBids = () => {
     const [wonAuctions, setWonAuctions] = useState<WonAuction[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'active' | 'won' | 'history'>('active');
+    const [pendingConfirmations, setPendingConfirmations] = useState<number>(0);
 
     useEffect(() => {
         fetchUserBids();
+        fetchPendingConfirmations();
     }, []);
+
+    const fetchPendingConfirmations = async () => {
+        try {
+            const wonBids = await bidsApi.getWonBids();
+            setPendingConfirmations(wonBids.filter(b => !b.isExpired).length);
+        } catch (e) {
+            // silently fail — won bids banner is supplementary
+        }
+    };
 
     const fetchUserBids = async () => {
         try {
@@ -364,6 +375,35 @@ export const MyBids = () => {
                     <p className="mt-2 text-lg text-gray-600">Track your bidding activity and manage won auctions</p>
                 </div>
 
+                {/* Pending Confirmations Banner */}
+                {pendingConfirmations > 0 && (
+                    <Link href="/my-bids/won">
+                        <div className="mb-6 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 rounded-xl p-5 shadow-lg cursor-pointer hover:shadow-xl transition-all duration-300 transform hover:scale-[1.01]">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="relative">
+                                        <div className="bg-white/20 backdrop-blur rounded-full p-3">
+                                            <FaTrophy className="text-2xl text-yellow-300" />
+                                        </div>
+                                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
+                                            {pendingConfirmations}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-white text-lg font-bold">🎉 You have {pendingConfirmations} auction{pendingConfirmations > 1 ? 's' : ''} to confirm!</h3>
+                                        <p className="text-indigo-200 text-sm mt-0.5">Confirm within 3 hours to secure your purchase. Not confirming will reduce your buyer rating.</p>
+                                    </div>
+                                </div>
+                                <div className="flex-shrink-0">
+                                    <span className="bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-lg text-sm hover:bg-indigo-50 transition-colors">
+                                        Confirm Now →
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </Link>
+                )}
+
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
@@ -393,6 +433,24 @@ export const MyBids = () => {
                             <FaTrophy className="text-4xl text-indigo-500" />
                         </div>
                     </div>
+                    {pendingConfirmations > 0 && (
+                        <Link href="/my-bids/won">
+                            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-yellow-500 cursor-pointer hover:shadow-md transition-shadow">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-600">Pending Confirmations</p>
+                                        <p className="text-3xl font-bold text-yellow-600">{pendingConfirmations}</p>
+                                    </div>
+                                    <div className="relative">
+                                        <FaBell className="text-4xl text-yellow-500" />
+                                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center animate-pulse">
+                                            !
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Link>
+                    )}
                 </div>
 
                 {/* Tabs */}

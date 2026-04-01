@@ -26,7 +26,7 @@ const orderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'qc_pending', 'qc_approved', 'in_delivery', 'delivered', 'completed', 'disputed', 'cancelled'],
+    enum: ['pending', 'awaiting_confirmation', 'confirmed', 'qc_pending', 'qc_approved', 'in_delivery', 'delivered', 'completed', 'disputed', 'cancelled'],
     default: 'pending'
   },
   escrowStatus: {
@@ -37,6 +37,20 @@ const orderSchema = new mongoose.Schema({
   orderDate: {
     type: Date,
     default: Date.now
+  },
+  buyerConfirmed: {
+    type: Boolean,
+    default: false
+  },
+  confirmedAt: Date,
+  sellerPaidAt: Date,
+  paymentReleasedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  platformFee: {
+    type: Number,
+    default: 30
   },
   estimatedDeliveryDate: Date,
   actualDeliveryDate: Date,
@@ -50,6 +64,13 @@ const orderSchema = new mongoose.Schema({
   qcRejectedAt: Date,
 
   // Dispute tracking
+  disputeReason: String,
+  disputeDescription: String,
+  disputeFiledBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  disputeFiledAt: Date,
   disputeAssignedTo: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

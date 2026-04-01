@@ -5,14 +5,14 @@ const logger = require('../utils/logger');
 const getCurrentUserProfile = async (req, res) => {
   try {
     console.log('[userController] Getting profile for user ID:', req.user.id);
-    const user = await User.findById(req.user.id).select('-password');
-    
+    const user = await User.findById(req.user.id).select('+nidNumber');
+
     if (!user) {
       console.log('[userController] User not found:', req.user.id);
       return res.status(404).json({ message: 'User not found' });
     }
 
-    console.log('[userController] Profile retrieved successfully:', user.email);
+    // console.log('[userController] Profile retrieved:', user.email, 'NID:', user.nidNumber);
     res.json(user);
   } catch (error) {
     console.error('[userController] Get current user profile error:', error.message);
@@ -47,14 +47,47 @@ const updateUserProfile = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const allowed = ['firstName', 'lastName', 'bio', 'profilePicture', 'address', 'city', 'state', 'zipCode', 'location'];
+    const allowed = [
+      'firstName', 'lastName', 'bio', 'profilePicture',
+      'address', 'city', 'state', 'zipCode', 'location',
+      'phone', 'nidNumber', 'interests'
+    ];
+
     const updates = {};
     allowed.forEach(field => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     });
 
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    // Calculate Profile Completion Score
+    let score = 40; // Base score for registration
+
+    // Check fields for score calculation
+    const checkFields = { ...req.body, ...updates }; // Merge existing (if we fetched it) or just use updates + what's in DB (needs fetch first for perfect accuracy, but let's approximate or fetch)
+
+    // Better approach: Fetch current user to merge with updates for accurate score calculation
+    const currentUser = await User.findById(req.params.id);
+    if (!currentUser) return res.status(404).json({ message: 'User not found' });
+
+    const updatedProfile = { ...currentUser.toObject(), ...updates };
+
+    if (updatedProfile.bio) score += 10;
+    if (updatedProfile.interests && updatedProfile.interests.length > 0) score += 10;
+    if (updatedProfile.nidNumber) score += 10;
+    if (updatedProfile.address) score += 10;
+    if (updatedProfile.phone) score += 10; // Extra points for phone
+    if (updatedProfile.profilePicture) score += 10;
+
+    // Cap score at 100
+    if (score > 100) score = 100;
+
+    updates.profileCompletionScore = score;
+
+    // Auto-verify if score >= 70
+    if (score >= 70) {
+      updates.isVerifiedUser = true;
+    }
+
+    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password +nidNumber');
 
     res.json(user);
   } catch (error) {
@@ -93,10 +126,65 @@ const deleteUserAccount = async (req, res) => {
   }
 };
 
+// Follow a user
+const followUser = async (req, res) => {
+  try {
+    const targetUserId = req.params.id;
+    const currentUserId = req.user.id;
+
+    if (targetUserId === currentUserId) {
+      return res.status(400).json({ message: 'You cannot follow yourself' });
+    }
+
+    const targetUser = await User.findById(targetUserId);
+    if (!targetUser) return res.status(404).json({ message: 'User not found' });
+
+    // Add current user to target user's followers
+    await User.findByIdAndUpdate(targetUserId, {
+      $addToSet: { followers: currentUserId }
+    });
+
+    // Add target user to current user's following
+    await User.findByIdAndUpdate(currentUserId, {
+      $addToSet: { following: targetUserId }
+    });
+
+    res.json({ message: 'User followed successfully' });
+  } catch (error) {
+    logger.error('Follow user error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Unfollow a user
+const unfollowUser = async (req, res) => {
+  try {
+    const targetUserId = req.params.id;
+    const currentUserId = req.user.id;
+
+    // Remove current user from target user's followers
+    await User.findByIdAndUpdate(targetUserId, {
+      $pull: { followers: currentUserId }
+    });
+
+    // Remove target user from current user's following
+    await User.findByIdAndUpdate(currentUserId, {
+      $pull: { following: targetUserId }
+    });
+
+    res.json({ message: 'User unfollowed successfully' });
+  } catch (error) {
+    logger.error('Unfollow user error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getCurrentUserProfile,
   getUserProfile,
   updateUserProfile,
   getUserRatings,
-  deleteUserAccount
+  deleteUserAccount,
+  followUser,
+  unfollowUser
 };

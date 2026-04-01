@@ -26,7 +26,7 @@ describe('Geolocation Endpoint', () => {
                 phone: `+1555${Math.random().toString().slice(2, 8)}`,
                 email: `geo_seller_${Math.random()}@test.com`,
                 password: 'Test1234',
-                role: 'seller'
+                role: 'user'
             });
         seller = sellerRes.body.user;
         sellerToken = sellerRes.body.token;

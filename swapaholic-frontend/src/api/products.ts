@@ -147,6 +147,16 @@ export const productsApi = {
     },
 
     /**
+     * Get search suggestions
+     */
+    async getSearchSuggestions(query: string): Promise<{ type: 'category' | 'title', value: string }[]> {
+        const response = await apiClient.get<{ suggestions: { type: 'category' | 'title', value: string }[] }>('/products/search/suggestions', {
+            params: { q: query }
+        });
+        return response.data.suggestions;
+    },
+
+    /**
      * Get products by seller
      */
     async getSellerProducts(sellerId: string, filters?: PaginationParams): Promise<PaginatedResponse<Product>> {
@@ -172,6 +182,14 @@ export const productsApi = {
      */
     async incrementViewCount(productId: string): Promise<void> {
         await apiClient.post(`/products/${productId}/view`);
+    },
+
+    /**
+     * Regenerate product description
+     */
+    async regenerateDescription(data: any): Promise<{ generatedDescription: string; score: number }> {
+        const response = await apiClient.post<{ generatedDescription: string; score: number }>('/products/regenerate-description', data);
+        return response.data;
     },
 
     /**

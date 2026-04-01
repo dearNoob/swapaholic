@@ -17,10 +17,12 @@ interface Listing {
 
 interface ActiveListingsProps {
     listings: Listing[];
+    onDelete: (id: string) => void;
 }
 
-export default function ActiveListings({ listings }: ActiveListingsProps) {
+export default function ActiveListings({ listings, onDelete }: ActiveListingsProps) {
     const getStatusBadge = (status: string) => {
+        // ... (keep logic)
         switch (status) {
             case 'active':
                 return { text: 'Active', class: 'bg-green-100 text-green-800', icon: FaCheckCircle };
@@ -36,6 +38,7 @@ export default function ActiveListings({ listings }: ActiveListingsProps) {
     };
 
     if (listings.length === 0) {
+        // ... (keep empty state)
         return (
             <div className="bg-white rounded-lg shadow-lg p-12">
                 <div className="text-center">
@@ -122,12 +125,13 @@ export default function ActiveListings({ listings }: ActiveListingsProps) {
                                     </td>
                                     <td className="py-4 px-4">
                                         <div className="flex items-center gap-2">
-                                            <button
+                                            <Link
+                                                href={`/seller/listings/${listing.id}/edit`}
                                                 className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
                                                 title="Edit"
                                             >
                                                 <FaEdit />
-                                            </button>
+                                            </Link>
                                             <Link
                                                 href={`/products/${listing.id}`}
                                                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
@@ -138,6 +142,11 @@ export default function ActiveListings({ listings }: ActiveListingsProps) {
                                             <button
                                                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
                                                 title="Delete"
+                                                onClick={() => {
+                                                    if (confirm('Are you sure you want to delete this listing?')) {
+                                                        onDelete(listing.id);
+                                                    }
+                                                }}
                                             >
                                                 <FaTrash />
                                             </button>

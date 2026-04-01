@@ -60,16 +60,7 @@ export default function MessagesPage() {
             setConversations(data.conversations || []);
         } catch (err) {
             console.error('Error fetching conversations:', err);
-            // Mock data
-            setConversations(Array.from({ length: 10 }, (_, i) => ({
-                id: `conv-${i + 1}`,
-                recipientName: `User ${i + 1}`,
-                recipientAvatar: '/placeholder-avatar.jpg',
-                lastMessage: `Last message from conversation ${i + 1}`,
-                lastMessageTime: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(),
-                unreadCount: Math.floor(Math.random() * 5),
-                orderId: i % 3 === 0 ? `order-${i + 1}` : null,
-            })));
+            toast.error('Failed to load conversations');
         } finally {
             setIsLoading(false);
         }
@@ -143,9 +134,9 @@ export default function MessagesPage() {
                 </div>
 
                 {/* Chat Container */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-250px)]">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-250px)] relative">
                     {/* Conversations Sidebar */}
-                    <div className="lg:col-span-1 bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+                    <div className={`lg:col-span-1 bg-white rounded-lg shadow-lg overflow-hidden flex-col h-full ${selectedConversation ? 'hidden lg:flex' : 'flex'}`}>
                         {/* Search */}
                         <div className="p-4 border-b">
                             <div className="relative">
@@ -170,17 +161,34 @@ export default function MessagesPage() {
                     </div>
 
                     {/* Chat Window */}
-                    <div className="lg:col-span-2">
+                    <div className={`lg:col-span-2 bg-white rounded-lg shadow-lg h-full overflow-hidden flex-col ${!selectedConversation ? 'hidden lg:flex' : 'flex'}`}>
                         {selectedConversation ? (
-                            <ChatWindow
-                                conversation={selectedConversation}
-                                onSendMessage={handleSendMessage}
-                            />
+                            <div className="flex flex-col h-full">
+                                {/* Mobile Back Button */}
+                                <div className="lg:hidden p-3 border-b border-gray-100 bg-gray-50/50 flex items-center">
+                                    <button 
+                                        onClick={() => setSelectedConversation(null)}
+                                        className="text-indigo-600 font-medium flex items-center gap-2 hover:text-indigo-800 transition"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                        Back to Messages
+                                    </button>
+                                </div>
+                                <div className="flex-1 relative">
+                                    <ChatWindow
+                                        conversation={selectedConversation}
+                                        onSendMessage={handleSendMessage}
+                                    />
+                                </div>
+                            </div>
                         ) : (
-                            <div className="bg-white rounded-lg shadow-lg h-full flex items-center justify-center">
+                            <div className="h-full flex items-center justify-center">
                                 <div className="text-center text-gray-500">
                                     <FaComments className="mx-auto text-6xl mb-4 text-gray-300" />
-                                    <p className="text-lg">Select a conversation to start messaging</p>
+                                    <p className="text-lg font-medium">Your Messages</p>
+                                    <p className="text-sm mt-1">Select a conversation to start messaging</p>
                                 </div>
                             </div>
                         )}

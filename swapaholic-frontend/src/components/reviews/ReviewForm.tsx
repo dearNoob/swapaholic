@@ -15,12 +15,11 @@ const reviewSchema = yup.object({
 type ReviewFormData = yup.InferType<typeof reviewSchema>;
 
 interface ReviewFormProps {
-    productId: string;
-    sellerId: string;
+    orderId: string;
     onSuccess?: () => void;
 }
 
-export const ReviewForm: React.FC<ReviewFormProps> = ({ productId, sellerId, onSuccess }) => {
+export const ReviewForm: React.FC<ReviewFormProps> = ({ orderId, onSuccess }) => {
     const [rating, setRating] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -41,8 +40,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ productId, sellerId, onS
         setIsSubmitting(true);
         try {
             const reviewData: CreateReviewData = {
-                productId,
-                sellerId,
+                orderId,
                 rating: data.rating,
                 comment: data.comment,
             };

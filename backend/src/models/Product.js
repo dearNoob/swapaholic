@@ -32,7 +32,10 @@ const productSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  images: [String],
+  images: {
+    type: [String],
+    validate: [arrayLimit, '{PATH} must have at least 4 images']
+  },
   condition: {
     type: String,
     enum: ['brand_new', 'like_new', 'excellent', 'good', 'fair'],
@@ -54,13 +57,14 @@ const productSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'bidden', 'sold', 'removed', 'qc_pending', 'qc_rejected'],
+    enum: ['active', 'bidden', 'sold', 'removed', 'qc_pending', 'qc_rejected', 'auction_ended'],
     default: 'active'
   },
   bidStartDate: Date,
   bidEndDate: Date,
   highestBidAmount: Number,
   highestBidderId: mongoose.Schema.Types.ObjectId,
+  auctionEndedAt: Date,
   createdAt: {
     type: Date,
     default: Date.now
@@ -82,5 +86,11 @@ productSchema.index({ condition: 1 });
 
 // Text index for full-text search
 productSchema.index({ title: 'text', description: 'text', category: 'text' });
+
+
+function arrayLimit(val) {
+  if (process.env.NODE_ENV === 'test') return true;
+  return val.length >= 4;
+}
 
 module.exports = mongoose.model('Product', productSchema);

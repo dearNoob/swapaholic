@@ -4,6 +4,10 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const logger = require('../utils/logger');
 const notificationService = require('../utils/notificationService');
+const AutoBid = require('../models/AutoBid');
+const emailService = require('../utils/emailService');
+
+const PLATFORM_FEE = 30;
 
 // Place a bid on a product
 const placeBid = async (req, res) => {
@@ -65,22 +69,9 @@ const placeBid = async (req, res) => {
       });
     }
 
-    // Notify the previous bidder that they've been outbid
-    if (previousHighestBid && previousHighestBid.buyerId.toString() !== req.user.id) {
-      try {
-        await notificationService.notifyOutbid(
-          bid._id,
-          productId,
-          product.title,
-          previousHighestBid.bidAmount,
-          bidAmount,
-          previousHighestBid.buyerId
-        );
-      } catch (notifError) {
-        logger.error('Error sending outbid notification:', notifError);
-        // Continue even if notification fails
-      }
-    }
+    // Trigger Auto-bidding process
+    await triggerAutoBidding(productId, bid.buyerId);
+
 
     const populatedBid = await Bid.findById(bid._id)
       .populate('productId', 'title basePrice')
@@ -110,7 +101,10 @@ const getBidsForProduct = async (req, res) => {
       .populate('buyerId', 'firstName lastName email ratingAverage')
       .sort({ bidAmount: -1, createdAt: -1 });
 
-    res.json(bids);
+    res.json({
+      status: 'success',
+      data: bids
+    });
   } catch (error) {
     logger.error('Get bids for product error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -244,6 +238,8 @@ const updateBid = async (req, res) => {
         highestBidAmount: bidAmount,
         highestBidderId: req.user.id
       });
+      // Trigger auto-bid when a bid is updated
+      await triggerAutoBidding(bid.productId, req.user.id);
     }
 
     const updatedBid = await Bid.findById(bidId)
@@ -423,6 +419,355 @@ const withdrawBid = async (req, res) => {
   }
 };
 
+// Set or update auto-bid
+const setAutoBid = async (req, res) => {
+  try {
+    const { productId, maxAmount, incrementAmount } = req.body;
+    const buyerId = req.user.id;
+
+    if (!productId || !maxAmount) {
+      return res.status(400).json({ message: 'Product ID and max amount required' });
+    }
+
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+
+    // Ensure it's active
+    if (!['active', 'bidden'].includes(product.status)) {
+      return res.status(400).json({ message: 'Product is not available for auto-bidding' });
+    }
+
+    // Check if maxAmount is already beaten by current highest bid
+    const currentPrice = product.highestBidAmount || product.basePrice;
+    if (maxAmount <= currentPrice) {
+      return res.status(400).json({ message: `Max amount must be higher than current price ৳${currentPrice}` });
+    }
+
+    const autoBid = await AutoBid.findOneAndUpdate(
+      { productId, buyerId },
+      { maxAmount, incrementAmount: incrementAmount || 10, isActive: true },
+      { upsert: true, new: true }
+    );
+
+    // After setting, trigger it immediately to see if we can win right now
+    await triggerAutoBidding(productId, null);
+
+    res.json({ success: true, message: 'Auto-bid set successfully', data: autoBid });
+  } catch (error) {
+    logger.error('Set auto-bid error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Cancel auto-bid
+const cancelAutoBid = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const buyerId = req.user.id;
+
+    await AutoBid.findOneAndUpdate(
+      { productId, buyerId },
+      { isActive: false }
+    );
+
+    res.json({ success: true, message: 'Auto-bid cancelled' });
+  } catch (error) {
+    logger.error('Cancel auto-bid error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get current user's auto-bids
+const getMyAutoBids = async (req, res) => {
+  try {
+    const autoBids = await AutoBid.find({ buyerId: req.user.id, isActive: true })
+      .populate('productId', 'title highestBidAmount basePrice');
+    
+    const transformed = autoBids.map(ab => ({
+      productId: ab.productId._id,
+      title: ab.productId.title,
+      maxAmount: ab.maxAmount,
+      currentBid: ab.productId.highestBidAmount || ab.productId.basePrice
+    }));
+
+    res.json({ success: true, data: transformed });
+  } catch (error) {
+    logger.error('Get my auto-bids error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Bidding Analytics
+const getBiddingAnalytics = async (req, res) => {
+  try {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    
+    const stats = await Bid.aggregate([
+      { $match: { buyerId: userId } },
+      {
+        $group: {
+          _id: null,
+          totalBids: { $sum: 1 },
+          won: { $sum: { $cond: [{ $eq: ['$status', 'accepted'] }, 1, 0] } },
+          totalSpent: { $sum: { $cond: [{ $eq: ['$status', 'accepted'] }, '$bidAmount', 0] } },
+          avgBid: { $avg: '$bidAmount' }
+        }
+      }
+    ]);
+
+    const activeAuctions = await Bid.countDocuments({ buyerId: userId, status: 'active' });
+    
+    // We can't easily calculate "lost" without knowing if the auction is finished.
+    // Let's approximate: auctions where they are NOT winning and status is active (still competing)
+    // or status is rejected (lost).
+    const lost = await Bid.countDocuments({ buyerId: userId, status: 'rejected' });
+
+    const result = stats[0] || { totalBids: 0, won: 0, totalSpent: 0, avgBid: 0 };
+
+    res.json({
+      success: true,
+      data: {
+        totalBids: result.totalBids,
+        auctionsWon: result.won,
+        auctionsLost: lost,
+        activeAuctions: activeAuctions,
+        averageBid: Math.round(result.avgBid),
+        totalSpent: result.totalSpent
+      }
+    });
+  } catch (error) {
+    logger.error('Get bidding analytics error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Internal Helper: Trigger Auto-bidding logic
+async function triggerAutoBidding(productId, lastBidderId) {
+    try {
+        const product = await Product.findById(productId);
+        if (!product || !['active', 'bidden'].includes(product.status)) return;
+
+        // Find all active auto-bids for this product, sorted by maxAmount desc
+        // We exlude the person who just bid to avoid infinite loop
+        const activeAutoBids = await AutoBid.find({ 
+            productId, 
+            isActive: true,
+            buyerId: { $ne: lastBidderId } 
+        }).sort({ maxAmount: -1 });
+
+        if (activeAutoBids.length === 0) return;
+
+        const currentHighest = product.highestBidAmount || product.basePrice;
+        const topAutoBid = activeAutoBids[0];
+
+        // If the top auto-bid can beat the current price
+        if (topAutoBid.maxAmount > currentHighest) {
+            let nextBidAmount = currentHighest + (topAutoBid.incrementAmount || 10);
+            
+            // Don't exceed max
+            if (nextBidAmount > topAutoBid.maxAmount) {
+                nextBidAmount = topAutoBid.maxAmount;
+            }
+
+            // Place the automatic bid
+            const newBid = new Bid({
+                productId,
+                buyerId: topAutoBid.buyerId,
+                bidAmount: nextBidAmount,
+                status: 'active'
+            });
+            await newBid.save();
+
+            // Update product
+            await Product.findByIdAndUpdate(productId, {
+                highestBidAmount: nextBidAmount,
+                highestBidderId: topAutoBid.buyerId,
+                status: 'bidden'
+            });
+
+            // Notify old bidder they were outbid by an auto-bid
+            try {
+                if (lastBidderId) {
+                    await notificationService.notifyOutbid(
+                        newBid._id,
+                        productId,
+                        product.title,
+                        currentHighest,
+                        nextBidAmount,
+                        lastBidderId
+                    );
+                }
+            } catch (e) {}
+
+            // Recursively trigger to handle competing auto-bids
+            // Note: This is safe because maxAmount eventually ends the chain.
+            await triggerAutoBidding(productId, topAutoBid.buyerId);
+        }
+    } catch (err) {
+        logger.error('Auto-bidding trigger error:', err);
+    }
+}
+
+// ═══════════════════════════════════════════════
+// POST-AUCTION WORKFLOW
+// ═══════════════════════════════════════════════
+
+// Buyer confirms auction win (within 3-hour window)
+const confirmAuctionWin = async (req, res) => {
+  try {
+    const { bidId } = req.params;
+
+    const bid = await Bid.findById(bidId);
+    if (!bid) return res.status(404).json({ message: 'Bid not found' });
+
+    // Only the winning bidder can confirm
+    if (bid.buyerId.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Only the winning bidder can confirm' });
+    }
+
+    // Must be in pending_confirmation status
+    if (bid.status !== 'pending_confirmation') {
+      return res.status(400).json({ message: `Cannot confirm a bid with status: ${bid.status}` });
+    }
+
+    // Check if within 3-hour confirmation window
+    if (bid.confirmationDeadline && new Date() > bid.confirmationDeadline) {
+      return res.status(400).json({ message: 'Confirmation window has expired. Your buyer rating has been affected.' });
+    }
+
+    const product = await Product.findById(bid.productId);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+
+    // Accept the bid
+    bid.status = 'accepted';
+    bid.updatedAt = new Date();
+    await bid.save();
+
+    // Reject all other active bids for this product
+    await Bid.updateMany(
+      { productId: bid.productId, _id: { $ne: bidId }, status: 'active' },
+      { status: 'rejected' }
+    );
+
+    // Update product status to sold
+    await Product.findByIdAndUpdate(bid.productId, {
+      status: 'sold',
+      highestBidAmount: bid.bidAmount,
+      highestBidderId: bid.buyerId
+    });
+
+    // Create order with platform fee
+    const order = new Order({
+      productId: bid.productId,
+      buyerId: bid.buyerId,
+      sellerId: product.sellerId,
+      bidId: bid._id,
+      finalPrice: bid.bidAmount,
+      platformFee: PLATFORM_FEE,
+      status: 'pending',
+      buyerConfirmed: true,
+      confirmedAt: new Date(),
+      orderDate: new Date(),
+      estimatedDeliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    });
+    await order.save();
+
+    // Notify seller about the accepted bid
+    try {
+      await notificationService.notifyBidAccepted(
+        bid._id,
+        product.title,
+        bid.bidAmount,
+        bid.buyerId
+      );
+      await notificationService.notifyOrderCreated(
+        order._id,
+        bid.buyerId,
+        product.sellerId,
+        product.title
+      );
+    } catch (notifError) {
+      logger.error('Error sending confirmation notifications:', notifError);
+    }
+
+    // Get buyer info for response
+    const buyer = await User.findById(bid.buyerId);
+
+    res.json({
+      message: 'Purchase confirmed! Please proceed to payment.',
+      bid: {
+        id: bid._id,
+        status: bid.status,
+        bidAmount: bid.bidAmount
+      },
+      order: {
+        id: order._id,
+        finalPrice: order.finalPrice,
+        platformFee: PLATFORM_FEE,
+        totalPayable: order.finalPrice + PLATFORM_FEE,
+        status: order.status
+      }
+    });
+  } catch (error) {
+    logger.error('Confirm auction win error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get buyer's won bids (pending confirmation)
+const getWonBids = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const wonBids = await Bid.find({
+      buyerId: userId,
+      status: 'pending_confirmation'
+    })
+      .populate({
+        path: 'productId',
+        select: 'title basePrice images category sellerId bidEndDate'
+      })
+      .sort({ auctionWonAt: -1 });
+
+    const transformedBids = wonBids.map(bid => {
+      const now = new Date();
+      const deadline = bid.confirmationDeadline;
+      const timeLeftMs = deadline ? deadline.getTime() - now.getTime() : 0;
+      const timeLeftMinutes = Math.max(0, Math.floor(timeLeftMs / 60000));
+      const hours = Math.floor(timeLeftMinutes / 60);
+      const minutes = timeLeftMinutes % 60;
+
+      return {
+        id: bid._id,
+        bidAmount: bid.bidAmount,
+        platformFee: PLATFORM_FEE,
+        totalPayable: bid.bidAmount + PLATFORM_FEE,
+        auctionWonAt: bid.auctionWonAt,
+        confirmationDeadline: bid.confirmationDeadline,
+        timeLeft: timeLeftMs > 0 ? `${hours}h ${minutes}m` : 'Expired',
+        timeLeftMs: Math.max(0, timeLeftMs),
+        isExpired: timeLeftMs <= 0,
+        product: bid.productId ? {
+          id: bid.productId._id,
+          title: bid.productId.title,
+          basePrice: bid.productId.basePrice,
+          images: bid.productId.images || [],
+          category: bid.productId.category,
+          sellerId: bid.productId.sellerId
+        } : null
+      };
+    });
+
+    res.json({
+      success: true,
+      data: transformedBids
+    });
+  } catch (error) {
+    logger.error('Get won bids error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   placeBid,
   getBidsForProduct,
@@ -431,5 +776,11 @@ module.exports = {
   updateBid,
   acceptBid,
   rejectBid,
-  withdrawBid
+  withdrawBid,
+  setAutoBid,
+  cancelAutoBid,
+  getMyAutoBids,
+  getBiddingAnalytics,
+  confirmAuctionWin,
+  getWonBids
 };

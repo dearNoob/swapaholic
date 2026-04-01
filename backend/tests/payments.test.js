@@ -25,7 +25,7 @@ describe('Payment Controller', () => {
         phone: `+1555${Date.now().toString().slice(-6)}`,
         email: `seller_pay_${Date.now()}@test.com`,
         password: 'Test1234',
-        role: 'seller'
+        role: 'user'
       });
     sellerToken = sellerRes.body.token;
     seller = sellerRes.body.user;
@@ -39,7 +39,7 @@ describe('Payment Controller', () => {
         phone: `+1555${Date.now().toString().slice(-7)}`,
         email: `buyer_pay_${Date.now()}@test.com`,
         password: 'Test1234',
-        role: 'buyer'
+        role: 'user'
       });
     buyerToken = buyerRes.body.token;
     buyer = buyerRes.body.user;

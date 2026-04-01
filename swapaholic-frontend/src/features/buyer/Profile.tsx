@@ -3,81 +3,98 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
-import { FaCreditCard, FaTrash, FaPlus, FaPaypal, FaUniversity, FaCheck } from 'react-icons/fa';
+import { FaCreditCard, FaTrash, FaPlus, FaPaypal, FaUniversity, FaCheck, FaCcVisa, FaCcMastercard, FaCcAmex } from 'react-icons/fa';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
-import { setUser } from '../../store/userSlice';
+import { updateUser } from '../../store/authSlice';
 import { authApi } from '../../api/auth';
-import { paymentApi } from '../../api/payment';
+import { paymentsApi, PaymentMethod, Transaction } from '../../api/payments';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import Modal from '../../components/ui/Modal';
 import TwoFactorAuth from '../../components/settings/TwoFactorAuth';
 
+// Profile Validation Schema
 const profileSchema = yup.object({
     firstName: yup.string().required('First name is required'),
     lastName: yup.string().required('Last name is required'),
     phone: yup.string().required('Phone is required'),
     address: yup.string().required('Address is required'),
+    nidNumber: yup.string().nullable(),
+    interests: yup.string().nullable(),
 }).required();
 
+// Password Validation Schema
 const passwordSchema = yup.object({
     currentPassword: yup.string().required('Current password is required'),
-    newPassword: yup.string().min(6, 'Password must be at least 6 characters').required('New password is required'),
-    confirmPassword: yup.string().oneOf([yup.ref('newPassword')], 'Passwords must match').required('Confirm password is required'),
+    newPassword: yup.string()
+        .required('New password is required')
+        .min(8, 'Password must be at least 8 characters'),
+    confirmPassword: yup.string()
+        .oneOf([yup.ref('newPassword')], 'Passwords must match')
+        .required('Confirm password is required'),
 }).required();
 
-type ProfileFormData = yup.InferType<typeof profileSchema>;
-type PasswordFormData = yup.InferType<typeof passwordSchema>;
-
-interface PaymentMethod {
-    id: string;
-    type: 'card' | 'paypal' | 'bank';
-    last4?: string;
-    cardBrand?: string;
-    email?: string;
-    accountName?: string;
-    isDefault: boolean;
+interface ProfileFormData {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    address: string;
+    nidNumber: string | null;
+    interests: string | null;
 }
 
-interface Transaction {
-    id: string;
-    type: 'payment' | 'refund' | 'payout';
-    amount: number;
-    status: 'completed' | 'pending' | 'failed';
-    description: string;
-    date: string;
+interface PasswordFormData {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
 }
 
 export const Profile = () => {
     const dispatch = useAppDispatch();
     const { user } = useAppSelector((state) => state.auth);
-    const [isEditingProfile, setIsEditingProfile] = useState(false);
-    const [isChangingPassword, setIsChangingPassword] = useState(false);
-    const [profileLoading, setProfileLoading] = useState(false);
-    const [passwordLoading, setPasswordLoading] = useState(false);
-    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([
-        { id: '1', type: 'card', last4: '4242', cardBrand: 'Visa', isDefault: true },
-        { id: '2', type: 'paypal', email: 'user@example.com', isDefault: false },
-    ]);
-    const [transactions, setTransactions] = useState<Transaction[]>([
-        { id: 'txn-1', type: 'payment', amount: 150.00, status: 'completed', description: 'Won auction: Vintage Camera', date: new Date().toISOString() },
-        { id: 'txn-2', type: 'payout', amount: 85.50, status: 'completed', description: 'Sale: Leather Jacket', date: new Date(Date.now() - 86400000).toISOString() },
-    ]);
-    const [activeTab, setActiveTab] = useState<'profile' | 'payment' | 'transactions'>('profile');
 
-    const { register: registerProfile, handleSubmit: handleProfileSubmit, formState: { errors: profileErrors }, reset: resetProfile } = useForm<ProfileFormData>({
-        resolver: yupResolver(profileSchema),
+    // UI State
+    const [activeTab, setActiveTab] = useState<'profile' | 'payment' | 'transactions'>('profile');
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [profileLoading, setProfileLoading] = useState(false);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [passwordLoading, setPasswordLoading] = useState(false);
+
+    // Payment & Transaction State
+    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+    const [transactions, setTransactions] = useState<Transaction[]>([]); // Mock data for now
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [modalPaymentType, setModalPaymentType] = useState('card');
+
+    // Profile Form
+    const {
+        register: registerProfile,
+        handleSubmit: handleProfileSubmit,
+        formState: { errors: profileErrors },
+        reset: resetProfile
+    } = useForm<ProfileFormData>({
+        resolver: yupResolver(profileSchema) as any,
         defaultValues: {
             firstName: user?.firstName || '',
             lastName: user?.lastName || '',
             phone: user?.phone || '',
             address: user?.address || '',
+            nidNumber: user?.nidNumber || null,
+            interests: user?.interests ? user.interests.join(', ') : null,
         },
     });
 
-    const { register: registerPassword, handleSubmit: handlePasswordSubmit, formState: { errors: passwordErrors }, reset: resetPassword } = useForm<PasswordFormData>({
+    // Password Form
+    const {
+        register: registerPassword,
+        handleSubmit: handlePasswordSubmit,
+        formState: { errors: passwordErrors },
+        reset: resetPassword
+    } = useForm<PasswordFormData>({
         resolver: yupResolver(passwordSchema),
     });
 
+    // Update form default values when user data changes
     useEffect(() => {
         if (user) {
             resetProfile({
@@ -85,15 +102,51 @@ export const Profile = () => {
                 lastName: user.lastName || '',
                 phone: user.phone || '',
                 address: user.address || '',
+                nidNumber: user.nidNumber || null,
+                interests: user.interests ? user.interests.join(', ') : null,
             });
         }
     }, [user, resetProfile]);
 
+    // Fetch payment methods when tab is active
+    useEffect(() => {
+        if (activeTab === 'payment') {
+            fetchPaymentMethods();
+        } else if (activeTab === 'transactions') {
+            fetchTransactions();
+        }
+    }, [activeTab]);
+
+    const fetchPaymentMethods = async () => {
+        try {
+            const methods = await paymentsApi.getPaymentMethods();
+            setPaymentMethods(methods);
+        } catch (error) {
+            console.error('Failed to fetch payment methods', error);
+        }
+    };
+
+    const fetchTransactions = async () => {
+        try {
+            const data = await paymentsApi.getTransactions();
+            setTransactions(data);
+        } catch (error) {
+            console.error('Failed to fetch transactions', error);
+            toast.error('Failed to load transaction history');
+        }
+    };
+
     const onProfileSubmit = async (data: ProfileFormData) => {
         setProfileLoading(true);
         try {
-            const response = await authApi.updateProfile(data);
-            dispatch(setUser(response.user));
+            // Convert interests string to array and handle nulls
+            const formattedData = {
+                ...data,
+                nidNumber: data.nidNumber || undefined, // Convert null to undefined for API
+                interests: data.interests ? data.interests.split(',').map((i: string) => i.trim()) : []
+            };
+            const response = await authApi.updateProfile(formattedData);
+            dispatch(updateUser(response.user));
             toast.success('Profile updated successfully!');
             setIsEditingProfile(false);
         } catch (error: any) {
@@ -108,7 +161,7 @@ export const Profile = () => {
         try {
             await authApi.changePassword({
                 currentPassword: data.currentPassword,
-                newPassword: data.newPassword,
+                newPassword: data.newPassword
             });
             toast.success('Password changed successfully!');
             setIsChangingPassword(false);
@@ -120,27 +173,33 @@ export const Profile = () => {
         }
     };
 
-    const handleRemovePaymentMethod = (id: string) => {
-        if (window.confirm('Are you sure you want to remove this payment method?')) {
-            setPaymentMethods(prev => prev.filter(pm => pm.id !== id));
-            toast.success('Payment method removed');
+    const handleSetDefaultPayment = async (id: string) => {
+        try {
+            await paymentsApi.setDefaultPaymentMethod(id);
+            toast.success('Default payment method updated');
+            fetchPaymentMethods();
+        } catch (error: any) {
+            toast.error('Failed to set default method');
         }
     };
 
-    const handleSetDefaultPayment = (id: string) => {
-        setPaymentMethods(prev => prev.map(pm => ({
-            ...pm,
-            isDefault: pm.id === id
-        })));
-        toast.success('Default payment method updated');
+    const handleRemovePaymentMethod = async (id: string) => {
+        if (!window.confirm('Are you sure you want to remove this payment method?')) return;
+        try {
+            await paymentsApi.removePaymentMethod(id);
+            toast.success('Payment method removed');
+            fetchPaymentMethods();
+        } catch (error: any) {
+            toast.error('Failed to remove payment method');
+        }
     };
 
     const getPaymentIcon = (type: string) => {
-        switch (type) {
-            case 'card': return <FaCreditCard className="text-indigo-600" />;
+        switch (type.toLowerCase()) {
+            case 'card': return <FaCreditCard className="text-gray-600" />;
             case 'paypal': return <FaPaypal className="text-blue-600" />;
-            case 'bank': return <FaUniversity className="text-green-600" />;
-            default: return <FaCreditCard />;
+            case 'bank': return <FaUniversity className="text-gray-600" />;
+            default: return <FaCreditCard className="text-gray-400" />;
         }
     };
 
@@ -156,17 +215,43 @@ export const Profile = () => {
     return (
         <div className="min-h-screen bg-gray-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <h1 className="text-3xl font-bold text-gray-900 mb-8">Account Settings</h1>
+                <div className="flex justify-between items-center mb-8">
+                    <h1 className="text-3xl font-bold text-gray-900">Account Settings</h1>
+                    {user?.isVerifiedUser && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                            <FaCheck className="mr-2" /> Verified User
+                        </span>
+                    )}
+                </div>
+
+                {/* Profile Completion Score */}
+                {user && (
+                    <div className="mb-8 bg-white shadow rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-gray-700">Profile Completion</span>
+                            <span className="text-sm font-medium text-indigo-600">{user.profileCompletionScore || 40}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div
+                                className="bg-indigo-600 h-2.5 rounded-full transition-all duration-500"
+                                style={{ width: `${user.profileCompletionScore || 40}%` }}
+                            ></div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                            Add Bio (+10%), Interests (+10%), and NID (+10%) to reach 70% and get Verified!
+                        </p>
+                    </div>
+                )}
 
                 {/* Tabs */}
-                <div className="border-b border-gray-200 mb-8">
-                    <nav className="-mb-px flex space-x-8">
+                <div className="border-b border-gray-200 mb-6">
+                    <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                         <button
                             onClick={() => setActiveTab('profile')}
                             className={`${activeTab === 'profile'
                                 ? 'border-indigo-500 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+                                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                         >
                             Profile & Security
                         </button>
@@ -175,7 +260,7 @@ export const Profile = () => {
                             className={`${activeTab === 'payment'
                                 ? 'border-indigo-500 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+                                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                         >
                             Payment Methods
                         </button>
@@ -184,7 +269,7 @@ export const Profile = () => {
                             className={`${activeTab === 'transactions'
                                 ? 'border-indigo-500 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+                                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                         >
                             Transaction History
                         </button>
@@ -209,7 +294,7 @@ export const Profile = () => {
                             </div>
 
                             {isEditingProfile ? (
-                                <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="border-t border-gray-200 px-4 py-5 sm:p-6">
+                                <form onSubmit={handleProfileSubmit(onProfileSubmit as any)} className="border-t border-gray-200 px-4 py-5 sm:p-6">
                                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                                         <Input label="First Name" {...registerProfile('firstName')} error={profileErrors.firstName?.message} />
                                         <Input label="Last Name" {...registerProfile('lastName')} error={profileErrors.lastName?.message} />
@@ -218,6 +303,8 @@ export const Profile = () => {
                                         <div className="sm:col-span-2">
                                             <Input label="Address" {...registerProfile('address')} error={profileErrors.address?.message} />
                                         </div>
+                                        <Input label="NID Number" {...registerProfile('nidNumber')} placeholder="National ID" />
+                                        <Input label="Interests" {...registerProfile('interests')} placeholder="Coding, Gaming (comma separated)" />
                                     </div>
                                     <div className="mt-6 flex justify-end space-x-3">
                                         <Button type="button" variant="outline" onClick={() => { setIsEditingProfile(false); resetProfile(); }}>Cancel</Button>
@@ -246,6 +333,16 @@ export const Profile = () => {
                                         <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                                             <dt className="text-sm font-medium text-gray-500">Role</dt>
                                             <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2 capitalize">{user?.role}</dd>
+                                        </div>
+                                        <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                                            <dt className="text-sm font-medium text-gray-500">NID</dt>
+                                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user?.nidNumber || 'Not provided'}</dd>
+                                        </div>
+                                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                                            <dt className="text-sm font-medium text-gray-500">Interests</dt>
+                                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                                                {user?.interests?.length ? user.interests.join(', ') : 'None'}
+                                            </dd>
                                         </div>
                                     </dl>
                                 </div>
@@ -318,10 +415,96 @@ export const Profile = () => {
                                     <h3 className="text-lg leading-6 font-medium text-gray-900">Saved Payment Methods</h3>
                                     <p className="mt-1 max-w-2xl text-sm text-gray-500">Manage your payment methods for faster checkout.</p>
                                 </div>
-                                <Button className="flex items-center gap-2">
+                                <Button
+                                    className="flex items-center gap-2"
+                                    onClick={() => setIsPaymentModalOpen(true)}
+                                >
                                     <FaPlus /> Add Payment Method
                                 </Button>
                             </div>
+
+                            <Modal
+                                isOpen={isPaymentModalOpen}
+                                onClose={() => setIsPaymentModalOpen(false)}
+                                title="Add Payment Method"
+                            >
+                                <form onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    const formData = new FormData(e.currentTarget);
+                                    const type = modalPaymentType;
+                                    const data: any = { type };
+
+                                    if (type === 'card') {
+                                        data.cardNumber = formData.get('cardNumber');
+                                        data.expiryMonth = formData.get('expiryMonth');
+                                        data.expiryYear = formData.get('expiryYear');
+                                        data.cvv = formData.get('cvv');
+                                        data.cardholderName = formData.get('cardholderName');
+                                    } else {
+                                        data.mobileNumber = formData.get('mobileNumber');
+                                        data.cardholderName = formData.get('accountName');
+                                    }
+
+                                    try {
+                                        await paymentsApi.addPaymentMethod(data);
+                                        toast.success('Payment method added successfully');
+                                        setIsPaymentModalOpen(false);
+                                        fetchPaymentMethods();
+                                    } catch (err: any) {
+                                        toast.error(err.response?.data?.message || 'Failed to add method');
+                                    }
+                                }}>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-black-700" 
+                                            style={{color:"black", fontWeight:"bold", fontSize:"18px", fontStyle:"italic"}}
+                                            >Method Type</label>
+                                            <select
+                                                name="type"
+                                                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-black-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                                                value={modalPaymentType}
+                                                onChange={(e) => setModalPaymentType(e.target.value)}
+                                                style={{color:"black"}}
+                                            >
+                                                <option value="card">Credit/Debit Card</option>
+                                                <option value="bkash">bKash</option>
+                                                <option value="nagad">Nagad</option>
+                                                <option value="rocket">Rocket</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <p className="text-xs text-black-500"
+                                            style={{color:"black", fontWeight:"bold", fontSize:"11px", fontStyle:"italic"}}
+                                            >Enter your {modalPaymentType === 'card' ? 'card' : 'account'} details securely.</p>
+
+                                            {modalPaymentType === 'card' ? (
+                                                <>
+                                                    <Input name="cardholderName" label="Cardholder Name" required />
+                                                    <Input name="cardNumber" label="Card Number" placeholder="1234 5678 1234 5678" required />
+
+                                                    <div className="flex gap-4">
+                                                        <Input name="expiryMonth" label="Exp Month" placeholder="MM" className="w-1/3" required />
+                                                        <Input name="expiryYear" label="Exp Year" placeholder="YY" className="w-1/3" required />
+                                                        <Input name="cvv" label="CVV" placeholder="123" type="password" className="w-1/3" required />
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Input name="accountName" label="Account Name" placeholder="Name on Account" required />
+                                                    <Input name="mobileNumber" label="Mobile Number" placeholder="01XXXXXXXXX" required />
+                                                </>
+                                            )}
+                                        </div>
+
+                                        <div className="mt-5 sm:mt-6">
+                                            <Button type="submit" className="w-full">
+                                                Save Payment Method
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </Modal>
 
                             <div className="border-t border-gray-200">
                                 {paymentMethods.length === 0 ? (
@@ -342,9 +525,8 @@ export const Profile = () => {
                                                         <div>
                                                             <div className="flex items-center gap-2">
                                                                 <p className="text-sm font-medium text-gray-900">
-                                                                    {method.type === 'card' && `${method.cardBrand} •••• ${method.last4}`}
-                                                                    {method.type === 'paypal' && `PayPal - ${method.email}`}
-                                                                    {method.type === 'bank' && `Bank Account - ${method.accountName}`}
+                                                                    {method.type === 'card' && `${method.brand} •••• ${method.last4}`}
+                                                                    {method.type === 'paypal' && `PayPal`}
                                                                 </p>
                                                                 {method.isDefault && (
                                                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">

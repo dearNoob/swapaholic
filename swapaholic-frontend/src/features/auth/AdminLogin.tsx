@@ -70,7 +70,7 @@ export const AdminLogin = () => {
             accessToken: accessToken,
         }));
 
-        tokenManager.setTokens(accessToken, '');
+
         localStorage.setItem('user', JSON.stringify(user));
 
         toast.success('Admin login successful!');

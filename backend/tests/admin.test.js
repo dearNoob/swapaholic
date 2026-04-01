@@ -40,7 +40,7 @@ describe('Admin Dashboard', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `seller_dash_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'seller'
+        role: 'user'
       });
     seller = sellerRes.body.user;
     sellerToken = sellerRes.body.token;
@@ -54,7 +54,7 @@ describe('Admin Dashboard', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `buyer_dash_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'buyer'
+        role: 'user'
       });
     buyer = buyerRes.body.user;
     buyerToken = buyerRes.body.token;
@@ -129,7 +129,7 @@ describe('Admin Dashboard', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `nonadmin_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const regularToken = regularRes.body.token;
 
@@ -212,7 +212,7 @@ describe('Admin Dashboard', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `ban_test_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const newUser = newUserRes.body.user;
 
@@ -253,7 +253,7 @@ describe('Admin Dashboard', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `seller2_dash_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'seller'
+          role: 'user'
         });
       const seller2Token = seller2Res.body.token;
 
@@ -266,7 +266,7 @@ describe('Admin Dashboard', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `buyer2_dash_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const buyer2Token = buyer2Res.body.token;
 
@@ -342,7 +342,7 @@ describe('Admin Dashboard', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `seller3_dash_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'seller'
+          role: 'user'
         });
       const seller3Token = seller3Res.body.token;
 
@@ -355,7 +355,7 @@ describe('Admin Dashboard', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `buyer3_dash_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const buyer3Token = buyer3Res.body.token;
 
@@ -462,7 +462,7 @@ describe('Admin Dashboard', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `regular_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const buyerToken = buyerRes.body.token;
 

@@ -133,10 +133,13 @@ export default function WonAuctionsCard({ auctions }: WonAuctionsCardProps) {
                                 {/* Actions */}
                                 <div className="flex flex-col justify-center items-end gap-3 lg:w-48">
                                     {auction.paymentStatus === 'pending' && (
-                                        <button className="w-full px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition shadow-md shadow-green-200 flex items-center justify-center gap-2">
+                                        <Link
+                                            href={`/payments/${auction.orderId}`}
+                                            className="w-full px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition shadow-md shadow-green-200 flex items-center justify-center gap-2"
+                                        >
                                             <FaCreditCard />
                                             Pay Now
-                                        </button>
+                                        </Link>
                                     )}
 
                                     {auction.paymentStatus === 'paid' && auction.deliveryStatus !== 'delivered' && auction.orderId && (

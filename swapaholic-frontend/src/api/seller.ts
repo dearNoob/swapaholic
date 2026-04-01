@@ -43,6 +43,18 @@ export const sellerApi = {
         return response.data;
     },
 
+    // Get recent bids
+    getRecentBids: async (limit: number = 5) => {
+        const response = await api.get(`/seller/bids/recent?limit=${limit}`);
+        return response.data;
+    },
+
+    // Get all bids (paginated)
+    getAllBids: async (page: number = 1, limit: number = 10) => {
+        const response = await api.get(`/seller/bids/recent?page=${page}&limit=${limit}`);
+        return response.data;
+    },
+
     // Get earnings summary
     getEarningsSummary: async () => {
         const response = await api.get('/seller/earnings');

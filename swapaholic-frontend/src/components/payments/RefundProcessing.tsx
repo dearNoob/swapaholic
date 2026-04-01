@@ -1,6 +1,6 @@
 // src/components/payments/RefundProcessing.tsx
 import React, { useState } from 'react';
-import { paymentApi } from '@/api/payment';
+import { paymentsApi } from '@/api/payments';
 
 interface Props {
     paymentId?: string; // optional, may be undefined until payment is created
@@ -19,7 +19,7 @@ export default function RefundProcessing({ paymentId }: Props) {
         }
         setLoading(true);
         try {
-            await paymentApi.refund(paymentId, reason);
+            await paymentsApi.refund(paymentId, reason);
             setStatus('Refund processed successfully');
         } catch (e) {
             setStatus('Refund failed');

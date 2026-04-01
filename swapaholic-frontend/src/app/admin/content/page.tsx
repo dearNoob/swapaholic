@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { adminApi } from '../../../api/admin';
+import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
 
 interface ContentSection {
     type: string;
@@ -14,17 +15,25 @@ interface ContentSection {
 export default function ContentManagementPage() {
     const [activeTab, setActiveTab] = useState<'terms' | 'privacy' | 'about'>('terms');
     const [content, setContent] = useState<ContentSection | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    // Protect route with admin auth
+    const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
+    const [isDataLoading, setIsDataLoading] = useState(false);
+
+    // Combined loading state
+    const isLoading = isAuthLoading || isDataLoading;
+
     const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState({ title: '', body: '' });
 
     useEffect(() => {
-        fetchContent(activeTab);
-    }, [activeTab]);
+        if (isAdmin) {
+            fetchContent(activeTab);
+        }
+    }, [activeTab, isAdmin]);
 
     const fetchContent = async (type: string) => {
         try {
-            setIsLoading(true);
+            setIsDataLoading(true);
             const data = await adminApi.getContent(type);
             setContent(data);
             setFormData({ title: data.title || '', body: data.body || '' });
@@ -32,7 +41,7 @@ export default function ContentManagementPage() {
             console.error('Error fetching content:', err);
             toast.error('Failed to load content');
         } finally {
-            setIsLoading(false);
+            setIsDataLoading(false);
         }
     };
 
@@ -74,8 +83,8 @@ export default function ContentManagementPage() {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id as any)}
                                     className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                                            ? 'border-indigo-500 text-indigo-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        ? 'border-indigo-500 text-indigo-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                         }`}
                                 >
                                     {tab.label}

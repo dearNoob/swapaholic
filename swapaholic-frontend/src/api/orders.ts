@@ -28,4 +28,14 @@ export const ordersApi = {
         const response = await apiClient.put<ApiResponse<Order>>(`/orders/${id}`, { status });
         return response.data.data;
     },
+    // Confirm delivery (Buyer only)
+    async confirmDelivery(id: string): Promise<Order> {
+        const response = await apiClient.put<ApiResponse<Order>>(`/orders/${id}/confirm-delivery`);
+        return response.data.data;
+    },
+    // Raise a dispute
+    async fileDispute(orderId: string, reason: string, description: string): Promise<{ message: string }> {
+        const response = await apiClient.put<ApiResponse<{ message: string }>>(`/orders/${orderId}/dispute`, { reason, description });
+        return response.data.data;
+    },
 };

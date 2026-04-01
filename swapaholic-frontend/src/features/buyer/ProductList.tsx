@@ -140,8 +140,14 @@ export const ProductList = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Page Header */}
                 <div className="mb-8">
-                    <h1 className="text-4xl font-extrabold text-gray-900 mb-2">Browse Products</h1>
-                    <p className="text-lg text-gray-600">Discover amazing second-hand items</p>
+                    <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
+                        {filters.searchQuery ? `Search Results for "${filters.searchQuery}"` : 'Browse Products'}
+                    </h1>
+                    <p className="text-lg text-gray-600">
+                        {filters.searchQuery
+                            ? `Found ${pagination.total} results`
+                            : 'Discover amazing second-hand items'}
+                    </p>
                 </div>
 
                 {/* Search Bar */}

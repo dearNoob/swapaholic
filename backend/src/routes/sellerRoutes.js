@@ -33,6 +33,11 @@ router.get('/orders', sellerController.getSellerOrders);
 // @access  Private - Seller only
 router.get('/orders/recent', sellerController.getRecentOrders);
 
+// @route   GET /api/seller/bids/recent
+// @desc    Get recent bids on seller's products
+// @access  Private - Seller only
+router.get('/bids/recent', sellerController.getRecentBids);
+
 // @route   GET /api/seller/performance
 // @desc    Get seller performance metrics
 // @access  Private - Seller only

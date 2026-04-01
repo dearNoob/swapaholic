@@ -66,6 +66,7 @@ export default function DeliveryTracking() {
             setDelivery(data);
         } catch (error) {
             console.error('Error fetching delivery:', error);
+            toast.error('Failed to load delivery details. Showing demo data.');
             // Mock data for demonstration
             setDelivery({
                 id: orderId,

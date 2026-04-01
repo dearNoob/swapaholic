@@ -25,7 +25,7 @@ describe('Review Controller', () => {
         phone: `+1555${Date.now().toString().slice(-6)}`,
         email: `seller_review_${Date.now()}@test.com`,
         password: 'Test1234',
-        role: 'seller'
+        role: 'user'
       });
     sellerToken = sellerRes.body.token;
     seller = sellerRes.body.user;
@@ -39,7 +39,7 @@ describe('Review Controller', () => {
         phone: `+1555${Date.now().toString().slice(-7)}`,
         email: `buyer_review_${Date.now()}@test.com`,
         password: 'Test1234',
-        role: 'buyer'
+        role: 'user'
       });
     buyerToken = buyerRes.body.token;
     buyer = buyerRes.body.user;
@@ -216,7 +216,7 @@ describe('Review Controller', () => {
           phone: `+1555${Date.now().toString().slice(-5)}`,
           email: `other_review_${Date.now()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 
@@ -301,7 +301,7 @@ describe('Review Controller', () => {
           phone: `+1555${Date.now().toString().slice(-4)}`,
           email: `newuser_review_${Date.now()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const newUserId = newUserRes.body.user.id;
 

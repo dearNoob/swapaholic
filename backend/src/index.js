@@ -10,6 +10,7 @@ const { validateEnvironment } = require('./config/validateEnv');
 const logger = require('./utils/logger');
 const { connectDB } = require('./config/mongodb');
 const notificationService = require('./utils/notificationService');
+const { startAuctionScheduler } = require('./utils/auctionScheduler');
 
 // Validate environment configuration
 validateEnvironment();
@@ -29,10 +30,13 @@ const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const sellerRoutes = require('./routes/sellerRoutes');
+const messageRoutes = require('./routes/messageRoutes');
+const logisticsRoutes = require('./routes/logisticsRoutes');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
 const { sanitizeInput } = require('./middleware/validation');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 
@@ -45,6 +49,7 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
+app.use(cookieParser());
 
 // Compression middleware
 app.use(compression({
@@ -70,10 +75,16 @@ app.use(helmet({
   },
 }));
 
+// Request Logger
+app.use((req, res, next) => {
+  logger.info(`[${req.method}] ${req.originalUrl}`);
+  next();
+});
+
 // Rate limiting for all routes
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000, // Increased for development to prevent 429 errors from Next.js fast refresh
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -91,6 +102,10 @@ app.use('/api/auth/', authLimiter);
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve uploaded files statically
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // Input sanitization
 app.use(sanitizeInput);
@@ -115,6 +130,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/seller', sellerRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/logistics', logisticsRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -152,6 +169,9 @@ if (require.main === module) {
         logger.info(`Swapaholic Backend Server running on port ${PORT}`);
         logger.info('MongoDB connection established');
         logger.info('Socket.io server initialized');
+
+        // Start auction scheduler (cron jobs)
+        startAuctionScheduler();
       });
     })
     .catch((err) => {

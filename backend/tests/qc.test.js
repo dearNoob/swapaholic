@@ -26,7 +26,7 @@ describe('QC Verification System', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `seller_qc_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'seller'
+        role: 'user'
       });
     sellerToken = sellerRes.body.token;
     seller = sellerRes.body.user;
@@ -40,7 +40,7 @@ describe('QC Verification System', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `buyer_qc_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'buyer'
+        role: 'user'
       });
     buyerToken = buyerRes.body.token;
     buyer = buyerRes.body.user;
@@ -153,7 +153,7 @@ describe('QC Verification System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `other_qc_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 
@@ -236,7 +236,7 @@ describe('QC Verification System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `other_qc2_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 

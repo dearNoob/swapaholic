@@ -12,9 +12,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         return (
             <div className="w-full">
                 {label && (
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         {label}
                     </label>
+
                 )}
                 <div className="relative">
                     <input
@@ -23,20 +24,21 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             block w-full px-3 py-2 rounded-md shadow-sm 
             transition-all duration-200 ease-in-out
             focus:outline-none focus:ring-2 focus:ring-offset-0
-            disabled:bg-gray-100 disabled:cursor-not-allowed
-            text-gray-900 bg-white border
-            placeholder:text-gray-400
+            disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed
+            text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 border
+            placeholder:text-gray-500 dark:placeholder:text-gray-400
             ${icon ? 'pl-10' : ''}
             ${error
-                                ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                                : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500 hover:border-gray-400'
+                                ? 'border-red-300 dark:border-red-500 focus:border-red-500 focus:ring-red-500'
+                                : 'border-gray-300 dark:border-slate-700 focus:border-blue-500 focus:ring-blue-500 hover:border-gray-400 dark:hover:border-slate-500'
                             }
             ${className}
           `}
+
                         {...props}
                     />
                     {icon && (
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
                             {icon}
                         </div>
                     )}
@@ -49,7 +51,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                         {error}
                     </p>
                 )}
-                {helperText && !error && <p className="mt-1.5 text-sm text-gray-500">{helperText}</p>}
+                {helperText && !error && <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">{helperText}</p>}
+
             </div>
         );
     }

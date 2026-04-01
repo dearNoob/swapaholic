@@ -22,7 +22,7 @@ describe('Notification System', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `notif_user1_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'buyer'
+        role: 'user'
       });
     user1 = user1Res.body.user;
     user1Token = user1Res.body.token;
@@ -36,7 +36,7 @@ describe('Notification System', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `notif_user2_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'seller'
+        role: 'user'
       });
     user2 = user2Res.body.user;
     user2Token = user2Res.body.token;
@@ -418,7 +418,7 @@ describe('Notification System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `empty_notif_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const newUserToken = newUserRes.body.token;
 

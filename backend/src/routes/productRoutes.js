@@ -6,6 +6,11 @@ const { authMiddleware, roleCheck } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 router.get('/nearby/search', validateNearbyQuery, productController.searchNearby);
 
+// Aliases for frontend consistency
+router.get('/search', productController.getProducts);
+router.get('/categories', productController.getCategories);
+
+
 // Special routes (must come BEFORE generic routes)
 // @route   GET /api/products/filters/metadata
 // @desc    Get filter options (categories, conditions, price range)
@@ -42,21 +47,43 @@ router.get('/:id', productController.getProductById);
 // @route   POST /api/products/analyze
 // @desc    Analyze product image and generate description/score (Seller)
 // @access  Private - Seller only
-router.post('/analyze', authMiddleware, roleCheck(['seller', 'user']), upload.array('images'), productController.analyzeProduct);
+router.post('/analyze', authMiddleware, roleCheck(['seller', 'user', 'buyer']), upload.array('images'), productController.analyzeProduct);
+
+// @route   POST /api/products/regenerate-description
+// @desc    Regenerate description (Seller)
+router.post('/regenerate-description', authMiddleware, roleCheck(['seller', 'user', 'buyer']), upload.array('images'), productController.regenerateDescription);
+
 
 // @route   POST /api/products
 // @desc    Create new product (Seller)
 // @access  Private - Seller only
-router.post('/', authMiddleware, roleCheck(['seller', 'user']), upload.array('images'), productController.createProduct);
+router.post('/', authMiddleware, roleCheck(['seller', 'user', 'buyer']), upload.array('images'), productController.createProduct);
 
 // @route   PUT /api/products/:id
 // @desc    Update product
 // @access  Private - Seller only
-router.put('/:id', authMiddleware, roleCheck(['seller', 'user']), upload.array('images'), productController.updateProduct);
+router.put('/:id', authMiddleware, roleCheck(['seller', 'user', 'buyer']), upload.array('images'), productController.updateProduct);
 
 // @route   DELETE /api/products/:id
 // @desc    Delete product
 // @access  Private - Seller/Admin
 router.delete('/:id', authMiddleware, productController.deleteProduct);
+
+// @route   POST /api/products/:id/images
+// @desc    Upload additional images
+router.post('/:id/images', authMiddleware, upload.array('images'), productController.uploadImages);
+
+// @route   GET /api/products/seller/:sellerId
+// @desc    Get products by seller
+router.get('/seller/:sellerId', productController.getSellerProducts);
+
+// @route   GET /api/products/:id/similar
+// @desc    Get similar products
+router.get('/:id/similar', productController.getSimilarProducts);
+
+// @route   POST /api/products/:id/view
+// @desc    Increment view count
+router.post('/:id/view', productController.incrementViewCount);
+
 
 module.exports = router;

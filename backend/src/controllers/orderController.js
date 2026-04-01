@@ -192,6 +192,7 @@ const updateOrderStatus = async (req, res) => {
 };
 
 // Confirm delivery (buyer confirms receipt)
+// Note: escrow stays 'held' — the autoReleaseEscrow cron job releases it after 24 hours
 const confirmDelivery = async (req, res) => {
   try {
     const { id } = req.params;
@@ -204,28 +205,26 @@ const confirmDelivery = async (req, res) => {
       return res.status(403).json({ message: 'Only buyer can confirm delivery' });
     }
 
-    if (order.status !== 'in_delivery') {
-      return res.status(400).json({ message: 'Order must be in_delivery status' });
+    if (order.status !== 'in_delivery' && order.status !== 'delivered') {
+      return res.status(400).json({ message: 'Order must be in delivery or delivered status' });
     }
 
     order.status = 'completed';
     order.actualDeliveryDate = new Date();
-    order.escrowStatus = 'released';
+    // Keep escrowStatus as 'held' — auto-release cron will release after 24 hours
     order.updatedAt = new Date();
 
     await order.save();
-
-    // Update seller's transaction count
-    await User.findByIdAndUpdate(order.sellerId, {
-      $inc: { totalTransactions: 1 }
-    });
 
     const completedOrder = await Order.findById(id)
       .populate('productId', 'title')
       .populate('buyerId', 'firstName lastName')
       .populate('sellerId', 'firstName lastName');
 
-    res.json({ message: 'Delivery confirmed. Order completed.', order: completedOrder });
+    res.json({
+      message: 'Delivery confirmed. Payment will be released to seller within 24 hours.',
+      order: completedOrder
+    });
   } catch (error) {
     logger.error('Confirm delivery error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -236,7 +235,7 @@ const confirmDelivery = async (req, res) => {
 const raiseDispute = async (req, res) => {
   try {
     const { id } = req.params;
-    const { reason } = req.body;
+    const { reason, description } = req.body;
 
     if (!reason) {
       return res.status(400).json({ message: 'Dispute reason required' });
@@ -253,11 +252,17 @@ const raiseDispute = async (req, res) => {
     }
 
     if (order.status === 'disputed' || order.status === 'completed' || order.status === 'cancelled') {
-      return res.status(400).json({ message: 'Cannot dispute this order' });
+      return res.status(400).json({ message: 'Cannot dispute this order in its current status' });
     }
 
     order.status = 'disputed';
-    order.notes = (order.notes ? order.notes + ' | ' : '') + `DISPUTE: ${reason}`;
+    order.disputeReason = reason;
+    order.disputeDescription = description || '';
+    order.disputeFiledBy = req.user.id;
+    order.disputeFiledAt = new Date();
+
+    // Append to notes for audit trail
+    order.notes = (order.notes ? order.notes + ' | ' : '') + `DISPUTE (${req.user.role}): ${reason} - ${description || ''}`;
     order.updatedAt = new Date();
 
     await order.save();

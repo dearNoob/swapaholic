@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { FaFilter, FaSave, FaCompressArrowsAlt } from 'react-icons/fa';
+import { FaFilter, FaSave, FaCompressArrowsAlt, FaTimes } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { productsApi, Product } from '../../api/products';
 
@@ -22,16 +22,22 @@ import AdvancedFilters from '../../components/products/AdvancedFilters';
 import ProductGrid from '../../components/products/ProductGrid';
 import ProductComparison from '../../components/products/ProductComparison';
 import SavedFilters from '../../components/products/SavedFilters';
+import Breadcrumbs from '../../components/ui/Breadcrumbs';
 
 function CategoryBrowsePage() {
     const searchParams = useSearchParams();
     const categoryParam = searchParams.get('category');
 
     const [products, setProducts] = useState<Product[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalProducts, setTotalProducts] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [showFilters, setShowFilters] = useState(true);
     const [showComparison, setShowComparison] = useState(false);
     const [comparisonItems, setComparisonItems] = useState<string[]>([]);
+    const [showSaveModal, setShowSaveModal] = useState(false);
+    const [filterName, setFilterName] = useState('');
 
     const [filters, setFilters] = useState({
         categories: categoryParam ? [categoryParam] : [],
@@ -44,38 +50,26 @@ function CategoryBrowsePage() {
         try {
             setIsLoading(true);
             const data = await productsApi.getProducts({
+                page: currentPage,
+                limit: 12,
                 category: filters.categories.join(','),
                 condition: filters.conditions.join(',') as any,
                 minPrice: filters.priceRange[0],
                 maxPrice: filters.priceRange[1],
                 sortBy: filters.sortBy,
             });
+            // data matches PaginatedResponse signature
             setProducts(data.data || []);
+            setTotalPages(data.totalPages || 1);
+            setTotalProducts(data.total || 0);
         } catch (err) {
             console.error('Error fetching products:', err);
             toast.error('Failed to load products');
-            // Mock data
-            setProducts(Array.from({ length: 12 }, (_, i) => ({
-                id: `prod-${i + 1}`,
-                title: `Product ${i + 1}`,
-                description: `Description for Product ${i + 1}`,
-                price: Math.floor(Math.random() * 500) + 100,
-                images: ['/placeholder-product.jpg'],
-                category: ['Electronics', 'Fashion', 'Home'][Math.floor(Math.random() * 3)],
-                condition: (['new', 'like-new', 'good', 'fair', 'poor'] as const)[Math.floor(Math.random() * 5)],
-                sellerId: `seller-${i + 1}`,
-                sellerName: `Seller ${i + 1}`,
-                status: 'active' as const,
-                currentBid: Math.floor(Math.random() * 500) + 100,
-                bidCount: Math.floor(Math.random() * 20) + 1,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                auctionEndTime: new Date(Date.now() + Math.random() * 86400000 * 7).toISOString(),
-            })));
+            setProducts([]);
         } finally {
             setIsLoading(false);
         }
-    }, [filters]);
+    }, [filters, currentPage]);
 
     useEffect(() => {
         fetchProducts();
@@ -83,16 +77,17 @@ function CategoryBrowsePage() {
 
     const handleFilterChange = (newFilters: Partial<BrowseFilters>) => {
         setFilters({ ...filters, ...newFilters });
+        setCurrentPage(1); // Reset to first page on filter change
     };
 
     const handleSaveFilters = () => {
+        if (!filterName.trim()) return;
         const savedFilters = JSON.parse(localStorage.getItem('savedFilters') || '[]');
-        const filterName = prompt('Name for this filter set:');
-        if (filterName) {
-            savedFilters.push({ name: filterName, filters, timestamp: Date.now() });
-            localStorage.setItem('savedFilters', JSON.stringify(savedFilters));
-            toast.success('Filters saved!');
-        }
+        savedFilters.push({ name: filterName.trim(), filters, timestamp: Date.now() });
+        localStorage.setItem('savedFilters', JSON.stringify(savedFilters));
+        toast.success('Filters saved!');
+        setFilterName('');
+        setShowSaveModal(false);
     };
 
     const handleLoadFilter = (savedFilter: SavedFilter) => {
@@ -113,14 +108,17 @@ function CategoryBrowsePage() {
     return (
         <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Breadcrumbs */}
+                <Breadcrumbs className="mb-4" />
+
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
-                            Browse Products 🔍
+                            Browse Products
                         </h1>
                         <p className="text-gray-600">
-                            {products.length} products found
+                            {totalProducts} products found
                         </p>
                     </div>
 
@@ -133,7 +131,7 @@ function CategoryBrowsePage() {
                             {showFilters ? 'Hide' : 'Show'} Filters
                         </button>
                         <button
-                            onClick={handleSaveFilters}
+                            onClick={() => setShowSaveModal(true)}
                             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                         >
                             <FaSave />
@@ -176,11 +174,48 @@ function CategoryBrowsePage() {
                                 <p className="text-gray-600">Loading products...</p>
                             </div>
                         ) : (
-                            <ProductGrid
-                                products={products}
-                                comparisonItems={comparisonItems}
-                                onToggleComparison={toggleComparison}
-                            />
+                            <>
+                                <ProductGrid
+                                    products={products}
+                                    comparisonItems={comparisonItems}
+                                    onToggleComparison={toggleComparison}
+                                />
+                                
+                                {/* Pagination Controls */}
+                                {totalPages > 1 && (
+                                    <div className="mt-8 flex justify-center items-center gap-2">
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                            disabled={currentPage === 1 || isLoading}
+                                            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition"
+                                        >
+                                            Previous
+                                        </button>
+                                        <div className="flex items-center gap-1 mx-2">
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setCurrentPage(page)}
+                                                    className={`w-10 h-10 rounded-lg font-medium transition ${
+                                                        currentPage === page 
+                                                            ? 'bg-indigo-600 text-white' 
+                                                            : 'text-gray-700 hover:bg-gray-100'
+                                                    }`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                            disabled={currentPage === totalPages || isLoading}
+                                            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -203,6 +238,44 @@ function CategoryBrowsePage() {
                         onRemove={(id) => setComparisonItems(comparisonItems.filter(i => i !== id))}
                     />
                 )}
+                {/* Save Filter Modal */}
+                {showSaveModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowSaveModal(false)} />
+                        <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-fade-in">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-gray-900">Save Filter Set</h3>
+                                <button onClick={() => setShowSaveModal(false)} className="p-1 text-gray-400 hover:text-gray-600 transition">
+                                    <FaTimes />
+                                </button>
+                            </div>
+                            <input
+                                type="text"
+                                value={filterName}
+                                onChange={(e) => setFilterName(e.target.value)}
+                                placeholder="Enter a name for this filter..."
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm mb-4"
+                                autoFocus
+                                onKeyDown={(e) => e.key === 'Enter' && handleSaveFilters()}
+                            />
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowSaveModal(false)}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveFilters}
+                                    disabled={!filterName.trim()}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -210,7 +283,11 @@ function CategoryBrowsePage() {
 
 export default function BrowsePage() {
     return (
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+            </div>
+        }>
             <CategoryBrowsePage />
         </Suspense>
     );

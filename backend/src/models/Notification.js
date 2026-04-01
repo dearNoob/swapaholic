@@ -37,7 +37,13 @@ const notificationSchema = new mongoose.Schema(
         'seller_banned',      // Seller account banned
         'product_listed',     // Product listed (for seller)
         'product_sold',       // Product sold (for seller)
-        'support_notice'      // General support/admin notice
+        'support_notice',     // General support/admin notice
+        'auction_won',        // Buyer won auction
+        'auction_confirmation_reminder', // Reminder to confirm
+        'auction_confirmation_expired',  // Confirmation time expired
+        'auction_second_chance',         // 2nd/3rd bidder selected
+        'seller_payout',      // Seller payout completed
+        'outbid'              // User outbid on auction
       ],
       required: true
     },

@@ -75,7 +75,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiLimit, setAiLimit] = useState(2);
 
-    const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormData>({
+    const { register, handleSubmit, watch, setValue, reset, formState: { errors, isDirty, isSubmitSuccessful } } = useForm<FormData>({
         resolver: yupResolver(schema) as any,
         defaultValues: {
             auctionDuration: 7,
@@ -130,6 +130,19 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
             fetchListing();
         }
     }, [listingId, reset, router, setValue]);
+
+    // Warn on unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isDirty && !isSubmitSuccessful && !isLoading) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isDirty, isSubmitSuccessful, isLoading]);
 
     const handleAIAnalyze = async () => {
         if (aiLimit <= 0) {
@@ -245,48 +258,71 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
         setExistingImages(newExistingImages);
     };
 
-    const handleGetLocation = () => {
-        if (!navigator.geolocation) {
-            toast.error('Geolocation is not supported by your browser');
-            return;
-        }
-
+    const handleGetLocation = async () => {
         setGettingLocation(true);
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                setValue('lat', position.coords.latitude);
-                setValue('lng', position.coords.longitude);
-                setValue('location', `Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)}`);
-                setGettingLocation(false);
-                toast.success('Location retrieved successfully');
-            },
-            (error) => {
-                console.error('Geolocation error:', error);
-                let errorMessage = 'Failed to get location.';
 
-                switch (error.code) {
-                    case error.PERMISSION_DENIED:
-                        errorMessage = 'Location permission denied. Please enable it in your browser settings.';
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        errorMessage = 'Location information is unavailable.';
-                        break;
-                    case error.TIMEOUT:
-                        errorMessage = 'The request to get user location timed out.';
-                        break;
-                    default:
-                        errorMessage = 'An unknown error occurred getting location.';
+        // Helper: try IP-based geolocation as fallback
+        const tryIPGeolocation = async () => {
+            try {
+                const response = await fetch('https://ipapi.co/json/');
+                if (!response.ok) {
+                    throw new Error(`IP geolocation API returned ${response.status}`);
                 }
-
-                toast.error(errorMessage);
+                const data = await response.json();
+                const lat = Number(data.latitude);
+                const lng = Number(data.longitude);
+                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                    setValue('lat', lat);
+                    setValue('lng', lng);
+                    const city = data.city || '';
+                    const region = data.region || '';
+                    const country = data.country_name || '';
+                    const locationStr = [city, region, country].filter(Boolean).join(', ');
+                    setValue('location', locationStr || `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`);
+                    setGettingLocation(false);
+                    toast.success(`Location set to: ${locationStr || 'coordinates captured'} (approximate)`);
+                } else {
+                    throw new Error('Invalid coordinates from IP geolocation');
+                }
+            } catch (ipError: any) {
+                console.error('IP Geolocation fallback failed:', ipError);
                 setGettingLocation(false);
+                toast.error('Could not determine your location. Please enter it manually.');
             }
-        );
+        };
+
+        // First, try browser's native geolocation
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setValue('lat', position.coords.latitude);
+                    setValue('lng', position.coords.longitude);
+                    setValue('location', `Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)}`);
+                    setGettingLocation(false);
+                    toast.success('Location retrieved successfully');
+                },
+                async (error) => {
+                    console.warn('Browser geolocation failed, trying IP-based fallback:', error.message);
+                    toast.info('Browser location unavailable, using approximate location...');
+                    await tryIPGeolocation();
+                },
+                {
+                    enableHighAccuracy: false,
+                    timeout: 5000,
+                    maximumAge: 300000
+                }
+            );
+        } else {
+            // Browser doesn't support geolocation at all, use IP fallback
+            toast.info('Browser location not supported, using approximate location...');
+            await tryIPGeolocation();
+        }
     };
 
     const onSubmit = async (data: FormData) => {
-        if (images.length === 0 && existingImages.length === 0) {
-            toast.error('Please upload at least one image of your product');
+        const totalImages = images.length + existingImages.length;
+        if (totalImages < 4) {
+            toast.error('Please upload at least 4 images (Front, Back, Sides) for QC standards.');
             return;
         }
 
@@ -327,8 +363,10 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
 
             router.push('/seller/listings');
         } catch (error: any) {
-            console.error('Save listing error:', error);
-            toast.error(error.response?.data?.message || 'Failed to save listing. Please try again.');
+            console.error('Save listing error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+            console.error('Error status:', error?.status, 'Error message:', error?.message);
+            const errorMsg = error?.message || error?.response?.data?.message || 'Failed to save listing. Please try again.';
+            toast.error(errorMsg);
         } finally {
             setIsLoading(false);
         }
@@ -611,7 +649,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                         <div className="p-6 sm:p-8">
                             <div className="mb-4">
                                 <p className="text-sm text-gray-500 mb-2">
-                                    Add up to 5 high-quality images. The first image will be your cover photo.
+                                    Quality Control: Upload at least 4 images covering different angles (Front, Back, Sides).
                                 </p>
                                 <div className="flex items-center gap-2 text-xs text-gray-400">
                                     <span className="bg-gray-100 px-2 py-1 rounded">JPG, PNG, WEBP</span>

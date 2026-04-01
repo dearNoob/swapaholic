@@ -3,6 +3,8 @@ const Order = require('../models/Order');
 const Review = require('../models/Review');
 const SupportTicket = require('../models/SupportTicket');
 const logger = require('../utils/logger');
+const notificationService = require('../utils/notificationService');
+const emailService = require('../utils/emailService');
 
 /**
  * Get list of all users with filters and pagination
@@ -590,6 +592,195 @@ const unbanUser = async (req, res) => {
   }
 };
 
+/**
+ * Get all logistics officers (with filters)
+ */
+const getLogisticsOfficers = async (req, res) => {
+  try {
+    const userRole = req.user.role;
+    if (userRole !== 'admin') {
+      return res.status(403).json({ message: 'Admin only' });
+    }
+
+    const { status, search, page = 1, limit = 20 } = req.query;
+
+    const filter = { role: 'logistics_officer' };
+    if (status) filter.accountStatus = status;
+
+    if (search) {
+      filter.$or = [
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const officers = await User.find(filter)
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await User.countDocuments(filter);
+    const pendingCount = await User.countDocuments({ role: 'logistics_officer', accountStatus: 'pending_approval' });
+    const activeCount = await User.countDocuments({ role: 'logistics_officer', accountStatus: 'active' });
+
+    res.json({
+      officers,
+      stats: { total, pending: pendingCount, active: activeCount },
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    logger.error('Get logistics officers error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Approve a logistics officer account (pending_approval -> active)
+ */
+const approveLogisticsOfficer = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const userRole = req.user.role;
+
+    if (userRole !== 'admin') {
+      return res.status(403).json({ message: 'Admin only' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.role !== 'logistics_officer') {
+      return res.status(400).json({ message: 'User is not a logistics officer' });
+    }
+
+    if (user.accountStatus !== 'pending_approval') {
+      return res.status(400).json({ message: `Account is already ${user.accountStatus}` });
+    }
+
+    user.accountStatus = 'active';
+    user.updatedAt = new Date();
+    await user.save();
+
+    logger.info(`Logistics officer approved: ${userId} by admin ${req.user.id}`);
+
+    // Send in-app notification
+    try {
+      await notificationService.createAndSend({
+        recipientId: user._id,
+        type: 'account_approved',
+        title: '🎉 Account Approved!',
+        message: 'Your logistics officer account has been approved by an admin. You can now login at /logistics/login.',
+        data: { relatedType: 'User', relatedId: user._id },
+        priority: 'high',
+        actionUrl: '/logistics/login'
+      });
+    } catch (notifErr) {
+      logger.warn('Failed to send approval notification:', notifErr);
+    }
+
+    // Send approval email
+    try {
+      const { sendLogisticsApprovalEmail } = require('../utils/emailService');
+      if (typeof sendLogisticsApprovalEmail === 'function') {
+        await sendLogisticsApprovalEmail(user.email, user.firstName);
+      }
+    } catch (emailErr) {
+      logger.warn('Failed to send approval email:', emailErr);
+    }
+
+    res.json({
+      success: true,
+      message: 'Logistics officer approved successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        accountStatus: user.accountStatus
+      }
+    });
+  } catch (error) {
+    logger.error('Approve logistics officer error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Reject a logistics officer account
+ */
+const rejectLogisticsOfficer = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason } = req.body;
+    const userRole = req.user.role;
+
+    if (userRole !== 'admin') {
+      return res.status(403).json({ message: 'Admin only' });
+    }
+
+    if (!reason) {
+      return res.status(400).json({ message: 'Rejection reason required' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.role !== 'logistics_officer') {
+      return res.status(400).json({ message: 'User is not a logistics officer' });
+    }
+
+    user.accountStatus = 'banned';
+    user.banReason = reason;
+    user.bannedAt = new Date();
+    user.bannedBy = req.user.id;
+    await user.save();
+
+    logger.info(`Logistics officer rejected: ${userId}, reason: ${reason}`);
+
+    // Send in-app notification
+    try {
+      await notificationService.createAndSend({
+        recipientId: user._id,
+        type: 'account_rejected',
+        title: 'Account Application Rejected',
+        message: `Your logistics officer account application was rejected. Reason: ${reason}`,
+        data: { relatedType: 'User', relatedId: user._id, reason },
+        priority: 'high',
+        actionUrl: '/logistics/register'
+      });
+    } catch (notifErr) {
+      logger.warn('Failed to send rejection notification:', notifErr);
+    }
+    res.json({
+      success: true,
+      message: 'Logistics officer rejected',
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        accountStatus: user.accountStatus
+      }
+    });
+  } catch (error) {
+    logger.error('Reject logistics officer error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   listUsers,
   getUserProfile,
@@ -600,5 +791,75 @@ module.exports = {
   verifyUser,
   unbanUser,
   getUserTransactions,
-  getUserTickets
+  getUserTickets,
+  getLogisticsOfficers,
+  approveLogisticsOfficer,
+  rejectLogisticsOfficer,
+  getLogisticsOfficerDetail,
 };
+
+/**
+ * Get single logistics officer detail + task history (admin view)
+ */
+async function getLogisticsOfficerDetail(req, res) {
+  try {
+    const { userId } = req.params;
+    const userRole = req.user.role;
+
+    if (userRole !== 'admin') {
+      return res.status(403).json({ message: 'Admin only' });
+    }
+
+    const user = await User.findById(userId).select('-password');
+    if (!user || user.role !== 'logistics_officer') {
+      return res.status(404).json({ message: 'Logistics officer not found' });
+    }
+
+    const QCVerification = require('../models/QCVerification');
+    const Delivery = require('../models/Delivery');
+
+    const [qcHistory, deliveryHistory] = await Promise.allSettled([
+      QCVerification.find({ reviewedBy: userId })
+        .populate('orderId', 'finalPrice status')
+        .populate('initiatedBy', 'firstName lastName email')
+        .sort({ reviewedAt: -1 })
+        .limit(50),
+      Delivery.find({ deliveryPersonId: userId })
+        .populate('orderId', 'finalPrice status buyerId sellerId')
+        .sort({ createdAt: -1 })
+        .limit(50),
+    ]);
+
+    const qcStats = {
+      total: 0, approved: 0, rejected: 0, inReview: 0,
+    };
+    const qcRecords = qcHistory.status === 'fulfilled' ? qcHistory.value : [];
+    qcRecords.forEach(q => {
+      qcStats.total++;
+      if (q.status === 'approved') qcStats.approved++;
+      else if (q.status === 'rejected') qcStats.rejected++;
+      else if (q.status === 'in_review') qcStats.inReview++;
+    });
+
+    const deliveryStats = {
+      total: 0, delivered: 0, failed: 0, active: 0,
+    };
+    const deliveryRecords = deliveryHistory.status === 'fulfilled' ? deliveryHistory.value : [];
+    deliveryRecords.forEach(d => {
+      deliveryStats.total++;
+      if (d.status === 'delivered') deliveryStats.delivered++;
+      else if (d.status === 'failed') deliveryStats.failed++;
+      else if (['assigned', 'picked_up', 'in_transit'].includes(d.status)) deliveryStats.active++;
+    });
+
+    res.json({
+      officer: user,
+      stats: { qc: qcStats, delivery: deliveryStats },
+      qcHistory: qcRecords,
+      deliveryHistory: deliveryRecords,
+    });
+  } catch (error) {
+    logger.error('Get logistics officer detail error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+}

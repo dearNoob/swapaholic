@@ -3,10 +3,10 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { TextArea } from '../../components/ui/TextArea';
-import { productApi } from '../../api/product';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { TextArea } from '@/components/ui/TextArea';
+import { productsApi as productApi } from '@/api/products';
 
 const schema = yup.object({
     name: yup.string().required('Product name is required'),
@@ -24,12 +24,12 @@ export const ProductForm = () => {
     const [score, setScore] = useState(0);
     const [regenerateCount, setRegenerateCount] = useState(0);
 
-    const onSubmit = async (data) => {
+    const onSubmit = async (data: any) => {
         try {
             const formData = new FormData();
             Object.keys(data).forEach(key => formData.append(key, data[key]));
 
-            const response = await productApi.createProduct(formData);
+            const response = await productApi.createProduct(formData) as any;
             setGeneratedDescription(response.generatedDescription);
             setScore(response.score);
 

@@ -14,6 +14,23 @@ const userSchema = new mongoose.Schema({
     unique: true,
     required: true
   },
+  loginHistory: [{
+    ip: String,
+    deviceFingerprint: String, // Hash of User-Agent + IP
+    lastLogin: Date,
+    isTrusted: { type: Boolean, default: false }
+  }],
+  otp: {
+    code: String,
+    expiresAt: Date,
+    purpose: { type: String, enum: ['LOGIN_2FA', 'PASSWORD_RESET', 'PHONE_VERIFY'] }
+  },
+  interests: [String],
+  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  nidNumber: { type: String, select: false },
+  profileCompletionScore: { type: Number, default: 40 },
+  isVerifiedUser: { type: Boolean, default: false },
   firstName: {
     type: String,
     required: true
@@ -29,9 +46,12 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'quality_controller', 'delivery_person', 'admin'],
+    enum: ['user', 'quality_controller', 'delivery_person', 'admin', 'logistics_officer'],
     default: 'user'
   },
+  twoFactorSecret: { type: String, select: false },
+  twoFactorEnabled: { type: Boolean, default: false },
+  backupCodes: { type: [String], select: false },
   profilePicture: String,
   bio: String,
   address: String,
@@ -56,7 +76,7 @@ const userSchema = new mongoose.Schema({
   kycDocument: String,
   accountStatus: {
     type: String,
-    enum: ['active', 'suspended', 'banned', 'deleted'],
+    enum: ['active', 'suspended', 'banned', 'deleted', 'pending_approval'],
     default: 'active'
   },
   suspensionReason: String,
@@ -77,6 +97,28 @@ const userSchema = new mongoose.Schema({
     min: 0,
     max: 5
   },
+  buyerRating: {
+    type: Number,
+    default: 5.0,
+    min: 0,
+    max: 5
+  },
+  auctionNoConfirmCount: {
+    type: Number,
+    default: 0
+  },
+  paymentMethods: [{
+    type: { type: String, enum: ['card', 'bkash', 'rocket', 'nagad', 'bank'] },
+    details: {
+      brand: String, // visa, mastercard, or bkash, etc.
+      last4: String, // 4242 or 8901
+      expiryMonth: Number,
+      expiryYear: Number,
+      accountName: String, // Account holder name
+      accountNumber: String // Masked or full number for MFS
+    },
+    isDefault: { type: Boolean, default: false }
+  }],
   totalTransactions: {
     type: Number,
     default: 0

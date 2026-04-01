@@ -25,7 +25,7 @@ describe('User & Product Controllers', () => {
         phone: `+1555${Date.now().toString().slice(-6)}`,
         email: `seller_${Date.now()}@example.com`,
         password: 'TestPass123',
-        role: 'seller'
+        role: 'user'
       });
 
     token = sellerRes.body.token;
@@ -172,7 +172,7 @@ describe('User & Product Controllers', () => {
           phone: `+1555${Date.now().toString().slice(-7)}`,
           email: `buyer_${Date.now()}@example.com`,
           password: 'TestPass123',
-          role: 'buyer'
+          role: 'user'
         });
 
       const res = await request(app)

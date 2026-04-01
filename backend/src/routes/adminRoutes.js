@@ -131,9 +131,12 @@ router.get('/products/pending', authMiddleware, roleCheck(['admin']), (req, res)
 // @route   PUT /api/admin/products/:productId/approve
 // @desc    Approve product after QC
 // @access  Private - Admin
-router.put('/products/:productId/approve', authMiddleware, roleCheck(['admin']), (req, res) => {
-  res.json({ message: 'Approve product' });
-});
+router.put('/products/:productId/approve', authMiddleware, roleCheck(['admin']), productController.approveProduct);
+
+// @route   PUT /api/admin/products/:productId/reject
+// @desc    Reject product
+// @access  Private - Admin
+router.put('/products/:productId/reject', authMiddleware, roleCheck(['admin']), productController.rejectProduct);
 
 // @route   DELETE /api/admin/products/:productId
 // @desc    Remove product
@@ -154,5 +157,21 @@ router.get('/transactions', authMiddleware, roleCheck(['admin']), (req, res) => 
  */
 router.get('/content/:type', authMiddleware, roleCheck(['admin']), adminContentController.getContent);
 router.put('/content/:type', authMiddleware, roleCheck(['admin']), adminContentController.updateContent);
+
+/**
+ * Logistics Officer Management Routes
+ */
+
+// List all logistics officers (filterable by status)
+router.get('/logistics-officers', authMiddleware, roleCheck(['admin']), adminUserController.getLogisticsOfficers);
+
+// Approve pending logistics officer account
+router.put('/logistics-officers/:userId/approve', authMiddleware, roleCheck(['admin']), adminUserController.approveLogisticsOfficer);
+
+// Reject pending logistics officer account
+router.put('/logistics-officers/:userId/reject', authMiddleware, roleCheck(['admin']), adminUserController.rejectLogisticsOfficer);
+
+// Get single logistics officer detail + task history
+router.get('/logistics-officers/:userId/detail', authMiddleware, roleCheck(['admin']), adminUserController.getLogisticsOfficerDetail);
 
 module.exports = router;

@@ -17,8 +17,17 @@ const bidSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'accepted', 'rejected', 'expired', 'withdrawn'],
+    enum: ['active', 'accepted', 'rejected', 'expired', 'withdrawn', 'won', 'pending_confirmation', 'confirmation_expired'],
     default: 'active'
+  },
+  auctionWonAt: {
+    type: Date
+  },
+  confirmationDeadline: {
+    type: Date
+  },
+  confirmationEmailSentAt: {
+    type: Date
   },
   createdAt: {
     type: Date,

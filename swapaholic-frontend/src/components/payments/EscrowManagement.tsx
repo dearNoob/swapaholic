@@ -1,6 +1,6 @@
 // src/components/payments/EscrowManagement.tsx
 import React, { useState } from 'react';
-import { paymentApi } from '@/api/payment';
+import { paymentsApi } from '@/api/payments';
 
 interface Props {
     orderId: string;
@@ -14,7 +14,7 @@ export default function EscrowManagement({ orderId, amount }: Props) {
     const initiate = async () => {
         setLoading(true);
         try {
-            const payment = await paymentApi.initiateEscrow(orderId, amount);
+            const payment = await paymentsApi.initiateEscrow(orderId, amount);
             setStatus('Escrow initiated');
         } catch (e) {
             setStatus('Failed to initiate escrow');
@@ -25,7 +25,7 @@ export default function EscrowManagement({ orderId, amount }: Props) {
     const release = async () => {
         setLoading(true);
         try {
-            await paymentApi.releaseEscrow(orderId);
+            await paymentsApi.releaseEscrow(orderId);
             setStatus('Escrow released');
         } catch (e) {
             setStatus('Failed to release escrow');
@@ -36,7 +36,7 @@ export default function EscrowManagement({ orderId, amount }: Props) {
     const refund = async () => {
         setLoading(true);
         try {
-            await paymentApi.refundEscrow(orderId);
+            await paymentsApi.refundEscrow(orderId);
             setStatus('Escrow refunded');
         } catch (e) {
             setStatus('Failed to refund escrow');

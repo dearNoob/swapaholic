@@ -8,7 +8,8 @@ const apiClient: AxiosInstance = axios.create({
     timeout: 15000,
     headers: {
         'Content-Type': 'application/json'
-    }
+    },
+    withCredentials: true
 });
 
 // Request interceptor - add auth token
@@ -77,26 +78,28 @@ apiClient.interceptors.response.use(
                     })
                     .catch((err) => Promise.reject(err));
             }
-            originalRequest._retry = true;
             isRefreshing = true;
-            const refreshToken = tokenManager.getRefreshToken();
-            if (!refreshToken) {
-                tokenManager.clearTokens();
-                if (typeof window !== 'undefined') {
-                    window.location.href = '/login';
-                }
-                return Promise.reject(error);
-            }
             try {
+                // Call refresh token endpoint. The HTTP-only cookie will be sent automatically.
                 const resp = await axios.post(
-                    `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/auth/refresh`,
-                    { refreshToken }
+                    `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/auth/refresh-token`,
+                    {},
+                    { withCredentials: true }
                 );
-                const { accessToken, refreshToken: newRefresh } = resp.data;
-                tokenManager.setTokens(accessToken, newRefresh);
+                
+                // Backend returns: { success: true, data: { accessToken, user } }
+                const accessToken = resp.data?.data?.accessToken;
+                
+                if (!accessToken) {
+                    throw new Error('No access token in refresh response');
+                }
+
+                tokenManager.setTokens(accessToken);
+                
                 if (originalRequest.headers) {
                     originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 }
+                
                 processQueue(null, accessToken);
                 isRefreshing = false;
                 return apiClient(originalRequest);

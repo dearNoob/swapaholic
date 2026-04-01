@@ -18,28 +18,21 @@ export interface Review {
 }
 
 export interface CreateReviewData {
-    productId: string;
-    sellerId: string;
+    orderId: string;
     rating: number;
     comment: string;
 }
 
 export const reviewsApi = {
-    // Get reviews for a product
-    getProductReviews: async (productId: string) => {
-        const response = await api.get(`/reviews/product/${productId}`);
-        return response.data;
-    },
-
-    // Get reviews for a seller
+    // Get reviews received by a seller
     getSellerReviews: async (sellerId: string) => {
-        const response = await api.get(`/reviews/seller/${sellerId}`);
+        const response = await api.get(`/reviews/user/${sellerId}/received`);
         return response.data;
     },
 
     // Get user's reviews (reviews they've written)
-    getUserReviews: async () => {
-        const response = await api.get('/reviews/user');
+    getUserReviews: async (userId: string) => {
+        const response = await api.get(`/reviews/user/${userId}/given`);
         return response.data;
     },
 
@@ -75,7 +68,7 @@ export const reviewsApi = {
 
     // Get seller rating statistics
     getSellerStats: async (sellerId: string) => {
-        const response = await api.get(`/reviews/seller/${sellerId}/stats`);
+        const response = await api.get(`/reviews/user/${sellerId}/summary`);
         return response.data;
     },
 };

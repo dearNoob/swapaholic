@@ -27,7 +27,7 @@ describe('Delivery Tracking System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `seller_delivery_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'seller'
+          role: 'user'
         });
       sellerToken = sellerRes.body.token;
       seller = sellerRes.body.user;
@@ -41,7 +41,7 @@ describe('Delivery Tracking System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `buyer_delivery_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       buyerToken = buyerRes.body.token;
       buyer = buyerRes.body.user;
@@ -69,7 +69,7 @@ describe('Delivery Tracking System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `deliveryman_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const deliveryPerson = deliveryRes.body.user;
       if (!deliveryPerson || !(deliveryPerson._id || deliveryPerson.id)) {
@@ -191,7 +191,7 @@ describe('Delivery Tracking System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `other_delivery_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 
@@ -293,7 +293,7 @@ describe('Delivery Tracking System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `other_delivery2_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 
@@ -353,7 +353,7 @@ describe('Delivery Tracking System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `other_delivery3_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 
@@ -378,7 +378,7 @@ describe('Delivery Tracking System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `newdelivery_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const newPerson = newPersonRes.body.user;
 
@@ -406,7 +406,7 @@ describe('Delivery Tracking System', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `newdelivery2_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const newPerson = newPersonRes.body.user;
 

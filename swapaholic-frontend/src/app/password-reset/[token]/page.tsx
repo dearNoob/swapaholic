@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { emailApi } from '@/api/email';
+import { authApi } from '@/api/auth';
 
 export default function PasswordResetPage() {
     const router = useRouter();
@@ -21,7 +21,7 @@ export default function PasswordResetPage() {
         }
         try {
             // Backend should verify token and set new password; we just call placeholder API
-            await emailApi.passwordReset('', token); // token contains necessary info
+            await authApi.resetPasswordWithOTP({ resetToken: token, newPassword });
             setStatus('Password has been reset successfully.');
             setTimeout(() => router.push('/'), 2000);
         } catch (err) {
@@ -31,11 +31,12 @@ export default function PasswordResetPage() {
 
     return (
         <div className="max-w-md mx-auto p-6 bg-white rounded shadow-md">
-            <h1 className="text-2xl font-bold mb-4">Set New Password</h1>
+            <h1 className="text-2xl font-bold mb-4"style={{color:"#3498db"}}    >Set New Password</h1>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <input
                     type="password"
                     placeholder="New password"
+                    style={{color:"#d22d22ff"}}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -44,6 +45,7 @@ export default function PasswordResetPage() {
                 <input
                     type="password"
                     placeholder="Confirm new password"
+                    style={{color:"#d22d22ff"}}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
@@ -55,7 +57,7 @@ export default function PasswordResetPage() {
                 >
                     Reset Password
                 </button>
-                {status && <p className="mt-2 text-sm">{status}</p>}
+                {status && <p className="mt-2 text-sm" style={{color:"#17cf39ff"}}>{status}</p>}
             </form>
         </div>
     );

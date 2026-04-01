@@ -4,14 +4,21 @@ import { User } from '../types/api';
 
 export const authApi = {
     // Register a new user
-    async register(data: any): Promise<{ user: User; accessToken: string }> {
-        const response = await apiClient.post<ApiResponse<{ user: User; accessToken: string }>>('/auth/register', data);
+    async register(data: any): Promise<{ user: User; accessToken: string } | { requireVerification: boolean; message: string; email: string }> {
+        const response = await apiClient.post<any>('/auth/register', data);
+        // Backend returns { success, requireVerification, message, email } (no data wrapper) when OTP is needed
+        if (response.data.requireVerification) {
+            return response.data;
+        }
         return response.data.data;
     },
 
     // Login and receive JWT tokens (access token stored in cookie, refresh token HttpOnly)
-    async login(data: { email: string; password: string }): Promise<{ accessToken: string; user: User }> {
-        const response = await apiClient.post<ApiResponse<{ accessToken: string; user: User }>>('/auth/login', data);
+    async login(data: { email: string; password: string }): Promise<{ accessToken: string; user: User } | { require2FA: boolean; message: string }> {
+        const response = await apiClient.post<any>('/auth/login', data);
+        if (response.data.require2FA) {
+            return response.data;
+        }
         return response.data.data;
     },
 
@@ -19,6 +26,18 @@ export const authApi = {
     async adminLogin(data: { email: string; password: string }): Promise<{ accessToken: string; user: User }> {
         const response = await apiClient.post<ApiResponse<{ accessToken: string; user: User }>>('/auth/admin/login', data);
         return response.data.data;
+    },
+
+    // Logistics Officer Login (separate portal)
+    async logisticsLogin(data: { email: string; password: string }): Promise<{ accessToken: string; user: User }> {
+        const response = await apiClient.post<ApiResponse<{ accessToken: string; user: User }>>('/logistics/login', data);
+        return response.data.data;
+    },
+
+    // Logistics Officer Registration
+    async logisticsRegister(data: { firstName: string; lastName: string; email: string; password: string; phone: string; address?: string }): Promise<{ message: string }> {
+        const response = await apiClient.post<any>('/logistics/register', data);
+        return response.data;
     },
 
     // Logout user
@@ -35,8 +54,8 @@ export const authApi = {
 
     // Request password reset
     async forgotPassword(email: string): Promise<{ message: string }> {
-        const response = await apiClient.post<ApiResponse<{ message: string }>>('/auth/forgot-password', { email });
-        return response.data.data;
+        const response = await apiClient.post<{ message: string; requireOtp: boolean }>('/auth/forgot-password', { email });
+        return response.data;
     },
 
     // Update user profile
@@ -79,5 +98,23 @@ export const authApi = {
     async validate2FA(data: { email: string; token: string }): Promise<{ accessToken: string; user: User }> {
         const response = await apiClient.post<ApiResponse<{ accessToken: string; user: User }>>('/auth/2fa/validate', data);
         return response.data.data;
+    },
+
+    // Verify OTP (Generic)
+    async verifyOTP(data: { email: string; otp: string; purpose: 'PHONE_VERIFY' | 'LOGIN_2FA' | 'PASSWORD_RESET' }): Promise<{ message: string; accessToken?: string; user?: User; resetToken?: string }> {
+        const response = await apiClient.post<any>('/auth/verify-otp', data);
+        // Backend returns inconsistent structures:
+        // LOGIN_2FA / PHONE_VERIFY: { success: true, data: { accessToken, user } }
+        // PASSWORD_RESET: { success: true, message, resetToken }
+        if (response.data.data) {
+            return response.data.data;
+        }
+        return response.data;
+    },
+
+    // Reset Password with OTP Token
+    async resetPasswordWithOTP(data: { resetToken: string; newPassword: string }): Promise<{ message: string }> {
+        const response = await apiClient.post<{ message: string }>('/auth/reset-password-otp', data);
+        return response.data;
     },
 };

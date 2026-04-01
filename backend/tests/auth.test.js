@@ -25,7 +25,7 @@ describe('Auth Routes', () => {
   test('POST /api/auth/register -> registers a user', async () => {
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ firstName: 'Test', lastName: 'User', phone: `+1555${Date.now().toString().slice(-6)}`, email: testEmail, password, role: 'buyer' })
+      .send({ firstName: 'Test', lastName: 'User', phone: `+1555${Date.now().toString().slice(-6)}`, email: testEmail, password, role: 'user' })
       .expect(201);
 
     expect(res.body).toHaveProperty('success', true);
@@ -60,7 +60,7 @@ describe('Auth Routes', () => {
   test('POST /api/auth/register -> fails with duplicate email', async () => {
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ firstName: 'Test', lastName: 'User', phone: `+1555${Date.now().toString().slice(-6)}`, email: testEmail, password, role: 'buyer' })
+      .send({ firstName: 'Test', lastName: 'User', phone: `+1555${Date.now().toString().slice(-6)}`, email: testEmail, password, role: 'user' })
       .expect(409);
 
     expect(res.body).toHaveProperty('message');

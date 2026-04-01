@@ -5,12 +5,15 @@ import { useState } from 'react';
 import { authApi } from '@/api/auth';
 import { useRouter } from 'next/navigation';
 import { showSuccessToast, showErrorToast } from '@/utils/errorHandler';
+import { collectRoutesUsingEdgeRuntime } from 'next/dist/build/utils';
 
 export default function PasswordResetRequestPage() {
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const router = useRouter();
+    const [otp, setOtp] = useState('');
+    const [isOtpSubmitted, setIsOtpSubmitted] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -19,9 +22,31 @@ export default function PasswordResetRequestPage() {
         try {
             const response = await authApi.forgotPassword(email);
             setIsSubmitted(true);
-            showSuccessToast(response.message || 'Password reset email sent!');
-        } catch (error) {
-            showErrorToast(error, 'Failed to send reset email. Please try again.');
+            showSuccessToast(response.message || 'OTP sent to your email!');
+        } catch (error: any) {
+            // Use the error message from the backend if available
+            const errorMessage = error.response?.data?.message || 'Failed to send OTP. Please try again.';
+            showErrorToast(error, errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleOtpSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+
+        try {
+            const response = await authApi.verifyOTP({ email, otp, purpose: 'PASSWORD_RESET' });
+            if (response.resetToken) {
+                showSuccessToast('OTP Verified! Redirecting to reset password...');
+                router.push(`/password-reset/${response.resetToken}`);
+            } else {
+                throw new Error('No reset token received');
+            }
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.message || 'Invalid OTP. Please try again.';
+            showErrorToast(error, errorMessage);
         } finally {
             setIsLoading(false);
         }
@@ -30,9 +55,11 @@ export default function PasswordResetRequestPage() {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
             <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-md">
-                <h1 className="text-2xl font-bold mb-2">Reset Your Password</h1>
+                <h1 className="text-2xl font-bold mb-2"style={{color:"#3498db"}}>Reset Your Password</h1>
                 <p className="text-gray-600 mb-6">
-                    Enter your email address and we'll send you a link to reset your password.
+                    {!isSubmitted
+                        ? "Enter your email address and we'll send you an OTP to reset your password."
+                        : "Enter the OTP sent to your email."}
                 </p>
 
                 {!isSubmitted ? (
@@ -56,7 +83,7 @@ export default function PasswordResetRequestPage() {
                             disabled={isLoading}
                             className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isLoading ? 'Sending...' : 'Send Reset Link'}
+                            {isLoading ? 'Sending...' : 'Send OTP'}
                         </button>
 
                         <button
@@ -68,19 +95,39 @@ export default function PasswordResetRequestPage() {
                         </button>
                     </form>
                 ) : (
-                    <div className="text-center">
-                        <div className="text-6xl text-green-500 mb-4">✓</div>
-                        <h2 className="text-xl font-semibold mb-2">Check Your Email</h2>
-                        <p className="text-gray-600 mb-6">
-                            We've sent a password reset link to <strong>{email}</strong>
-                        </p>
+                    <form onSubmit={handleOtpSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Enter OTP
+                            </label>
+                            <input
+                                type="text"
+                                placeholder="Enter 6-digit OTP"
+                                style={{color:"#3498db"}}
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                required
+                                maxLength={6}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-center tracking-widest text-xl"
+                            />
+                        </div>
+
                         <button
-                            onClick={() => router.push('/login')}
-                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                            type="submit"
+                            disabled={isLoading}
+                            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Back to Login
+                            {isLoading ? 'Verifying...' : 'Verify OTP'}
                         </button>
-                    </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setIsSubmitted(false)}
+                            className="w-full text-gray-600 hover:text-gray-800 text-sm font-medium"
+                        >
+                            Change Email
+                        </button>
+                    </form>
                 )}
             </div>
         </div>

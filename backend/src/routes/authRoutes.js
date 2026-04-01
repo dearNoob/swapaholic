@@ -56,8 +56,14 @@ router.post(
 // Logout
 router.post('/logout', authController.logout);
 
-// Verify email
+// Verify email (Link based - modify if using OTP strictly, but keeping for legacy compatibility if needed)
 router.post('/verify-email', authController.verifyEmail);
+
+// Verify OTP (Unified endpoint for Registration Phone verify, Login 2FA, etc)
+router.post('/verify-otp', authController.verifyOTP);
+
+// Reset Password with OTP Token
+router.post('/reset-password-otp', authController.resetPasswordWithOTP);
 
 // Refresh token
 router.post('/refresh-token', authController.refreshToken);
@@ -72,5 +78,8 @@ router.post('/change-password', authMiddleware, authController.changePassword);
 router.post('/2fa/generate', authMiddleware, authController.generate2FA);
 router.post('/2fa/verify', authMiddleware, authController.verify2FA);
 router.post('/2fa/disable', authMiddleware, authController.disable2FA);
+
+// Update profile (protected route)
+router.put('/profile', authMiddleware, authController.updateProfile);
 
 module.exports = router;

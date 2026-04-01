@@ -32,39 +32,13 @@ export default function NotificationDropdown() {
             setNotifications(notificationsList.slice(0, 5)); // Show only latest 5 in dropdown
         } catch (error) {
             console.error('Error fetching notifications:', error);
-            // Use mock data if API fails
-            setNotifications([
-                {
-                    id: '1',
-                    title: 'New Bid on Your Item',
-                    message: 'Someone bid ৳150 on your Vintage Camera',
-                    type: 'bid',
-                    isRead: false,
-                    createdAt: new Date().toISOString(),
-                },
-                {
-                    id: '2',
-                    title: 'Payment Received',
-                    message: 'You received ৳450 for Gaming Laptop',
-                    type: 'payment',
-                    isRead: false,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-                },
-                {
-                    id: '3',
-                    title: 'Order Shipped',
-                    message: 'Your order #12345 has been shipped',
-                    type: 'delivery',
-                    isRead: true,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-                },
-            ]);
+            toast.error('Failed to load notifications');
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Close dropdown when clicking outside
+    // Close dropdown when clicking outside or pressing Escape
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -72,12 +46,20 @@ export default function NotificationDropdown() {
             }
         };
 
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsOpen(false);
+            }
+        };
+
         if (isOpen) {
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('keydown', handleEscape);
         }
 
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
         };
     }, [isOpen]);
 
@@ -97,7 +79,14 @@ export default function NotificationDropdown() {
             };
 
             setNotifications((prev) => [newNotification, ...prev].slice(0, 5));
-            toast.info(data.title || 'New Notification');
+            
+            if (data.type === 'outbid') {
+                toast.warn(data.message || data.title || "You've been outbid!", {
+                    icon: <FaGavel className="text-orange-600" />
+                });
+            } else {
+                toast.info(data.title || 'New Notification');
+            }
         };
 
         socketService.on('notification', handleNewNotification);

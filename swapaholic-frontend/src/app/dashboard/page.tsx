@@ -17,6 +17,10 @@ export default function DashboardRedirect() {
                     router.push('/seller/dashboard');
                 } else if (user.role === 'admin') {
                     router.push('/admin/dashboard');
+                } else if (user.role === 'logistics_officer') {
+                    router.push('/logistics/dashboard');
+                } else if (user.role === 'delivery') {
+                    router.push('/delivery/dashboard');
                 } else {
                     // Default to buyer dashboard for buyers and others
                     router.push('/buyer/dashboard');

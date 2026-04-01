@@ -39,7 +39,12 @@ export const bidsApi = {
      * Place a bid on a product
      */
     async placeBid(data: PlaceBidData): Promise<Bid> {
-        const response = await apiClient.post<ApiResponse<Bid>>('/bids', data);
+        // Map frontend's `amount` to backend's expected `bidAmount` parameter
+        const payload = {
+            productId: data.productId,
+            bidAmount: data.amount
+        };
+        const response = await apiClient.post<ApiResponse<Bid>>('/bids', payload);
         return response.data.data;
     },
 
@@ -64,7 +69,7 @@ export const bidsApi = {
      * Get bid history for a product
      */
     async getProductBids(productId: string): Promise<Bid[]> {
-        const response = await apiClient.get<ApiResponse<Bid[]>>(`/products/${productId}/bids`);
+        const response = await apiClient.get<ApiResponse<Bid[]>>(`/bids/${productId}`);
         return response.data.data;
     },
 
@@ -127,6 +132,49 @@ export const bidsApi = {
             totalSpent: number;
         }>>('/bids/analytics');
         return response.data.data;
+    },
+
+    // ═══════════════════════════════════════════════
+    // POST-AUCTION WORKFLOW
+    // ═══════════════════════════════════════════════
+
+    /**
+     * Get buyer's won bids (pending confirmation)
+     */
+    async getWonBids(): Promise<WonBid[]> {
+        const response = await apiClient.get<ApiResponse<WonBid[]>>('/bids/won');
+        return response.data.data;
+    },
+
+    /**
+     * Confirm auction win (buyer confirms within 3-hour window)
+     */
+    async confirmAuctionWin(bidId: string): Promise<{
+        message: string;
+        bid: { id: string; status: string; bidAmount: number };
+        order: { id: string; finalPrice: number; platformFee: number; totalPayable: number; status: string };
+    }> {
+        const response = await apiClient.post(`/bids/${bidId}/confirm-win`);
+        return response.data;
     }
 };
 
+export interface WonBid {
+    id: string;
+    bidAmount: number;
+    platformFee: number;
+    totalPayable: number;
+    auctionWonAt: string;
+    confirmationDeadline: string;
+    timeLeft: string;
+    timeLeftMs: number;
+    isExpired: boolean;
+    product: {
+        id: string;
+        title: string;
+        basePrice: number;
+        images: string[];
+        category: string;
+        sellerId: string;
+    } | null;
+}

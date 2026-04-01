@@ -17,7 +17,7 @@ export default function UserDropdown({ user, onLogout }: UserDropdownProps) {
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { activeMode } = useAppSelector((state) => state.auth);
 
-    // Close dropdown when clicking outside
+    // Close dropdown when clicking outside or pressing Escape
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -25,8 +25,18 @@ export default function UserDropdown({ user, onLogout }: UserDropdownProps) {
             }
         };
 
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsOpen(false);
+            }
+        };
+
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
     }, []);
 
     if (!user) return null;
@@ -37,6 +47,8 @@ export default function UserDropdown({ user, onLogout }: UserDropdownProps) {
 
     const getDashboardLink = () => {
         if (user.role === 'admin') return '/admin/dashboard';
+        if (user.role === 'logistics_officer') return '/logistics/dashboard';
+        if (user.role === 'delivery') return '/delivery/dashboard';
         // For unified 'user' role, use activeMode to determine dashboard
         return activeMode === 'seller' ? '/seller/dashboard' : '/buyer/dashboard';
     };
@@ -89,15 +101,6 @@ export default function UserDropdown({ user, onLogout }: UserDropdownProps) {
                     {/* Menu Items */}
                     <div className="py-2">
                         <Link
-                            href="/profile"
-                            onClick={() => setIsOpen(false)}
-                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
-                        >
-                            <FaUser className="mr-3 h-4 w-4 text-gray-400" />
-                            Profile
-                        </Link>
-
-                        <Link
                             href={getDashboardLink()}
                             onClick={() => setIsOpen(false)}
                             className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
@@ -106,14 +109,49 @@ export default function UserDropdown({ user, onLogout }: UserDropdownProps) {
                             Dashboard
                         </Link>
 
-                        <Link
-                            href="/profile"
-                            onClick={() => setIsOpen(false)}
-                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
-                        >
-                            <FaCog className="mr-3 h-4 w-4 text-gray-400" />
-                            Settings
-                        </Link>
+                        {/* Marketplace specific links - Only for unified 'user' role */}
+                        {user.role === 'user' && (
+                            <>
+                                <Link
+                                    href="/profile"
+                                    onClick={() => setIsOpen(false)}
+                                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                                >
+                                    <FaUser className="mr-3 h-4 w-4 text-gray-400" />
+                                    Profile
+                                </Link>
+                                
+                                {activeMode === 'buyer' && (
+                                    <Link
+                                        href="/orders"
+                                        onClick={() => setIsOpen(false)}
+                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                                    >
+                                        <FaShoppingCart className="mr-3 h-4 w-4 text-gray-400" />
+                                        My Purchases
+                                    </Link>
+                                )}
+                                {activeMode === 'seller' && (
+                                    <Link
+                                        href="/seller/orders"
+                                        onClick={() => setIsOpen(false)}
+                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                                    >
+                                        <FaStore className="mr-3 h-4 w-4 text-gray-400" />
+                                        Order Management
+                                    </Link>
+                                )}
+
+                                <Link
+                                    href="/profile"
+                                    onClick={() => setIsOpen(false)}
+                                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                                >
+                                    <FaCog className="mr-3 h-4 w-4 text-gray-400" />
+                                    Settings
+                                </Link>
+                            </>
+                        )}
                     </div>
 
                     {/* Logout */}

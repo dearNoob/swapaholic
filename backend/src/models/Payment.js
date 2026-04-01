@@ -47,6 +47,20 @@ const paymentSchema = new mongoose.Schema({
   escrowReleaseDate: Date,
   refundDate: Date,
   refundReason: String,
+  sellerPayoutStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'completed'],
+    default: 'pending'
+  },
+  sellerPayoutDate: Date,
+  adminReleasedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  platformFeeAmount: {
+    type: Number,
+    default: 30
+  },
   createdAt: {
     type: Date,
     default: Date.now

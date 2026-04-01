@@ -8,7 +8,7 @@ export const adminApi = {
     },
 
     // User Management
-    getUsers: async (params?: { status?: string; page?: number; limit?: number }) => {
+    getUsers: async (params?: { status?: string; role?: string; search?: string; page?: number; limit?: number }) => {
         const response = await api.get('/admin/users', { params });
         return response.data;
     },
@@ -51,7 +51,7 @@ export const adminApi = {
     },
 
     // Order Oversight
-    getAllOrders: async (params?: { status?: string; page?: number; limit?: number }) => {
+    getAllOrders: async (params?: { status?: string; search?: string; page?: number; limit?: number }) => {
         const response = await api.get('/admin/orders', { params });
         return response.data;
     },
@@ -86,6 +86,117 @@ export const adminApi = {
 
     updateContent: async (type: string, content: any) => {
         const response = await api.put(`/admin/content/${type}`, content);
+        return response.data;
+    },
+
+    // System Health
+    getSystemHealth: async () => {
+        const response = await api.get('/admin/dashboard/health');
+        return response.data;
+    },
+
+    // Top Performers
+    getTopPerformers: async () => {
+        const response = await api.get('/admin/dashboard/top-performers');
+        return response.data;
+    },
+
+    // Revenue Stats
+    getRevenueStats: async () => {
+        const response = await api.get('/admin/dashboard/revenue');
+        return response.data;
+    },
+
+    // User Growth
+    getUserGrowth: async () => {
+        const response = await api.get('/admin/dashboard/user-growth');
+        return response.data;
+    },
+
+    // Suspend User
+    suspendUser: async (userId: string, reason: string, duration?: number) => {
+        const response = await api.put(`/admin/users/${userId}/suspend`, { reason, duration });
+        return response.data;
+    },
+
+    // Unsuspend User
+    unsuspendUser: async (userId: string) => {
+        const response = await api.put(`/admin/users/${userId}/unsuspend`);
+        return response.data;
+    },
+
+    // Get User Profile (admin view)
+    getUserProfile: async (userId: string) => {
+        const response = await api.get(`/admin/users/${userId}`);
+        return response.data;
+    },
+
+    // Get User Transactions
+    getUserTransactions: async (userId: string) => {
+        const response = await api.get(`/admin/users/${userId}/transactions`);
+        return response.data;
+    },
+
+    // Get User Support Tickets
+    getUserTickets: async (userId: string) => {
+        const response = await api.get(`/admin/users/${userId}/tickets`);
+        return response.data;
+    },
+
+    // Get Dispute Details
+    getDisputeDetails: async (orderId: string) => {
+        const response = await api.get(`/admin/disputes/${orderId}`);
+        return response.data;
+    },
+
+    // Dispute Stats
+    getDisputeStats: async () => {
+        const response = await api.get('/admin/disputes/stats/overview');
+        return response.data;
+    },
+
+    // Assign Dispute
+    assignDispute: async (orderId: string, assignedAdminId: string) => {
+        const response = await api.put(`/admin/disputes/${orderId}/assign`, { assignedAdminId });
+        return response.data;
+    },
+
+    // Add Investigation Notes
+    addInvestigationNotes: async (orderId: string, notes: string) => {
+        const response = await api.post(`/admin/disputes/${orderId}/notes`, { notes });
+        return response.data;
+    },
+
+    // Get All Products (admin view)
+    getAllProducts: async (params?: { status?: string; page?: number; limit?: number }) => {
+        const response = await api.get('/admin/products', { params });
+        return response.data;
+    },
+
+    // Remove Product
+    removeProduct: async (productId: string) => {
+        const response = await api.delete(`/admin/products/${productId}`);
+        return response.data;
+    },
+
+    // Logistics Officer Management
+    getLogisticsOfficers: async (params?: { status?: string; search?: string; page?: number; limit?: number }) => {
+        const response = await api.get('/admin/logistics-officers', { params });
+        return response.data;
+    },
+
+    approveLogisticsOfficer: async (userId: string) => {
+        const response = await api.put(`/admin/logistics-officers/${userId}/approve`);
+        return response.data;
+    },
+
+    rejectLogisticsOfficer: async (userId: string, reason: string) => {
+        const response = await api.put(`/admin/logistics-officers/${userId}/reject`, { reason });
+        return response.data;
+    },
+
+    getLogisticsOfficerDetail: async (userId: string) => {
+        const response = await api.get(`/admin/logistics-officers/${userId}/detail`);
         return response.data;
     },
 };

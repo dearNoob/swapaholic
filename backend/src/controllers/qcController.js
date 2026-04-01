@@ -4,6 +4,7 @@ const Product = require('../models/Product');
 const Payment = require('../models/Payment');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const notificationService = require('../utils/notificationService');
 
 /**
  * Initiate QC for an order (seller initiates)
@@ -24,8 +25,8 @@ const initiateQC = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Only seller of the product can initiate QC, or admin
-    if (order.sellerId.toString() !== userId && userRole !== 'admin') {
+    // Only seller of the product can initiate QC, admin, or logistics officer
+    if (order.sellerId.toString() !== userId && !['admin', 'logistics_officer'].includes(userRole)) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -110,9 +111,9 @@ const reviewQC = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
 
-    // Only admin can review
-    if (userRole !== 'admin') {
-      return res.status(403).json({ message: 'Only admins can review QC' });
+    // Only admin or logistics officer can review
+    if (!['admin', 'logistics_officer'].includes(userRole)) {
+      return res.status(403).json({ message: 'Only admins or logistics officers can review QC' });
     }
 
     const qc = await QCVerification.findById(qcId);
@@ -153,9 +154,9 @@ const approveQC = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
 
-    // Only admin can approve
-    if (userRole !== 'admin') {
-      return res.status(403).json({ message: 'Only admins can approve QC' });
+    // Only admin or logistics officer can approve
+    if (!['admin', 'logistics_officer'].includes(userRole)) {
+      return res.status(403).json({ message: 'Only admins or logistics officers can approve QC' });
     }
 
     const qc = await QCVerification.findById(qcId);
@@ -176,11 +177,14 @@ const approveQC = async (req, res) => {
 
     await qc.save();
 
-    // Release escrowed payment (mark as eligible for release)
-    const order = await Order.findById(qc.orderId);
+    // Update order status to qc_approved and trigger delivery assignment
+    const order = await Order.findById(qc.orderId)
+      .populate('buyerId', 'firstName lastName')
+      .populate('productId', 'title');
     if (order) {
       order.qcApproved = true;
       order.qcApprovedAt = new Date();
+      order.status = 'qc_approved';
       await order.save();
 
       // Update payment if it exists
@@ -189,11 +193,29 @@ const approveQC = async (req, res) => {
         payment.escrowReleaseEligible = true;
         await payment.save();
       }
+
+      // Notify buyer that QC passed and delivery is incoming
+      try {
+        const productTitle = order.productId?.title || 'your item';
+        await notificationService.createAndSend({
+          recipientId: order.buyerId._id,
+          type: 'qc_passed',
+          title: '✅ QC Passed — Delivery Incoming!',
+          message: `Quality check for "${productTitle}" has passed! Your item will be delivered soon.`,
+          data: { relatedId: order._id, relatedType: 'Order', productTitle },
+          priority: 'high',
+          actionUrl: `/orders/${order._id}`
+        });
+        // Also notify seller
+        await notificationService.notifyQCPassed(order.productId?._id, order.sellerId, productTitle);
+      } catch (notifErr) {
+        logger.warn('Failed to send QC approval notification:', notifErr);
+      }
     }
 
     logger.info(`QC approved: ${qcId}, order ${qc.orderId}`);
 
-    res.json({ message: 'QC approved. Payment release enabled.', qc });
+    res.json({ message: 'QC approved. Payment release enabled. Delivery incoming.', qc });
   } catch (error) {
     logger.error('Approve QC error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -210,9 +232,9 @@ const rejectQC = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
 
-    // Only admin can reject
-    if (userRole !== 'admin') {
-      return res.status(403).json({ message: 'Only admins can reject QC' });
+    // Only admin or logistics officer can reject
+    if (!['admin', 'logistics_officer'].includes(userRole)) {
+      return res.status(403).json({ message: 'Only admins or logistics officers can reject QC' });
     }
 
     if (!rejectionReason) {
@@ -237,11 +259,14 @@ const rejectQC = async (req, res) => {
 
     await qc.save();
 
-    // Block payment release and notify seller
-    const order = await Order.findById(qc.orderId);
+    // Block payment release and update order status
+    const order = await Order.findById(qc.orderId)
+      .populate('sellerId', 'firstName lastName')
+      .populate('productId', 'title');
     if (order) {
       order.qcApproved = false;
       order.qcRejectedAt = new Date();
+      order.status = 'qc_pending';
       order.notes = (order.notes ? order.notes + ' | ' : '') + `QC REJECTED: ${rejectionReason}`;
       await order.save();
 
@@ -250,6 +275,14 @@ const rejectQC = async (req, res) => {
       if (payment && payment.status === 'escrowed') {
         payment.escrowReleaseEligible = false;
         await payment.save();
+      }
+
+      // Notify seller that QC failed
+      try {
+        const productTitle = order.productId?.title || 'your item';
+        await notificationService.notifyQCFailed(order.productId?._id, order.sellerId._id, productTitle, rejectionReason);
+      } catch (notifErr) {
+        logger.warn('Failed to send QC rejection notification:', notifErr);
       }
     }
 
@@ -313,9 +346,9 @@ const getAllQC = async (req, res) => {
     const { status, page = 1, limit = 10 } = req.query;
     const userRole = req.user.role;
 
-    // Only admin
-    if (userRole !== 'admin') {
-      return res.status(403).json({ message: 'Admin only' });
+    // Only admin or logistics officer
+    if (!['admin', 'logistics_officer'].includes(userRole)) {
+      return res.status(403).json({ message: 'Admin or logistics officer only' });
     }
 
     const filter = {};
@@ -354,9 +387,9 @@ const getQCStats = async (req, res) => {
   try {
     const userRole = req.user.role;
 
-    // Only admin
-    if (userRole !== 'admin') {
-      return res.status(403).json({ message: 'Admin only' });
+    // Only admin or logistics officer
+    if (!['admin', 'logistics_officer'].includes(userRole)) {
+      return res.status(403).json({ message: 'Admin or logistics officer only' });
     }
 
     const total = await QCVerification.countDocuments({});

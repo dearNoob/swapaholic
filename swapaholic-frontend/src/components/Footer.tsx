@@ -5,7 +5,7 @@ import { FaGithub, FaTwitter, FaLinkedin, FaEnvelope } from 'react-icons/fa';
 
 export default function Footer() {
     return (
-        <footer className="w-full bg-gray-900 text-gray-300">
+        <footer className="w-full bg-gray-900 dark:bg-black text-gray-300 border-t border-gray-800">
             <div className="mx-auto max-w-6xl px-8 py-12">
                 <div className="grid gap-8 md:grid-cols-4">
                     {/* About Section */}
@@ -49,22 +49,22 @@ export default function Footer() {
                         <h4 className="mb-4 font-semibold text-white">Legal</h4>
                         <ul className="space-y-2 text-sm">
                             <li>
-                                <Link href="/about" className="hover:text-indigo-400">
+                                <Link href="/about" className="hover:text-indigo-400 transition-colors">
                                     About Us
                                 </Link>
                             </li>
                             <li>
-                                <Link href="/terms" className="hover:text-indigo-400">
+                                <Link href="/legal/terms" className="hover:text-indigo-400 transition-colors">
                                     Terms of Service
                                 </Link>
                             </li>
                             <li>
-                                <Link href="/privacy" className="hover:text-indigo-400">
+                                <Link href="/legal/privacy" className="hover:text-indigo-400 transition-colors">
                                     Privacy Policy
                                 </Link>
                             </li>
                             <li>
-                                <Link href="/support" className="hover:text-indigo-400">
+                                <Link href="/about/contact" className="hover:text-indigo-400 transition-colors">
                                     Support
                                 </Link>
                             </li>
@@ -76,41 +76,16 @@ export default function Footer() {
                         <h4 className="mb-4 font-semibold text-white">Connect</h4>
                         <div className="flex gap-4 text-2xl">
                             <a
-                                href="https://github.com"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-indigo-400"
-                                aria-label="GitHub"
-                            >
-                                <FaGithub />
-                            </a>
-                            <a
-                                href="https://twitter.com"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-indigo-400"
-                                aria-label="Twitter"
-                            >
-                                <FaTwitter />
-                            </a>
-                            <a
-                                href="https://linkedin.com"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-indigo-400"
-                                aria-label="LinkedIn"
-                            >
-                                <FaLinkedin />
-                            </a>
-                            <a
                                 href="mailto:support@swapaholic.com"
-                                className="hover:text-indigo-400"
+                                className="hover:text-indigo-400 transition-colors"
                                 aria-label="Email"
                             >
                                 <FaEnvelope />
                             </a>
                         </div>
-                        <p className="mt-4 text-sm">support@swapaholic.com</p>
+                        <p className="mt-4 text-sm font-medium text-gray-200">support@swapaholic.com</p>
+                        <p className="mt-2 text-xs text-gray-400">Dhaka, Bangladesh</p>
+
                     </div>
                 </div>
 

@@ -43,100 +43,37 @@ export default function PaymentPage() {
         setSelectedMethod(method);
     };
 
-    const startStripePayment = async () => {
+    const handlePaymentRedirect = async (method: 'stripe' | 'paypal' | 'bkash' | 'rocket' | 'nagad') => {
         if (!orderDetails) return;
         try {
             const payment = await paymentApi.initiate({
                 orderId: orderDetails.id,
-                method: 'stripe'
+                method
             });
             setPaymentSession(payment);
 
             const session = payment as any;
-            if (session.sessionId) {
-                const { loadStripe } = await import('@stripe/stripe-js');
-                const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_KEY || '');
-                if (stripe) {
-                    // Type assertion for Stripe compatibility
-                    await (stripe as any).redirectToCheckout({ sessionId: session.sessionId });
-                }
+
+            // Check for Mock Gateway URL (or standard paymentUrl)
+            if (session.gatewayUrl) {
+                window.location.href = session.gatewayUrl;
+                return;
+            }
+
+            // Fallback for legacy implementations (if any)
+            if (session.paymentUrl) {
+                window.location.href = session.paymentUrl;
             }
         } catch (error) {
-            console.error('Stripe payment error:', error);
+            console.error(`${method} payment error:`, error);
         }
     };
 
-    const startPayPalPayment = async () => {
-        if (!orderDetails) return;
-        try {
-            const payment = await paymentApi.initiate({
-                orderId: orderDetails.id,
-                method: 'paypal'
-            });
-            setPaymentSession(payment);
-
-            const paypalOrder = payment as any;
-            if (paypalOrder.approveLink) {
-                window.open(paypalOrder.approveLink, '_blank');
-            }
-        } catch (error) {
-            console.error('PayPal payment error:', error);
-        }
-    };
-
-    const startBkashPayment = async () => {
-        if (!orderDetails) return;
-        try {
-            const payment = await paymentApi.initiate({
-                orderId: orderDetails.id,
-                method: 'bkash'
-            });
-            setPaymentSession(payment);
-
-            const bkashPayment = payment as any;
-            if (bkashPayment.paymentUrl) {
-                window.location.href = bkashPayment.paymentUrl;
-            }
-        } catch (error) {
-            console.error('bKash payment error:', error);
-        }
-    };
-
-    const startRocketPayment = async () => {
-        if (!orderDetails) return;
-        try {
-            const payment = await paymentApi.initiate({
-                orderId: orderDetails.id,
-                method: 'rocket'
-            });
-            setPaymentSession(payment);
-
-            const rocketPayment = payment as any;
-            if (rocketPayment.paymentUrl) {
-                window.location.href = rocketPayment.paymentUrl;
-            }
-        } catch (error) {
-            console.error('Rocket payment error:', error);
-        }
-    };
-
-    const startNagadPayment = async () => {
-        if (!orderDetails) return;
-        try {
-            const payment = await paymentApi.initiate({
-                orderId: orderDetails.id,
-                method: 'nagad'
-            });
-            setPaymentSession(payment);
-
-            const nagadPayment = payment as any;
-            if (nagadPayment.paymentUrl) {
-                window.location.href = nagadPayment.paymentUrl;
-            }
-        } catch (error) {
-            console.error('Nagad payment error:', error);
-        }
-    };
+    const startStripePayment = () => handlePaymentRedirect('stripe'); // Now redirected to Mock Gateway if 'card' or 'stripe' logic matches
+    const startPayPalPayment = () => handlePaymentRedirect('paypal'); // PayPal can also go to Mock Gateway if we want
+    const startBkashPayment = () => handlePaymentRedirect('bkash');
+    const startRocketPayment = () => handlePaymentRedirect('rocket');
+    const startNagadPayment = () => handlePaymentRedirect('nagad');
 
     return (
         <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
@@ -148,15 +85,15 @@ export default function PaymentPage() {
                         Amount: {orderDetails.amount} {orderDetails.currency}
                     </p>
                     <PaymentMethodSelector onSelect={handleMethodSelect} selected={selectedMethod} />
+                    {/* Update button logic if needed, but since we updated the function names/definitions above, the existing JSX calls to startBkashPayment etc should work fine. */}
                     {selectedMethod === 'stripe' && (
-                        <StripeCheckoutButton
-                            orderId={orderDetails.id}
-                            amount={orderDetails.amount}
-                            onSuccess={() => {
-                                setPaymentStatus('completed');
-                                // Optionally refresh order details or redirect
-                            }}
-                        />
+                        // We will allow the user to click "Pay with Card" which redirects to Gateway for "card"
+                        <button
+                            onClick={() => handlePaymentRedirect('card' as any)}
+                            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex justify-center items-center gap-2"
+                        >
+                            Pay with Secure Gateway
+                        </button>
                     )}
                     {selectedMethod === 'paypal' && (
                         <PayPalButton onPay={startPayPalPayment} />
@@ -188,8 +125,8 @@ export default function PaymentPage() {
                             Pay with Nagad
                         </button>
                     )}
-                    <RefundProcessing paymentId={paymentSession?.paymentId} />
-                    <InvoiceDisplay paymentId={paymentSession?.paymentId} />
+                    <RefundProcessing paymentId={paymentSession?.id} />
+                    <InvoiceDisplay paymentId={paymentSession?.id} />
                 </div>
             ) : (
                 <p>Loading order details...</p>

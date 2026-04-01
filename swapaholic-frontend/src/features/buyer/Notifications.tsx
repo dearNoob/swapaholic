@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { useAppSelector } from '../../store/hooks';
 import { FaBell, FaDollarSign, FaTruck, FaGavel, FaExclamation, FaCheckCircle, FaFilter, FaTrash, FaCheck } from 'react-icons/fa';
 import { notificationApi, Notification } from '../../api/notifications';
+import { socketService } from '../../utils/socket';
 import { Button } from '../../components/ui/Button';
 
 export const Notifications = () => {
+    const { user } = useAppSelector((state) => state.auth);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'unread' | Notification['type']>('all');
@@ -12,6 +15,31 @@ export const Notifications = () => {
     useEffect(() => {
         fetchNotifications();
     }, []);
+
+    // Listen for real-time notifications
+    useEffect(() => {
+        if (!user?.id) return;
+
+        const handleNewNotification = (data: any) => {
+            const newNotification: Notification = {
+                id: data.id || Date.now().toString(),
+                title: data.title || 'New Notification',
+                message: data.message || '',
+                type: data.type || 'system',
+                isRead: false,
+                createdAt: new Date().toISOString(),
+                metadata: data.metadata,
+            };
+
+            setNotifications((prev) => [newNotification, ...prev]);
+        };
+
+        socketService.on('notification', handleNewNotification);
+
+        return () => {
+            socketService.off('notification', handleNewNotification);
+        };
+    }, [user]);
 
     const fetchNotifications = async () => {
         try {
@@ -21,73 +49,7 @@ export const Notifications = () => {
             setNotifications(notificationsList);
         } catch (error) {
             console.error('Error fetching notifications:', error);
-            // Mock data for demonstration
-            setNotifications([
-                {
-                    id: '1',
-                    title: 'New Bid on Your Item',
-                    message: 'Someone placed a bid of ৳150 on your Vintage Canon AE-1 Camera. The current highest bid is now ৳150.',
-                    type: 'bid',
-                    isRead: false,
-                    createdAt: new Date().toISOString(),
-                },
-                {
-                    id: '2',
-                    title: 'You Won an Auction!',
-                    message: 'Congratulations! You won the auction for "Sony PlayStation 5" with a final bid of ৳450.',
-                    type: 'bid',
-                    isRead: false,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-                },
-                {
-                    id: '3',
-                    title: 'Payment Received',
-                    message: 'You received a payment of ৳450 for the sale of "Gaming Laptop". Funds will be available in your account within 24-48 hours.',
-                    type: 'payment',
-                    isRead: false,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-                },
-                {
-                    id: '4',
-                    title: 'Order Shipped',
-                    message: 'Your order #12345 for "Nike Air Jordan 1 Retro" has been shipped. Tracking number: TRACK123456',
-                    type: 'delivery',
-                    isRead: true,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-                },
-                {
-                    id: '5',
-                    title: 'Payment Pending',
-                    message: 'Your payment for order #12346 is pending. Please complete the payment to avoid order cancellation.',
-                    type: 'payment',
-                    isRead: true,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-                },
-                {
-                    id: '6',
-                    title: 'Account Verified',
-                    message: 'Your seller account has been verified. You can now start listing products on Swapaholic.',
-                    type: 'verification',
-                    isRead: true,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-                },
-                {
-                    id: '7',
-                    title: 'Auction Ending Soon',
-                    message: 'The auction for "Vintage Camera" you\'re bidding on ends in 1 hour. Place your final bid now!',
-                    type: 'bid',
-                    isRead: true,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-                },
-                {
-                    id: '8',
-                    title: 'Dispute Resolved',
-                    message: 'The dispute for order #12340 has been resolved in your favor. A full refund has been issued.',
-                    type: 'dispute',
-                    isRead: true,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
-                },
-            ]);
+            toast.error('Failed to load notifications');
         } finally {
             setIsLoading(false);
         }

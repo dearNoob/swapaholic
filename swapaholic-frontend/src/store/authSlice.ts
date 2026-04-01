@@ -109,8 +109,17 @@ const authSlice = createSlice({
                 localStorage.setItem('activeMode', state.activeMode);
             }
         },
+        // Update user profile (for profile edits)
+        updateUser: (state, action: PayloadAction<User>) => {
+            state.user = action.payload;
+
+            // Persist updated user to localStorage
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('user', JSON.stringify(action.payload));
+            }
+        },
     },
 });
 
-export const { setCredentials, logout, setLoading, setError, switchMode, setActiveMode } = authSlice.actions;
+export const { setCredentials, logout, setLoading, setError, switchMode, setActiveMode, updateUser } = authSlice.actions;
 export default authSlice.reducer;

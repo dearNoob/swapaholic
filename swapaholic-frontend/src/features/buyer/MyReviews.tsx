@@ -5,52 +5,42 @@ import { reviewsApi, Review } from '../../api/reviews';
 import { RatingStars } from '../../components/ui/RatingStars';
 import { Button } from '../../components/ui/Button';
 import Link from 'next/link';
+import { useAppSelector } from '../../store/hooks';
 
 export const MyReviews = () => {
+    const { user } = useAppSelector((state) => state.auth);
     const [reviews, setReviews] = useState<Review[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        fetchReviews();
-    }, []);
+        if (user?.id) {
+            fetchReviews();
+        }
+    }, [user?.id]);
 
     const fetchReviews = async () => {
         try {
             setIsLoading(true);
-            const data = await reviewsApi.getUserReviews();
-            const reviewsList = Array.isArray(data) ? data : (data.reviews || []);
-            setReviews(reviewsList);
+            const data = await reviewsApi.getUserReviews(user?.id || '');
+            
+            const rawReviews = Array.isArray(data.reviews) ? data.reviews : [];
+            const mappedReviews = rawReviews.map((r: any) => ({
+                id: r._id || r.id,
+                productId: r.orderId?.productId || r.orderId?._id || 'unknown',
+                sellerId: r.revieweeId?._id || 'unknown',
+                buyerId: r.reviewerId?._id || 'unknown',
+                buyerName: r.reviewerId ? `${r.reviewerId.firstName || ''} ${r.reviewerId.lastName || ''}`.trim() : 'You',
+                rating: r.rating || 0,
+                comment: r.comment || '',
+                createdAt: r.createdAt,
+                helpful: r.reportCount || 0,
+                productTitle: r.orderId?.productId?.title || 'Unknown Product',
+            }));
+            
+            setReviews(mappedReviews);
         } catch (error) {
             console.error('Error fetching user reviews:', error);
-            // Mock data for demonstration
-            setReviews([
-                {
-                    id: '1',
-                    productId: 'prod-1',
-                    sellerId: 'seller-1',
-                    buyerId: 'me',
-                    buyerName: 'You',
-                    rating: 5,
-                    comment: 'Excellent product! Exactly as described. The seller was very responsive and shipped quickly.',
-                    createdAt: new Date().toISOString(),
-                    helpful: 12,
-                    response: {
-                        text: 'Thank you so much for your kind words! We appreciate your business.',
-                        createdAt: new Date(Date.now() - 3600000).toISOString(),
-                    },
-                },
-                {
-                    id: '2',
-                    productId: 'prod-2',
-                    sellerId: 'seller-2',
-                    buyerId: 'me',
-                    buyerName: 'You',
-                    rating: 4,
-                    comment: 'Good quality. Minor wear and tear but overall satisfied with the purchase.',
-                    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-                    helpful: 5,
-                },
-            ]);
+            setReviews([]);
         } finally {
             setIsLoading(false);
         }

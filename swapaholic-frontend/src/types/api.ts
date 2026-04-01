@@ -68,7 +68,7 @@ export interface User {
     lastName: string;
     name?: string; // Computed property: firstName + lastName
     avatar?: string;
-    role: 'user' | 'admin' | 'moderator' | 'buyer' | 'seller' | 'verifier' | 'delivery' | 'quality_controller';
+    role: 'user' | 'admin' | 'moderator' | 'buyer' | 'seller' | 'verifier' | 'delivery' | 'quality_controller' | 'logistics_officer';
     emailVerified: boolean;
     createdAt: string;
     updatedAt: string;
@@ -76,6 +76,11 @@ export interface User {
     address?: string;
     kycVerified?: boolean;
     accountStatus?: 'active' | 'suspended' | 'banned' | 'deleted';
+    loginHistory?: Array<{ ip: string; deviceFingerprint: string; lastLogin: string; isTrusted: boolean }>;
+    interests?: string[];
+    nidNumber?: string;
+    profileCompletionScore?: number;
+    isVerifiedUser?: boolean;
 }
 
 // Token types
@@ -90,7 +95,7 @@ export interface Order {
     userId: string;
     products: Array<{ productId: string; quantity: number }>;
     totalAmount: number;
-    status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+    status: 'pending' | 'confirmed' | 'qc_pending' | 'qc_approved' | 'in_delivery' | 'delivered' | 'completed' | 'disputed' | 'cancelled';
     createdAt: string;
     updatedAt: string;
 }

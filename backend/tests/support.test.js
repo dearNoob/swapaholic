@@ -25,7 +25,7 @@ describe('Support Ticket Controller', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `seller_support_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'seller'
+        role: 'user'
       });
     sellerToken = sellerRes.body.token;
     seller = sellerRes.body.user;
@@ -39,7 +39,7 @@ describe('Support Ticket Controller', () => {
         phone: `+1555${Math.random().toString().slice(2, 8)}`,
         email: `buyer_support_${Math.random()}@test.com`,
         password: 'Test1234',
-        role: 'buyer'
+        role: 'user'
       });
     buyerToken = buyerRes.body.token;
     buyer = buyerRes.body.user;
@@ -173,7 +173,7 @@ describe('Support Ticket Controller', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `other_support_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 
@@ -270,7 +270,7 @@ describe('Support Ticket Controller', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `other2_support_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 
@@ -346,7 +346,7 @@ describe('Support Ticket Controller', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `third_support_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 
@@ -564,7 +564,7 @@ describe('Support Ticket Controller', () => {
           phone: `+1555${Math.random().toString().slice(2, 8)}`,
           email: `fourth_support_${Math.random()}@test.com`,
           password: 'Test1234',
-          role: 'buyer'
+          role: 'user'
         });
       const otherToken = otherRes.body.token;
 

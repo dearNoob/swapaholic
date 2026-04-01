@@ -4,15 +4,24 @@ import { useState, useEffect, useCallback } from 'react';
 import { FaChartLine, FaUsers, FaBox, FaMoneyBillWave } from 'react-icons/fa';
 import { adminApi } from '../../../api/admin';
 import { PlatformAnalytics, TopCategory } from '../../../types/api';
+import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
 
 export default function PlatformAnalyticsPage() {
     const [analytics, setAnalytics] = useState<PlatformAnalytics | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    // Protect route with admin auth
+    const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
+    const [isDataLoading, setIsDataLoading] = useState(true);
+
+    // Combined loading state
+    const isLoading = isAuthLoading || isDataLoading;
+
     const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
 
     const fetchAnalytics = useCallback(async () => {
+        if (!isAdmin) return;
+
         try {
-            setIsLoading(true);
+            setIsDataLoading(true);
             const data = await adminApi.getPlatformAnalytics(period);
             setAnalytics(data);
         } catch (err) {
@@ -51,9 +60,9 @@ export default function PlatformAnalyticsPage() {
                 ],
             });
         } finally {
-            setIsLoading(false);
+            setIsDataLoading(false);
         }
-    }, [period]);
+    }, [period, isAdmin]);
 
     useEffect(() => {
         fetchAnalytics();
@@ -210,9 +219,9 @@ export default function PlatformAnalyticsPage() {
                         {analytics.topCategories.map((category: TopCategory, index: number) => (
                             <div key={category.name} className="flex items-center gap-4">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${index === 0 ? 'bg-yellow-500' :
-                                        index === 1 ? 'bg-gray-400' :
-                                            index === 2 ? 'bg-orange-600' :
-                                                'bg-gray-300'
+                                    index === 1 ? 'bg-gray-400' :
+                                        index === 2 ? 'bg-orange-600' :
+                                            'bg-gray-300'
                                     }`}>
                                     {index + 1}
                                 </div>

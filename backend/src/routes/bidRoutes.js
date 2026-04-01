@@ -23,6 +23,18 @@ router.post('/', authMiddleware, bidController.placeBid);
 // @access  Private
 router.get('/user/:userId', authMiddleware, bidController.getUserBids);
 
+// --- Post-Auction Confirmation ---
+
+// @route   GET /api/bids/won
+// @desc    Get buyer's won bids (pending confirmation)
+// @access  Private
+router.get('/won', authMiddleware, bidController.getWonBids);
+
+// @route   POST /api/bids/:bidId/confirm-win
+// @desc    Buyer confirms auction win (within 3-hour window)
+// @access  Private
+router.post('/:bidId/confirm-win', authMiddleware, bidController.confirmAuctionWin);
+
 // @route   GET /api/bids/:productId
 // @desc    Get all bids for a product
 // @access  Private
@@ -47,5 +59,30 @@ router.post('/:bidId/reject', authMiddleware, roleCheck(['seller']), bidControll
 // @desc    Withdraw bid (Buyer)
 // @access  Private - Buyer only
 router.post('/:bidId/withdraw', authMiddleware, roleCheck(['buyer']), bidController.withdrawBid);
+
+// @route   DELETE /api/bids/:bidId
+// @desc    Withdraw/Retract bid (Alias for frontend)
+router.delete('/:bidId', authMiddleware, bidController.withdrawBid);
+
+// --- Auto-bidding Endpoints ---
+
+// @route   POST /api/bids/auto-bid
+// @desc    Set auto-bid for a product
+router.post('/auto-bid', authMiddleware, bidController.setAutoBid);
+
+// @route   DELETE /api/bids/auto-bid/:productId
+// @desc    Cancel auto-bid
+router.delete('/auto-bid/:productId', authMiddleware, bidController.cancelAutoBid);
+
+// @route   GET /api/bids/my-auto-bids
+// @desc    Get user's active auto-bids
+router.get('/my-auto-bids', authMiddleware, bidController.getMyAutoBids);
+
+// --- Analytics ---
+
+// @route   GET /api/bids/analytics
+// @desc    Get bidding analytics
+router.get('/analytics', authMiddleware, bidController.getBiddingAnalytics);
+
 
 module.exports = router;

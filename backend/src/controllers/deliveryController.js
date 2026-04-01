@@ -2,6 +2,7 @@ const Delivery = require('../models/Delivery');
 const Order = require('../models/Order');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const notificationService = require('../utils/notificationService');
 
 // Track delivery - get delivery details and location
 const trackDelivery = async (req, res) => {
@@ -117,6 +118,40 @@ const updateDeliveryStatus = async (req, res) => {
 
     await delivery.populate('deliveryPersonId', 'firstName lastName phone email');
 
+    // When delivery is marked as 'delivered' → auto-complete the order and notify buyer
+    if (status === 'delivered') {
+      try {
+        const completedOrder = await Order.findById(orderId)
+          .populate('buyerId', 'firstName lastName')
+          .populate('productId', 'title');
+        if (completedOrder) {
+          completedOrder.status = 'completed';
+          completedOrder.actualDeliveryDate = new Date();
+          await completedOrder.save();
+
+          const productTitle = completedOrder.productId?.title || 'your item';
+          await notificationService.notifyDeliveryCompleted(
+            orderId,
+            completedOrder.buyerId._id,
+            productTitle
+          );
+          // Notify seller too
+          await notificationService.createAndSend({
+            recipientId: completedOrder.sellerId,
+            type: 'order_completed',
+            title: 'Order Completed — Payment Released',
+            message: `Your order for "${productTitle}" has been delivered successfully. Payment will be released shortly.`,
+            data: { relatedId: orderId, relatedType: 'Order', productTitle },
+            priority: 'high',
+            actionUrl: `/orders/${orderId}`
+          });
+          logger.info(`Order ${orderId} auto-completed after delivery`);
+        }
+      } catch (completionErr) {
+        logger.warn('Failed to auto-complete order after delivery:', completionErr);
+      }
+    }
+
     logger.info(`Delivery status updated for order ${orderId}: ${status}`);
 
     res.json(delivery);
@@ -203,7 +238,7 @@ const assignDelivery = async (req, res) => {
     const { deliveryPersonId, estimatedArrival } = req.body;
     const userRole = req.user.role;
 
-    if (userRole !== 'admin') {
+    if (!['admin', 'logistics_officer'].includes(userRole)) {
       return res.status(403).json({ message: 'Insufficient permissions' });
     }
 
@@ -250,7 +285,10 @@ const getActiveDeliveries = async (req, res) => {
     // Only delivery persons can get their deliveries
     // Admins can see all
     let query = {};
-    if (userRole !== 'admin') {
+    if (!['admin', 'logistics_officer'].includes(userRole)) {
+      query.deliveryPersonId = userId;
+    } else if (userRole === 'logistics_officer') {
+      // Logistics officers see their own deliveries by default
       query.deliveryPersonId = userId;
     }
 
@@ -290,7 +328,7 @@ const getDeliveryStats = async (req, res) => {
   try {
     const userRole = req.user.role;
 
-    if (userRole !== 'admin') {
+    if (!['admin', 'logistics_officer'].includes(userRole)) {
       return res.status(403).json({ message: 'Insufficient permissions' });
     }
 

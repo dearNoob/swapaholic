@@ -13,7 +13,7 @@ import { ordersApi } from '../../../api/orders';
 import { wishlistApi } from '../../../api/wishlist';
 import { productsApi } from '../../../api/products';
 import { toast } from 'react-toastify';
-import AuthDebug from '../../../components/auth/AuthDebug';
+
 import { FaGavel, FaTrophy, FaShoppingBag, FaHeart, FaThLarge } from 'react-icons/fa';
 
 export default function BuyerDashboardPage() {
@@ -48,6 +48,14 @@ export default function BuyerDashboardPage() {
             router.push('/admin/dashboard');
         }
     }, [isAuthenticated, user, router]);
+
+    // Cleanup isLoading if we lose auth
+    useEffect(() => {
+        if (!isAuthenticated) {
+            setIsLoading(false);
+        }
+    }, [isAuthenticated]);
+
 
     // Fetch Orders (Paginated)
     useEffect(() => {
@@ -245,7 +253,7 @@ export default function BuyerDashboardPage() {
 
     return (
         <div className="min-h-screen bg-gray-50 pb-12">
-            <AuthDebug />
+
 
             {/* Header Section with Gradient */}
             <div className="bg-white border-b border-gray-200">
@@ -256,7 +264,7 @@ export default function BuyerDashboardPage() {
                                 Dashboard
                             </h1>
                             <p className="text-gray-500 mt-1">
-                                Welcome back, <span className="font-semibold text-indigo-600">{user?.firstName || 'User'}</span>! Here's your activity overview.
+                                Welcome back, <span className="font-semibold text-indigo-600">{(user && user.firstName) ? user.firstName : 'User'}</span>! Here's your activity overview.
                             </p>
                         </div>
                         <div className="flex items-center gap-3">

@@ -23,10 +23,37 @@ interface OrderHistoryCardProps {
     onPageChange: (page: number) => void;
 }
 
+import { FileDisputeModal } from '../orders/FileDisputeModal';
+import { ordersApi } from '../../api/orders';
+import { toast } from 'react-toastify';
+import { FaFlag } from 'react-icons/fa';
+
 export default function OrderHistoryCard({ orders, currentPage, totalPages, onPageChange }: OrderHistoryCardProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    // Dispute Modal State
+    const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
+    const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+    const openDisputeModal = (orderId: string) => {
+        setSelectedOrderId(orderId);
+        setIsDisputeModalOpen(true);
+    };
+
+    const handleFileDispute = async (reason: string, description: string) => {
+        if (!selectedOrderId) return;
+        try {
+            await ordersApi.fileDispute(selectedOrderId, reason, description);
+            toast.success('Dispute filed successfully. Support will contact you.');
+            // Ideally refresh orders here, but we'd need a prop callback for that. 
+            // For now, toast is sufficient feedback.
+        } catch (error: any) {
+            console.error('Failed to file dispute:', error);
+            toast.error(error.response?.data?.message || 'Failed to file dispute');
+        }
+    };
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -169,6 +196,15 @@ export default function OrderHistoryCard({ orders, currentPage, totalPages, onPa
                                             >
                                                 <FaArrowRight size={12} />
                                             </Link>
+                                            {['delivered', 'shipped', 'completed'].includes(order.status) && (
+                                                <button
+                                                    onClick={() => openDisputeModal(order.id)}
+                                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition ml-2"
+                                                    title="Report Issue / Dispute"
+                                                >
+                                                    <FaFlag size={12} />
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 );
@@ -191,8 +227,8 @@ export default function OrderHistoryCard({ orders, currentPage, totalPages, onPa
                         onClick={() => onPageChange(Math.max(1, currentPage - 1))}
                         disabled={currentPage === 1}
                         className={`px-4 py-2 text-sm font-medium rounded-lg transition ${currentPage === 1
-                                ? 'text-gray-400 cursor-not-allowed'
-                                : 'text-gray-700 hover:bg-white hover:shadow-sm'
+                            ? 'text-gray-400 cursor-not-allowed'
+                            : 'text-gray-700 hover:bg-white hover:shadow-sm'
                             }`}
                     >
                         Previous
@@ -204,14 +240,21 @@ export default function OrderHistoryCard({ orders, currentPage, totalPages, onPa
                         onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
                         disabled={currentPage === totalPages}
                         className={`px-4 py-2 text-sm font-medium rounded-lg transition ${currentPage === totalPages
-                                ? 'text-gray-400 cursor-not-allowed'
-                                : 'text-gray-700 hover:bg-white hover:shadow-sm'
+                            ? 'text-gray-400 cursor-not-allowed'
+                            : 'text-gray-700 hover:bg-white hover:shadow-sm'
                             }`}
                     >
                         Next
                     </button>
                 </div>
             )}
+
+            <FileDisputeModal
+                isOpen={isDisputeModalOpen}
+                onClose={() => setIsDisputeModalOpen(false)}
+                onSubmit={handleFileDispute}
+                orderId={selectedOrderId || ''}
+            />
         </div>
     );
 }

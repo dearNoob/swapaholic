@@ -1,16 +1,13 @@
-// const vision = require('@google-cloud/vision'); // Vision API replaced by Gemini
-// const OpenAI = require('openai'); // OpenAI replaced by Gemini
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { HfInference } = require("@huggingface/inference");
 const Product = require('../models/Product');
 const logger = require('../utils/logger');
 const path = require('path');
 
-// Initialize Google Gemini Client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+// Initialize Hugging Face Inference client
+const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
+// We will use Qwen2.5 VL for multimodal analysis
+const MODEL = "Qwen/Qwen2.5-VL-7B-Instruct";
 
-// Initialize Google Vision API client (Kept commented out/unused or for SafeSearch if wanted later)
-// const visionClient = new vision.ImageAnnotatorClient({ ... });
 
 // Analyze product images and generate description (Seller only)
 const analyzeProduct = async (req, res) => {
@@ -18,18 +15,16 @@ const analyzeProduct = async (req, res) => {
     const { title, category, condition } = req.body;
     const files = req.files;
 
-    let imageParts = [];
+    let imageBase64 = null;
+    let mimeType = null;
+
     if (files && files.length > 0) {
-      // Convert first image to base64 for Gemini
-      imageParts = [{
-        inlineData: {
-          data: files[0].buffer.toString("base64"),
-          mimeType: files[0].mimetype
-        }
-      }];
+      // Convert first image to base64 for Hugging Face
+      imageBase64 = files[0].buffer.toString("base64");
+      mimeType = files[0].mimetype;
     }
 
-    const prompt = `
+    const promptText = `
       You are an expert product copywriter. Generate a compelling and detailed product description for a listing.
       
       Product Details:
@@ -43,23 +38,39 @@ const analyzeProduct = async (req, res) => {
       3. Tone: Professional, persuasive, and informative.
       4. Calculate a "Quality Score" (0-100) based on the condition and visual appearance (New=100, Like New=90, Good=75, Fair=60, Poor=40).
       
-      Output strictly in JSON format:
+      Output strictly in JSON format without any other text or markdown:
       {
         "description": "...",
         "score": 85,
         "detectedLabels": ["label1", "label2"]
       }
-      Do not add any markdown formatting (like \`\`\`json). Just the raw JSON string.
     `;
 
-    const result = await model.generateContent([prompt, ...imageParts]);
-    const response = await result.response;
-    let text = response.text();
+    const messages = [
+      {
+        role: "user",
+        content: imageBase64
+          ? [
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+            { type: "text", text: promptText }
+          ]
+          : [{ type: "text", text: promptText }]
+      }
+    ];
 
-    // Clean up if Gemini adds markdown
-    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const result = await hf.chatCompletion({
+      model: MODEL,
+      messages: messages,
+      max_tokens: 1000,
+      temperature: 0.5,
+    });
 
-    const content = JSON.parse(text);
+    const outputContent = result.choices[0].message.content;
+
+    // Clean up if HF adds markdown
+    let cleanText = outputContent.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    const content = JSON.parse(cleanText);
 
     res.json({
       description: content.description,
@@ -80,9 +91,9 @@ const analyzeProduct = async (req, res) => {
       });
     }
 
-    // Check for API key issues
-    if (error.message?.includes('API key')) {
-      logger.error('Gemini API Key missing or invalid');
+    // Check for API key issues or Rate limits
+    if (error.message?.includes('API key') || error.message?.includes('Unauthorized')) {
+      logger.error('Hugging Face API Key missing or invalid');
       return res.status(500).json({
         message: 'AI service configuration error',
         error: 'API_KEY_ERROR'
@@ -96,33 +107,92 @@ const analyzeProduct = async (req, res) => {
   }
 };
 
+// Regenerate description (Alias for part of analyze logic)
+const regenerateDescription = async (req, res) => {
+    // For now, we reuse the analyze logic but specifically for text regeneration
+    // In a real app, this might avoid image re-processing if not needed
+    return analyzeProduct(req, res);
+};
+
+
 // Create product (seller only)
 const createProduct = async (req, res) => {
   try {
-    let { title, description, category, basePrice, price, condition, geometry, location, images, aiQualityScore } = req.body;
+    let { title, description, category, basePrice, price, condition, geometry, location, aiQualityScore } = req.body;
 
     // Handle mismatched field name from frontend
     if (!basePrice && price) {
       basePrice = price;
     }
 
+    // Parse basePrice as number (FormData sends strings)
+    basePrice = parseFloat(basePrice);
+
     if (!title || !description || !category || !basePrice || !condition) {
-      return res.status(400).json({ message: 'Missing required fields' });
+      return res.status(400).json({ message: 'Missing required fields', details: { title: !!title, description: !!description, category: !!category, basePrice: !!basePrice, condition: !!condition } });
+    }
+
+    // Map frontend condition values to schema enum values
+    const conditionMap = {
+      'new': 'brand_new',
+      'like-new': 'like_new',
+      'excellent': 'excellent',
+      'good': 'good',
+      'fair': 'fair',
+      // Also accept schema values directly
+      'brand_new': 'brand_new',
+      'like_new': 'like_new',
+    };
+    const mappedCondition = conditionMap[condition] || condition;
+
+    // Handle images from multer (req.files) - save to disk
+    let imageUrls = [];
+    if (req.files && req.files.length > 0) {
+      const fs = require('fs');
+      const path = require('path');
+      const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'products');
+      
+      // Ensure directory exists (fallback)
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      imageUrls = req.files.map(file => {
+        // Generate unique filename
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname) || '.jpg';
+        const filename = `${uniqueSuffix}${ext}`;
+        const filePath = path.join(uploadDir, filename);
+        
+        // Write file to disk
+        fs.writeFileSync(filePath, file.buffer);
+        
+        // Return public URL path
+        return `/uploads/products/${filename}`;
+      });
+    }
+
+    // Also handle pre-existing image URLs from body (for updates)
+    if (req.body.images) {
+      const bodyImages = typeof req.body.images === 'string' ? JSON.parse(req.body.images) : req.body.images;
+      if (Array.isArray(bodyImages)) {
+        imageUrls = [...imageUrls, ...bodyImages];
+      }
     }
 
     const product = new Product({
       sellerId: req.user.id,
       title,
-      description, // User can edit this after generation
+      description,
       category,
       basePrice,
-      condition,
+      condition: mappedCondition,
       geometry: typeof geometry === 'string' ? JSON.parse(geometry) : (geometry || { type: 'Point', coordinates: [0, 0] }),
       location,
-      images: images || [],
+      images: imageUrls,
       status: 'active',
       bidStartDate: new Date(),
-      aiQualityScore: aiQualityScore || 0
+      aiQualityScore: parseFloat(aiQualityScore) || 0
     });
 
     await product.save();
@@ -481,7 +551,7 @@ const getProducts = async (req, res) => {
 const getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
-      .populate('sellerId', 'firstName lastName ratingAverage');
+      .populate('sellerId', 'firstName lastName ratingAverage createdAt totalTransactions profilePicture');
 
     if (!product) return res.status(404).json({ message: 'Product not found' });
 
@@ -501,7 +571,10 @@ const getProductById = async (req, res) => {
       }
     );
 
-    res.json(product);
+    res.json({
+      status: 'success',
+      data: product
+    });
   } catch (error) {
     logger.error('Get product by ID error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -519,11 +592,62 @@ const updateProduct = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const allowed = ['title', 'description', 'category', 'basePrice', 'condition', 'geometry', 'location', 'images', 'status', 'aiQualityScore'];
+    const allowed = ['title', 'description', 'category', 'basePrice', 'condition', 'geometry', 'location', 'status', 'aiQualityScore'];
     const updates = {};
+    
+    // Map price to basePrice if frontend sent price
+    if (req.body.price && !req.body.basePrice) {
+        req.body.basePrice = req.body.price;
+    }
+
+    // Map geometry
+    if (req.body.geometry) {
+        updates.geometry = typeof req.body.geometry === 'string' 
+            ? JSON.parse(req.body.geometry) 
+            : req.body.geometry;
+    }
+
     allowed.forEach(field => {
-      if (req.body[field] !== undefined) updates[field] = req.body[field];
+      if (req.body[field] !== undefined && field !== 'geometry') {
+          updates[field] = req.body[field];
+      }
     });
+
+    // Handle new images from multer (req.files) - save to disk
+    let newImageUrls = [];
+    if (req.files && req.files.length > 0) {
+      const fs = require('fs');
+      const path = require('path');
+      const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'products');
+      
+      // Ensure directory exists
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      newImageUrls = req.files.map(file => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname) || '.jpg';
+        const filename = `${uniqueSuffix}${ext}`;
+        const filePath = path.join(uploadDir, filename);
+        
+        fs.writeFileSync(filePath, file.buffer);
+        return `/uploads/products/${filename}`;
+      });
+    }
+
+    // Handle existing images
+    let existingImages = [];
+    if (req.body.existingImages) {
+      existingImages = typeof req.body.existingImages === 'string' 
+        ? JSON.parse(req.body.existingImages) 
+        : req.body.existingImages;
+    }
+
+    // Only update images if there are new ones or if the existing images were explicitly provided
+    if (newImageUrls.length > 0 || req.body.existingImages) {
+        updates.images = [...existingImages, ...newImageUrls];
+    }
 
     updates.updatedAt = new Date();
 
@@ -720,6 +844,166 @@ const getFeaturedProducts = async (req, res) => {
   }
 };
 
+// Admin: Approve a pending product
+const approveProduct = async (req, res) => {
+  try {
+    const product = await Product.findByIdAndUpdate(
+      req.params.productId,
+      { status: 'active' },
+      { new: true }
+    );
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+    res.json({ message: 'Product approved successfully', product });
+  } catch (error) {
+    logger.error('Approve product error:', error);
+    res.status(500).json({ message: 'Failed to approve product' });
+  }
+};
+
+// Admin: Reject a pending product
+const rejectProduct = async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const product = await Product.findByIdAndUpdate(
+      req.params.productId,
+      { status: 'rejected', rejectionReason: reason || 'Violation of terms' },
+      { new: true }
+    );
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+    res.json({ message: 'Product rejected successfully', product });
+  } catch (error) {
+    logger.error('Reject product error:', error);
+    res.status(500).json({ message: 'Failed to reject product' });
+  }
+};
+
+// Upload additional images to existing product
+const uploadImages = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+
+    if (product.sellerId.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No images provided' });
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+    const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'products');
+    
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const newImageUrls = req.files.map(file => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const ext = path.extname(file.originalname) || '.jpg';
+      const filename = `${uniqueSuffix}${ext}`;
+      const filePath = path.join(uploadDir, filename);
+      fs.writeFileSync(filePath, file.buffer);
+      return `/uploads/products/${filename}`;
+    });
+
+    product.images = [...(product.images || []), ...newImageUrls];
+    await product.save();
+
+    res.json({ success: true, images: product.images });
+  } catch (error) {
+    logger.error('Upload product images error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get products by a specific seller
+const getSellerProducts = async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const query = { sellerId, status: 'active' };
+    const products = await Product.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    const total = await Product.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        data: products.map(p => ({ ...p.toObject(), id: p._id })),
+        total,
+        pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) }
+      }
+    });
+  } catch (error) {
+    logger.error('Get seller products error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get similar products (same category, different ID)
+const getSimilarProducts = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const limit = parseInt(req.query.limit) || 6;
+
+    const product = await Product.findById(id);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+
+    const similar = await Product.find({
+      category: product.category,
+      _id: { $ne: id },
+      status: 'active'
+    })
+    .limit(limit)
+    .populate('sellerId', 'firstName lastName ratingAverage');
+
+    res.json({
+        success: true,
+        data: similar.map(p => ({ ...p.toObject(), id: p._id }))
+    });
+  } catch (error) {
+    logger.error('Get similar products error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Discrete route to increment view count
+const incrementViewCount = async (req, res) => {
+  try {
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { viewCount: 1 } },
+      { new: true }
+    );
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+    res.json({ success: true, viewCount: product.viewCount });
+  } catch (error) {
+    logger.error('Increment view count error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Simple categories list
+const getCategories = async (req, res) => {
+  try {
+    const categories = await Product.distinct('category', { status: 'active' });
+    res.json({ success: true, data: categories });
+  } catch (error) {
+    logger.error('Get categories error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   createProduct,
   getProducts,
@@ -730,5 +1014,13 @@ module.exports = {
   getSearchSuggestions,
   getFilterMetadata,
   getFeaturedProducts,
-  analyzeProduct
+  analyzeProduct,
+  regenerateDescription,
+  approveProduct,
+  rejectProduct,
+  uploadImages,
+  getSellerProducts,
+  getSimilarProducts,
+  incrementViewCount,
+  getCategories
 };

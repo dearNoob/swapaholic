@@ -3,79 +3,47 @@ import { FaThumbsUp, FaUser } from 'react-icons/fa';
 import { reviewsApi, Review } from '../../api/reviews';
 import { RatingStars } from '../ui/RatingStars';
 import { toast } from 'react-toastify';
+import { formatRelativeTime } from '../../utils/time';
 
 interface ReviewListProps {
-    productId?: string;
-    sellerId?: string;
+    sellerId: string;
     showProductName?: boolean;
 }
 
-export const ReviewList: React.FC<ReviewListProps> = ({ productId, sellerId, showProductName = false }) => {
+export const ReviewList: React.FC<ReviewListProps> = ({ sellerId, showProductName = false }) => {
     const [reviews, setReviews] = useState<Review[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [sortBy, setSortBy] = useState<'recent' | 'helpful' | 'rating'>('recent');
 
     useEffect(() => {
-        fetchReviews();
-    }, [productId, sellerId]);
+        if (sellerId) fetchReviews();
+    }, [sellerId]);
 
     const fetchReviews = async () => {
         try {
             setIsLoading(true);
-            let data;
-            if (productId) {
-                data = await reviewsApi.getProductReviews(productId);
-            } else if (sellerId) {
-                data = await reviewsApi.getSellerReviews(sellerId);
-            }
-
-            const reviewsList = Array.isArray(data) ? data : (data.reviews || []);
-            setReviews(reviewsList);
+            const data = await reviewsApi.getSellerReviews(sellerId);
+            
+            // Map backend schema to Review UI representation
+            const rawReviews = Array.isArray(data) ? data : (data.reviews || []);
+            const mappedReviews = rawReviews.map((r: any) => ({
+                id: r._id || r.id,
+                productId: r.orderId?._id || 'unknown',
+                sellerId: r.revieweeId || sellerId,
+                buyerId: r.reviewerId?._id || 'unknown',
+                buyerName: r.reviewerId ? `${r.reviewerId.firstName || ''} ${r.reviewerId.lastName || ''}`.trim() : 'Anonymous Buyer',
+                buyerAvatar: undefined,
+                rating: r.rating || 0,
+                comment: r.comment || '',
+                createdAt: r.createdAt,
+                helpful: r.reportCount || 0, // Fallback property
+                response: undefined // Responses not handled yet in backend schema
+            }));
+            
+            setReviews(mappedReviews);
         } catch (error) {
             console.error('Error fetching reviews:', error);
-            // Mock data for demonstration
-            setReviews([
-                {
-                    id: '1',
-                    productId: productId || 'prod-1',
-                    sellerId: sellerId || 'seller-1',
-                    buyerId: 'buyer-1',
-                    buyerName: 'John Doe',
-                    buyerAvatar: 'https://ui-avatars.com/api/?name=John+Doe',
-                    rating: 5,
-                    comment: 'Excellent product! Exactly as described. The seller was very responsive and shipped quickly. Highly recommend!',
-                    createdAt: new Date().toISOString(),
-                    helpful: 12,
-                },
-                {
-                    id: '2',
-                    productId: productId || 'prod-1',
-                    sellerId: sellerId || 'seller-1',
-                    buyerId: 'buyer-2',
-                    buyerName: 'Jane Smith',
-                    buyerAvatar: 'https://ui-avatars.com/api/?name=Jane+Smith',
-                    rating: 4,
-                    comment: 'Good quality item. Had minor wear but overall satisfied with the purchase.',
-                    createdAt: new Date(Date.now() - 86400000).toISOString(),
-                    helpful: 8,
-                    response: {
-                        text: 'Thank you for your feedback! We appreciate your business.',
-                        createdAt: new Date(Date.now() - 43200000).toISOString(),
-                    },
-                },
-                {
-                    id: '3',
-                    productId: productId || 'prod-1',
-                    sellerId: sellerId || 'seller-1',
-                    buyerId: 'buyer-3',
-                    buyerName: 'Mike Johnson',
-                    buyerAvatar: 'https://ui-avatars.com/api/?name=Mike+Johnson',
-                    rating: 5,
-                    comment: 'Amazing! Better than expected. Fast shipping and great communication.',
-                    createdAt: new Date(Date.now() - 172800000).toISOString(),
-                    helpful: 15,
-                },
-            ]);
+            setReviews([]);
         } finally {
             setIsLoading(false);
         }
@@ -208,7 +176,7 @@ export const ReviewList: React.FC<ReviewListProps> = ({ productId, sellerId, sho
                                     <div>
                                         <p className="font-semibold text-gray-900">{review.buyerName}</p>
                                         <p className="text-sm text-gray-500">
-                                            {new Date(review.createdAt).toLocaleDateString()}
+                                            {formatRelativeTime(review.createdAt)}
                                         </p>
                                     </div>
                                 </div>
@@ -224,7 +192,7 @@ export const ReviewList: React.FC<ReviewListProps> = ({ productId, sellerId, sho
                                     <p className="text-sm font-semibold text-gray-900 mb-1">Seller Response:</p>
                                     <p className="text-sm text-gray-700">{review.response.text}</p>
                                     <p className="text-xs text-gray-500 mt-2">
-                                        {new Date(review.response.createdAt).toLocaleDateString()}
+                                        {formatRelativeTime(review.response.createdAt)}
                                     </p>
                                 </div>
                             )}

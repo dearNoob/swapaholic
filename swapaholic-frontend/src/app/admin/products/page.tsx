@@ -6,18 +6,26 @@ import Link from 'next/link';
 import { FaCheckCircle, FaTimes, FaEye } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { adminApi } from '../../../api/admin';
+import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
 
 export default function ProductModerationPage() {
     const [products, setProducts] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    // Protect route with admin auth
+    const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
+    const [isDataLoading, setIsDataLoading] = useState(true);
+
+    // Combined loading state
+    const isLoading = isAuthLoading || isDataLoading;
 
     useEffect(() => {
-        fetchPendingProducts();
-    }, []);
+        if (isAdmin) {
+            fetchPendingProducts();
+        }
+    }, [isAdmin]);
 
     const fetchPendingProducts = async () => {
         try {
-            setIsLoading(true);
+            setIsDataLoading(true);
             const data = await adminApi.getPendingProducts();
             setProducts(data.products || []);
         } catch (err) {
@@ -34,7 +42,7 @@ export default function ProductModerationPage() {
                 createdAt: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(),
             })));
         } finally {
-            setIsLoading(false);
+            setIsDataLoading(false);
         }
     };
 

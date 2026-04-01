@@ -17,6 +17,7 @@ interface BiddingInterfaceProps {
     minimumIncrement: number;
     endTime?: string;
     totalBids: number;
+    sellerId: string;
     onBidPlaced?: () => void;
 }
 
@@ -29,6 +30,7 @@ export default function BiddingInterface({
     minimumIncrement = 5,
     endTime,
     totalBids,
+    sellerId,
     onBidPlaced,
 }: BiddingInterfaceProps) {
     const [bidAmount, setBidAmount] = useState<number>(currentBid + minimumIncrement);
@@ -79,6 +81,11 @@ export default function BiddingInterface({
 
     const handleBidSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (user?.id === sellerId) {
+            toast.warning("You cannot bid on your own product.");
+            return;
+        }
 
         if (bidAmount < minBid) {
             toast.error(`Minimum bid is ৳${minBid.toFixed(2)}`);
@@ -189,7 +196,7 @@ export default function BiddingInterface({
                             onChange={(e) => setBidAmount(Number(e.target.value))}
                             min={minBid}
                             step={minimumIncrement}
-                            className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg font-semibold"
+                            className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-black focus:border-indigo-500 text-lg font-semibold"
                             required
                         />
                     </div>
@@ -204,7 +211,7 @@ export default function BiddingInterface({
                                 key={index}
                                 type="button"
                                 onClick={() => setBidAmount(amount)}
-                                className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-indigo-50 hover:border-indigo-300 transition"
+                                className="px-3 py-2 text-sm border border-gray-300 rounded-lg text-black hover:bg-indigo-50 hover:border-indigo-300 transition"
                             >
                                 ৳{amount.toFixed(2)}
                             </button>
@@ -213,14 +220,20 @@ export default function BiddingInterface({
                 </div>
 
                 {/* Place Bid Button */}
-                <button
-                    type="submit"
-                    disabled={isSubmitting || bidAmount < minBid}
-                    className="w-full bg-indigo-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
-                >
-                    <FaGavel />
-                    {isSubmitting ? 'Placing Bid...' : 'Place Bid'}
-                </button>
+                {user?.id === sellerId ? (
+                    <div className="w-full bg-gray-100 text-gray-500 py-4 rounded-lg font-semibold text-lg text-center border border-gray-200">
+                        You cannot bid on your own product
+                    </div>
+                ) : (
+                    <button
+                        type="submit"
+                        disabled={isSubmitting || bidAmount < minBid}
+                        className="w-full bg-indigo-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
+                    >
+                        <FaGavel />
+                        {isSubmitting ? 'Placing Bid...' : 'Place Bid'}
+                    </button>
+                )}
             </form>
 
             {/* Bid Info */}

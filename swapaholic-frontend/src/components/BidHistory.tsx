@@ -1,6 +1,7 @@
 'use client';
 
 import { FaTrophy, FaUser } from 'react-icons/fa';
+import { formatRelativeTime } from '../utils/time';
 
 interface Bid {
     id: string;
@@ -19,18 +20,9 @@ export default function BidHistory({ bids, maxDisplay = 5 }: BidHistoryProps) {
     const displayedBids = bids.slice(0, maxDisplay);
     const hasMore = bids.length > maxDisplay;
 
+    // (Inside component)
     const formatTime = (timestamp: string) => {
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diff = now.getTime() - date.getTime();
-        const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(diff / 3600000);
-        const days = Math.floor(diff / 86400000);
-
-        if (minutes < 1) return 'Just now';
-        if (minutes < 60) return `${minutes}m ago`;
-        if (hours < 24) return `${hours}h ago`;
-        return `${days}d ago`;
+        return formatRelativeTime(timestamp);
     };
 
     const anonymizeName = (name: string, isCurrentUser?: boolean) => {
