@@ -37,7 +37,7 @@ export default function AdminSidebar() {
 
     const handleLogout = () => {
         dispatch(logout());
-        router.push('/login');
+        router.push('/admin/login');
     };
 
     const isActive = (href: string) => {

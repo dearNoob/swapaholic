@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAppSelector } from '../store/hooks';
 import { toast } from 'react-toastify';
 
-export const useRequireAdminAuth = (redirectPath = '/login') => {
+export const useRequireAdminAuth = (redirectPath = '/admin/login') => {
     const router = useRouter();
     const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth);
 

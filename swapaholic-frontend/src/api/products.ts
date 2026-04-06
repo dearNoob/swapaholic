@@ -198,5 +198,13 @@ export const productsApi = {
     async analyzeProduct(formData: FormData): Promise<{ description: string; score: number }> {
         const response = await apiClient.post<{ description: string; score: number }>('/products/analyze', formData);
         return response.data;
+    },
+
+    /**
+     * Get AI suggested price
+     */
+    async predictPrice(data: { category: string; brand: string; model: string; original_price: number; condition?: string; product_age?: string }): Promise<{ success: boolean; suggestedPrice?: number; source?: string; message?: string; error?: string }> {
+        const response = await apiClient.post('/products/price/predict', data);
+        return response.data;
     }
 };

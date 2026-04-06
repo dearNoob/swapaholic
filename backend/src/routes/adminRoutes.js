@@ -7,6 +7,7 @@ const adminDisputeController = require('../controllers/adminDisputeController');
 const orderController = require('../controllers/orderController');
 const productController = require('../controllers/productController');
 const adminContentController = require('../controllers/adminContentController');
+const reportController = require('../controllers/reportController');
 
 /**
  * Admin Dashboard Routes
@@ -173,5 +174,12 @@ router.put('/logistics-officers/:userId/reject', authMiddleware, roleCheck(['adm
 
 // Get single logistics officer detail + task history
 router.get('/logistics-officers/:userId/detail', authMiddleware, roleCheck(['admin']), adminUserController.getLogisticsOfficerDetail);
+
+/**
+ * Report Management Routes
+ */
+router.get('/reports', authMiddleware, roleCheck(['admin']), reportController.getAllReports);
+router.get('/reports/:reportId', authMiddleware, roleCheck(['admin']), reportController.getReportDetails);
+router.put('/reports/:reportId/review', authMiddleware, roleCheck(['admin']), reportController.reviewReport);
 
 module.exports = router;

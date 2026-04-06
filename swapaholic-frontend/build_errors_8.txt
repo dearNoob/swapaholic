@@ -1,8 +1,0 @@
-src/components/bidding/BiddingAnalytics.tsx(150,79): error TS18048: 'percent' is possibly 'undefined'.
-src/components/layout/Header.tsx(55,47): error TS2322: Type 'import("C:/Users/user/Desktop/CSE_ALL/Capstone/swapaholic.20/swapaholic-frontend/src/types/api").User | null' is not assignable to type 'User | null'.
-  Property 'name' is missing in type 'import("C:/Users/user/Desktop/CSE_ALL/Capstone/swapaholic.20/swapaholic-frontend/src/types/api").User' but required in type 'User'.
-src/features/buyer/BidPanel.tsx(70,14): error TS18047: 'socketService' is possibly 'null'.
-src/features/buyer/BidPanel.tsx(70,28): error TS2339: Property 'socket' does not exist on type 'Socket<DefaultEventsMap, DefaultEventsMap>'.
-src/features/buyer/BidPanel.tsx(72,9): error TS18047: 'socketService' is possibly 'null'.
-src/features/buyer/MyReviews.tsx(116,33): error TS2322: Type '{ children: string; href: string; }' is not assignable to type 'IntrinsicAttributes & ButtonProps'.
-  Property 'href' does not exist on type 'IntrinsicAttributes & ButtonProps'.

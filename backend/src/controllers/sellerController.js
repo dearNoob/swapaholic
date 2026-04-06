@@ -521,12 +521,183 @@ exports.getEarningsSummary = async (req, res) => {
 
 /**
  * @route   GET /api/seller/analytics/comprehensive
- * @desc    Get comprehensive analytics
+ * @desc    Get comprehensive analytics including revenue, products, traffic, and conversion
  * @access  Private - Seller only
  */
 exports.getComprehensiveAnalytics = async (req, res) => {
-    // Reuse getSalesAnalytics logic or expand it
-    return exports.getSalesAnalytics(req, res);
+    try {
+        const sellerId = req.user.id;
+        const sellerObjectId = new mongoose.Types.ObjectId(sellerId);
+        const period = req.query.period || '30d';
+
+        // 1. Calculate date range
+        const daysMap = { '7d': 7, '30d': 30, '90d': 90, '1y': 365 };
+        const days = daysMap[period] || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        // 2. Revenue Data (Daily, Weekly, Monthly)
+        const orders = await Order.find({
+            sellerId,
+            status: 'completed',
+            createdAt: { $gte: startDate }
+        });
+
+        // Daily Revenue
+        const dailyMap = {};
+        for (let i = days - 1; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            dailyMap[dateStr] = 0;
+        }
+
+        orders.forEach(order => {
+            const dateStr = order.createdAt.toISOString().split('T')[0];
+            if (dailyMap[dateStr] !== undefined) {
+                dailyMap[dateStr] += order.totalAmount;
+            }
+        });
+
+        const dailyRevenue = Object.entries(dailyMap).map(([date, amount]) => ({ date, amount }));
+
+        // Weekly Revenue (last 12 weeks)
+        const twelveWeeksAgo = new Date();
+        twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 12 * 7);
+        
+        const weeklyData = await Order.aggregate([
+            {
+                $match: {
+                    sellerId: sellerObjectId,
+                    status: 'completed',
+                    createdAt: { $gte: twelveWeeksAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: { $week: '$createdAt' },
+                    amount: { $sum: '$totalAmount' },
+                    year: { $first: { $year: '$createdAt' } }
+                }
+            },
+            { $sort: { year: 1, _id: 1 } }
+        ]);
+        const weeklyRevenue = weeklyData.map(d => ({ week: `Week ${d._id}`, amount: d.amount }));
+
+        // Monthly Revenue (last 12 months)
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+        
+        const monthlyData = await Order.aggregate([
+            {
+                $match: {
+                    sellerId: sellerObjectId,
+                    status: 'completed',
+                    createdAt: { $gte: twelveMonthsAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: { $month: '$createdAt' },
+                    amount: { $sum: '$totalAmount' },
+                    year: { $first: { $year: '$createdAt' } }
+                }
+            },
+            { $sort: { year: 1, _id: 1 } }
+        ]);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthlyRevenue = monthlyData.map(d => ({ 
+            month: `${months[d._id - 1]} ${d.year}`, 
+            amount: d.amount 
+        }));
+
+        // 3. Best Selling Products
+        const products = await Product.find({ sellerId, status: { $ne: 'removed' } });
+        const productIds = products.map(p => p._id);
+
+        const salesByProduct = await Order.aggregate([
+            {
+                $match: {
+                    sellerId: sellerObjectId,
+                    status: 'completed',
+                    productId: { $in: productIds }
+                }
+            },
+            {
+                $group: {
+                    _id: '$productId',
+                    sales: { $sum: 1 },
+                    revenue: { $sum: '$totalAmount' }
+                }
+            },
+            { $sort: { sales: -1 } },
+            { $limit: 10 }
+        ]);
+
+        const bestSelling = await Promise.all(salesByProduct.map(async (item) => {
+            const product = products.find(p => p._id.toString() === item._id.toString());
+            return {
+                id: item._id,
+                title: product?.title || 'Unknown Product',
+                image: product?.images?.[0] || '/placeholder-product.jpg',
+                sales: item.sales,
+                revenue: item.revenue,
+                views: product?.viewCount || 0
+            };
+        }));
+
+        // 4. Traffic Analytics
+        const totalViews = products.reduce((sum, p) => sum + (p.viewCount || 0), 0);
+        const uniqueVisitors = Math.floor(totalViews * 0.7); // Mock factor for now
+
+        // Mock traffic sources and device breakdown
+        const traffic = {
+            totalViews,
+            uniqueVisitors,
+            avgTimeOnPage: 245,
+            bounceRate: 32.5,
+            viewsBySource: {
+                direct: Math.floor(totalViews * 0.3),
+                search: Math.floor(totalViews * 0.4),
+                social: Math.floor(totalViews * 0.2),
+                referral: Math.floor(totalViews * 0.1)
+            },
+            viewsByDevice: {
+                desktop: Math.floor(totalViews * 0.55),
+                mobile: Math.floor(totalViews * 0.35),
+                tablet: Math.floor(totalViews * 0.10)
+            }
+        };
+
+        // 5. Conversion Metrics
+        const totalBids = await Bid.countDocuments({ productId: { $in: productIds } });
+        const totalSales = orders.length;
+
+        const viewToBid = totalViews > 0 ? (totalBids / totalViews) * 100 : 0;
+        const bidToSale = totalBids > 0 ? (totalSales / totalBids) * 100 : 0;
+        const overallConversion = totalViews > 0 ? (totalSales / totalViews) * 100 : 0;
+        const avgBidsPerListing = products.length > 0 ? totalBids / products.length : 0;
+
+        res.json({
+            revenue: {
+                daily: dailyRevenue,
+                weekly: weeklyRevenue,
+                monthly: monthlyRevenue
+            },
+            bestSelling,
+            traffic,
+            conversion: {
+                viewToBid,
+                bidToSale,
+                overallConversion,
+                avgBidsPerListing
+            }
+        });
+
+    } catch (error) {
+        logger.error('Error fetching comprehensive analytics:', error);
+        res.status(500).json({ message: 'Server error fetching comprehensive analytics' });
+    }
 };
 
 /**

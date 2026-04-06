@@ -28,7 +28,7 @@ class SocketService {
                 token,
                 userId
             },
-            transports: ['websocket', 'polling'],
+            transports: ['polling', 'websocket'],
             reconnectionAttempts: this.maxReconnectAttempts,
             reconnectionDelay: 1000,
             withCredentials: true,

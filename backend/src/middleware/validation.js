@@ -143,10 +143,17 @@ module.exports.validateBid = [
  * General input sanitization middleware
  */
 module.exports.sanitizeInput = (req, res, next) => {
+  // Check if this is an admin content route where HTML is allowed
+  const isAdminContentRoute = req.path.includes('/admin/content');
+
   // Sanitize string fields in body
   const sanitizeObject = (obj) => {
     for (let key in obj) {
       if (typeof obj[key] === 'string') {
+        // Skip sanitization for 'body' on admin content routes
+        if (isAdminContentRoute && key === 'body') {
+          continue;
+        }
         obj[key] = sanitizeString(obj[key]);
       } else if (typeof obj[key] === 'object' && obj[key] !== null) {
         sanitizeObject(obj[key]);

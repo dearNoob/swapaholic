@@ -1,12 +1,13 @@
 const { HfInference } = require("@huggingface/inference");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Product = require('../models/Product');
 const logger = require('../utils/logger');
 const path = require('path');
 
-// Initialize Hugging Face Inference client
+// Initialize AI clients
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
-// We will use Qwen2.5 VL for multimodal analysis
-const MODEL = "Qwen/Qwen2.5-VL-7B-Instruct";
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 
 // Analyze product images and generate description (Seller only)
@@ -25,20 +26,22 @@ const analyzeProduct = async (req, res) => {
     }
 
     const promptText = `
-      You are an expert product copywriter. Generate a compelling and detailed product description for a listing.
+      You are an expert product copywriter for Swapaholic, a second-hand P2P marketplace. 
+      Generate a compelling and detailed product description for a listing.
       
       Product Details:
       - Title: ${title}
       - Category: ${category}
       - Condition: ${condition}
+      ${imageBase64 ? '- Vision: Please analyze the provided image to infer quality and features.' : '- Note: No image provided. Base your analysis strictly on the title and category.'}
       
       Key Requirements:
-      1. Analyze the provided image (if any) and the details to generate the description.
-      2. If it's an electronics item, infer specifications visible in the image or typical for the model.
-      3. Tone: Professional, persuasive, and informative.
-      4. Calculate a "Quality Score" (0-100) based on the condition and visual appearance (New=100, Like New=90, Good=75, Fair=60, Poor=40).
+      1. Generate a professional, persuasive description.
+      2. If it is an electronics item, infer specifications typical for the model.
+      3. Calculate a "Quality Score" (0-100) based on the condition (New=100, Like New=90, Good=75, Fair=60, Poor=40).
       
-      Output strictly in JSON format without any other text or markdown:
+      You MUST output ONLY a valid JSON object. Do not include any conversational text.
+      Format:
       {
         "description": "...",
         "score": 85,
@@ -46,62 +49,93 @@ const analyzeProduct = async (req, res) => {
       }
     `;
 
-    const messages = [
-      {
-        role: "user",
-        content: imageBase64
-          ? [
-            { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-            { type: "text", text: promptText }
-          ]
-          : [{ type: "text", text: promptText }]
-      }
-    ];
+    try {
+        let textResponse = '';
+        let usedProvider = 'gemini';
 
-    const result = await hf.chatCompletion({
-      model: MODEL,
-      messages: messages,
-      max_tokens: 1000,
-      temperature: 0.5,
-    });
+        try {
+            // First attempt: Gemini 1.5 Flash
+            if (imageBase64) {
+                const result = await model.generateContent([
+                    promptText,
+                    {
+                        inlineData: {
+                            data: imageBase64,
+                            mimeType: mimeType
+                        }
+                    }
+                ]);
+                const response = await result.response;
+                textResponse = response.text();
+            } else {
+                const result = await model.generateContent(promptText);
+                const response = await result.response;
+                textResponse = response.text();
+            }
+        } catch (geminiError) {
+            logger.warn('Gemini API failed, falling back to Hugging Face:', geminiError.message);
+            // Fallback to Hugging Face Qwen 2.5
+            usedProvider = 'huggingface';
+            const { HfInference } = require("@huggingface/inference");
+            const hfFallback = new HfInference(process.env.HUGGINGFACE_API_KEY);
+            
+            const messages = [
+            {
+                role: "user",
+                content: imageBase64
+                ? [
+                    { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+                    { type: "text", text: promptText + "\n\nCRITICAL: Respond ONLY in valid English JSON." }
+                ]
+                : [{ type: "text", text: promptText + "\n\nCRITICAL: Respond ONLY in valid English JSON." }]
+            }
+            ];
 
-    const outputContent = result.choices[0].message.content;
+            const result = await hfFallback.chatCompletion({
+                model: "Qwen/Qwen2.5-7B-Instruct",
+                messages: messages,
+                max_tokens: 1500,
+                temperature: 0.5,
+            });
 
-    // Clean up if HF adds markdown
-    let cleanText = outputContent.replace(/```json/g, '').replace(/```/g, '').trim();
+            textResponse = result.choices[0].message.content;
+        }
 
-    const content = JSON.parse(cleanText);
+        console.log(`--- RAW AI RESPONSE (${usedProvider}) ---`);
+        console.log(textResponse);
+        console.log('-----------------------');
 
-    res.json({
-      description: content.description,
-      score: content.score,
-      detectedLabels: content.detectedLabels || []
-    });
+        // Robust JSON extraction: Find the first { and the last }
+        const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error(`AI did not return valid JSON format. Response: ${textResponse.substring(0, 50)}...`);
+        }
+
+        const cleanJson = jsonMatch[0];
+        const content = JSON.parse(cleanJson);
+
+        res.json({
+            description: content.description || 'No description generated.',
+            score: content.score || 0,
+            detectedLabels: content.detectedLabels || []
+        });
+
+    } catch (aiError) {
+        logger.error('API or Parsing error:', aiError);
+        throw aiError; // Handled by the outer catch
+    }
 
   } catch (error) {
     logger.error('Analyze product error:', error);
-    console.error('Full Analyze Error:', JSON.stringify(error, null, 2));
+    console.error('Full Analyze Error:', error);
 
-    // Check for quota exceeded (429)
-    if (error.status === 429 || error.message?.includes('429') || error.message?.includes('quota')) {
-      return res.status(429).json({
-        message: 'AI quota exceeded. Please wait a minute and try again.',
-        error: 'QUOTA_EXCEEDED',
-        retryAfter: 60
-      });
-    }
-
-    // Check for API key issues or Rate limits
-    if (error.message?.includes('API key') || error.message?.includes('Unauthorized')) {
-      logger.error('Hugging Face API Key missing or invalid');
-      return res.status(500).json({
-        message: 'AI service configuration error',
-        error: 'API_KEY_ERROR'
-      });
+    let errorMessage = 'Failed to analyze product. Please try again.';
+    if (error.message && error.message.includes('API key was reported as leaked')) {
+        errorMessage = 'Both AI providers failed. Your Gemini API key is leaked, and Hugging Face fallback failed.';
     }
 
     res.status(500).json({
-      message: 'Failed to analyze product. Please try again.',
+      message: errorMessage,
       error: error.message || 'Unknown error'
     });
   }

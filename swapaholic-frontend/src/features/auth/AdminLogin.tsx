@@ -7,7 +7,7 @@ import * as yup from 'yup';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import { FaEye, FaEyeSlash, FaShieldAlt } from 'react-icons/fa';
-import { useAppDispatch } from '../../store/hooks';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { setCredentials, setLoading, setError } from '../../store/authSlice';
 import { authApi } from '../../api/auth';
 import { User } from '../../types/api';
@@ -30,8 +30,15 @@ interface LoginResponse {
 export const AdminLogin = () => {
     const dispatch = useAppDispatch();
     const router = useRouter();
+    const { user, isAuthenticated } = useAppSelector((state) => state.auth);
     const [isLoading, setIsLoadingState] = React.useState(false);
     const [showPassword, setShowPassword] = React.useState(false);
+
+    React.useEffect(() => {
+        if (isAuthenticated && user?.role === 'admin') {
+            router.replace('/admin/dashboard');
+        }
+    }, [isAuthenticated, user, router]);
 
     const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
         resolver: yupResolver(schema),

@@ -18,6 +18,14 @@ interface BestSellingProductsProps {
 }
 
 export default function BestSellingProducts({ products }: BestSellingProductsProps) {
+    if (!products || products.length === 0) {
+        return (
+            <div className="bg-white p-6 rounded-xl shadow-lg h-96 flex items-center justify-center">
+                <p className="text-gray-500">No product sales data available</p>
+            </div>
+        );
+    }
+
     return (
         <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">

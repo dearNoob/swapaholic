@@ -1,20 +1,20 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { contentApi } from '../../../api/content';
-import { FaShieldAlt, FaGavel, FaTruck, FaMoneyBillWave, FaHandshake, FaInfoCircle } from 'react-icons/fa';
+import { contentApi } from '../../api/content';
+import { FaUsers, FaInfoCircle } from 'react-icons/fa';
 
-export default function TermsPage() {
+export default function AboutPage() {
     const [content, setContent] = useState<{ title: string; body: string } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const fetchContent = async () => {
             try {
-                const data = await contentApi.getContent('terms');
+                const data = await contentApi.getContent('about');
                 setContent(data);
             } catch (error) {
-                console.error('Error fetching terms content:', error);
+                console.error('Error fetching about content:', error);
             } finally {
                 setIsLoading(false);
             }
@@ -35,10 +35,10 @@ export default function TermsPage() {
             <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-12 animate-fade-in">
                     <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-4 tracking-tighter">
-                        {content?.title || 'Terms of Service'}
+                        {content?.title || 'About Us'}
                     </h1>
                     <p className="text-lg text-slate-600 dark:text-slate-400 font-light max-w-2xl mx-auto leading-relaxed">
-                        Last updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        Discover the story behind Swapaholic.
                     </p>
                 </div>
 
@@ -64,8 +64,8 @@ export default function TermsPage() {
                         )}
 
                         <div className="pt-12 mt-16 border-t border-slate-100 dark:border-slate-800/60 text-center">
-                            <p className="text-sm text-slate-400 dark:text-slate-500 italic font-light">
-                                By continuing to use Swapaholic, you acknowledge that you have read and understood these terms in their entirety.
+                            <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 tracking-wide uppercase">
+                                Join the Re-Commerce Revolution
                             </p>
                         </div>
                     </div>

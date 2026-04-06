@@ -14,6 +14,14 @@ interface ConversionMetricsProps {
 }
 
 export default function ConversionMetrics({ data }: ConversionMetricsProps) {
+    if (!data) {
+        return (
+            <div className="bg-white p-6 rounded-xl shadow-lg h-60 flex items-center justify-center">
+                <p className="text-gray-500">No conversion data available</p>
+            </div>
+        );
+    }
+
     const metrics = [
         {
             label: 'View to Bid',

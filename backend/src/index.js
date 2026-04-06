@@ -32,6 +32,9 @@ const serviceRoutes = require('./routes/serviceRoutes');
 const sellerRoutes = require('./routes/sellerRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const logisticsRoutes = require('./routes/logisticsRoutes');
+const predictionRoutes = require('./routes/predictionRoutes');
+const publicRoutes = require('./routes/publicRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -132,6 +135,9 @@ app.use('/api/services', serviceRoutes);
 app.use('/api/seller', sellerRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/logistics', logisticsRoutes);
+app.use('/api/products/price', predictionRoutes);
+app.use('/api/public', publicRoutes);
+app.use('/api/reports', reportRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -155,7 +161,13 @@ if (require.main === module) {
       const server = http.createServer(app);
       const io = socketIO(server, {
         cors: {
-          origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://192.168.0.104:3000'],
+          origin: [
+            process.env.FRONTEND_URL || 'http://localhost:3000',
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            'http://192.168.0.104:3000',
+            'http://192.168.56.1:3000'
+          ],
           methods: ['GET', 'POST'],
           credentials: true,
         },

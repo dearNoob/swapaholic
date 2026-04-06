@@ -27,8 +27,14 @@ export const useRouteGuard = () => {
             // Strict private routes like dashboard/profile should kick them out to login.
             // Exception: staff login pages must remain accessible without auth.
             const isStaffLoginPage = pathname === '/admin/login' || pathname === '/logistics/login';
-            if (!isStaffLoginPage && (pathname.includes('/dashboard') || pathname.includes('/profile') || pathname.includes('/admin') || pathname.includes('/logistics') || pathname.includes('/messages') || pathname.includes('/settings'))) {
-                router.replace('/login');
+            if (!isStaffLoginPage) {
+                if (pathname.includes('/admin')) {
+                    router.replace('/admin/login');
+                } else if (pathname.includes('/logistics')) {
+                    router.replace('/logistics/login');
+                } else if (pathname.includes('/dashboard') || pathname.includes('/profile') || pathname.includes('/messages') || pathname.includes('/settings')) {
+                    router.replace('/login');
+                }
             }
             return;
         }

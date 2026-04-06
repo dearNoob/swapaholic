@@ -25,6 +25,14 @@ interface TrafficAnalyticsProps {
 }
 
 export default function TrafficAnalytics({ data }: TrafficAnalyticsProps) {
+    if (!data) {
+        return (
+            <div className="bg-white p-6 rounded-xl shadow-lg h-96 flex items-center justify-center">
+                <p className="text-gray-500">No traffic data available</p>
+            </div>
+        );
+    }
+
     const sources = [
         { name: 'Search Engines', value: data.viewsBySource.search, color: 'bg-blue-500' },
         { name: 'Direct Traffic', value: data.viewsBySource.direct, color: 'bg-green-500' },

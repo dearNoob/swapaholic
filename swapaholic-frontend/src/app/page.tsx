@@ -8,6 +8,7 @@ import {
 import { productsApi } from '../api/products';
 import AuthRedirect from '../components/auth/AuthRedirect';
 import RecentlyViewed from '../components/RecentlyViewed';
+import HeroActions from '../components/home/HeroActions';
 
 // Server Components can be async
 export default async function HomePage() {
@@ -103,18 +104,7 @@ export default async function HomePage() {
             Experience the future of re-commerce. Join our exclusive community to buy, sell, and discover unique items with uncompromised trust.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full max-w-md mx-auto">
-            <Link href="/products" className="w-full sm:w-auto">
-              <button className="w-full px-8 py-4 bg-slate-900 text-white rounded-2xl font-semibold text-lg hover:bg-slate-800 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.2)] hover:-translate-y-0.5 flex items-center justify-center gap-2 group">
-                Explore Auctions <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
-              </button>
-            </Link>
-            <Link href="/seller/create-listing" className="w-full sm:w-auto">
-              <button className="w-full px-8 py-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl font-semibold text-lg hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 transition-all flex items-center justify-center gap-2 shadow-sm">
-                Start Selling <FaGavel className="text-slate-500 dark:text-slate-400" />
-              </button>
-            </Link>
-          </div>
+          <HeroActions />
 
           {/* Trust Indicators */}
           <div className="mt-20 flex flex-wrap justify-center gap-8 md:gap-16 pt-10 border-t border-slate-200/60 dark:border-slate-800/60 w-full max-w-3xl">
