@@ -17,6 +17,7 @@ export interface Product {
     mlScore?: number;
     mlSummary?: string;
     distance?: number; // distance in meters from user location
+    aiSuggestedPrice?: number;
 }
 
 interface ListingState {

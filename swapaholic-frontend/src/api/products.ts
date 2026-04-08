@@ -25,6 +25,7 @@ export interface Product {
         type: 'Point';
         coordinates: [number, number];
     };
+    aiSuggestedPrice?: number;
 }
 
 export interface CreateProductData {

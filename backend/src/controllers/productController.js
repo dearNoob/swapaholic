@@ -152,7 +152,7 @@ const regenerateDescription = async (req, res) => {
 // Create product (seller only)
 const createProduct = async (req, res) => {
   try {
-    let { title, description, category, basePrice, price, condition, geometry, location, aiQualityScore } = req.body;
+    let { title, description, category, basePrice, price, condition, geometry, location, aiQualityScore, aiSuggestedPrice } = req.body;
 
     // Handle mismatched field name from frontend
     if (!basePrice && price) {
@@ -226,11 +226,41 @@ const createProduct = async (req, res) => {
       images: imageUrls,
       status: 'active',
       bidStartDate: new Date(),
-      aiQualityScore: parseFloat(aiQualityScore) || 0
+      aiQualityScore: parseFloat(aiQualityScore) || 0,
+      aiSuggestedPrice: aiSuggestedPrice ? parseFloat(aiSuggestedPrice) : undefined
     });
 
     await product.save();
     res.status(201).json(product);
+
+    // After responding, process notifications asynchronously
+    setImmediate(async () => {
+      try {
+        const User = require('../models/User');
+        const notificationService = require('../utils/notificationService');
+        
+        // Use words > 2 chars to avoid matching 'and', 'the', etc.
+        const titleWords = title.split(/\s+/).filter(w => w.length > 2).map(w => new RegExp(w, 'i'));
+        
+        const matchCondition = {
+          $or: [
+            { interests: { $regex: new RegExp(category, 'i') } },
+            ...titleWords.map(word => ({ interests: { $regex: word } }))
+          ],
+          _id: { $ne: req.user.id }
+        };
+        
+        const interestedUsers = await User.find(matchCondition).select('_id');
+        const userIds = interestedUsers.map(u => u._id.toString());
+        
+        if (userIds.length > 0) {
+          await notificationService.notifyNewProductMatch(userIds, title, product._id, category);
+        }
+      } catch (notifError) {
+        logger.error('Error sending new product match notifications:', notifError);
+      }
+    });
+
   } catch (error) {
 
     logger.error('Create product error:', error);
@@ -626,7 +656,7 @@ const updateProduct = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const allowed = ['title', 'description', 'category', 'basePrice', 'condition', 'geometry', 'location', 'status', 'aiQualityScore'];
+    const allowed = ['title', 'description', 'category', 'basePrice', 'condition', 'geometry', 'location', 'status', 'aiQualityScore', 'aiSuggestedPrice'];
     const updates = {};
     
     // Map price to basePrice if frontend sent price

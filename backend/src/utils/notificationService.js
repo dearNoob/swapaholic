@@ -561,6 +561,31 @@ class NotificationService {
       actionUrl: `/orders/${orderId}`
     });
   }
+
+  /**
+   * Notification helper: New Product Match
+   */
+  async notifyNewProductMatch(userIds, productTitle, productId, category) {
+    if (!userIds || userIds.length === 0) return;
+    
+    // We send notifications to all matched users
+    for (const userId of userIds) {
+        await this.createAndSend({
+            recipientId: userId,
+            type: 'new_product_match',
+            title: '✨ New Match Found!',
+            message: `A new ${category || 'item'} listing matching your interests has been posted: "${productTitle}"`,
+            data: {
+                relatedId: productId,
+                relatedType: 'Product',
+                productTitle,
+                category
+            },
+            priority: 'normal',
+            actionUrl: `/products/${productId}`
+        });
+    }
+  }
 }
 
 // Export singleton instance

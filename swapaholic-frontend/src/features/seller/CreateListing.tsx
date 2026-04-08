@@ -36,6 +36,9 @@ const schema = yup.object({
     lat: yup.number().optional().nullable(),
     lng: yup.number().optional().nullable(),
     aiQualityScore: yup.number().optional().default(0),
+    aiSuggestedPrice: yup.number().optional().nullable(),
+    originalPrice: yup.number().typeError('Original price must be a number').positive('Original price must be positive').optional().nullable(),
+    productAge: yup.number().typeError('Product age must be a number').min(0, 'Product age cannot be negative').optional().nullable(),
 }).required();
 
 type FormData = yup.InferType<typeof schema>;
@@ -74,6 +77,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
     const [gettingLocation, setGettingLocation] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiLimit, setAiLimit] = useState(2);
+    const [isPredicting, setIsPredicting] = useState(false);
 
     const { register, handleSubmit, watch, setValue, reset, formState: { errors, isDirty, isSubmitSuccessful } } = useForm<FormData>({
         resolver: yupResolver(schema) as any,
@@ -113,6 +117,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                         location: data.location,
                         lat: data.geometry?.coordinates[1] || null,
                         lng: data.geometry?.coordinates[0] || null,
+                        aiSuggestedPrice: (data as any).aiSuggestedPrice || null,
                     });
 
                     // Set existing images
@@ -209,6 +214,46 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
             }
         } finally {
             setIsAnalyzing(false);
+        }
+    };
+
+    const handlePredictPrice = async () => {
+        const title = watch('title');
+        const category = watch('category');
+        const condition = watch('condition');
+        const originalPrice = watch('originalPrice');
+        const productAge = watch('productAge');
+
+        if (!title || !category || !originalPrice || productAge === null || productAge === undefined) {
+            toast.error('Please fill in Title, Category, Original Price, and Product Age to predict the price.');
+            return;
+        }
+
+        setIsPredicting(true);
+        try {
+            const brand = title.split(' ')[0] || 'Unknown';
+            const response = await productsApi.predictPrice({
+                category,
+                brand,
+                model: title,
+                original_price: originalPrice,
+                condition: condition || 'Used',
+                product_age: productAge.toString()
+            });
+
+            if (response.success && response.suggestedPrice) {
+                setValue('price', response.suggestedPrice, { shouldValidate: true });
+                setValue('aiSuggestedPrice', response.suggestedPrice);
+                toast.success(`✨ AI Predicted Price: ${response.suggestedPrice} BDT`);
+            } else {
+                toast.error(`Prediction Failed: ${response.message || 'Model could not predict for this item.'}`);
+            }
+        } catch (error: any) {
+            console.error('Prediction failed', error);
+            const errorMsg = error?.message || error?.response?.data?.message || 'Failed to predict price.';
+            toast.error(errorMsg);
+        } finally {
+            setIsPredicting(false);
         }
     };
 
@@ -344,6 +389,9 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
             }
             if (data.aiQualityScore) {
                 formData.append('aiQualityScore', data.aiQualityScore.toString());
+            }
+            if (data.aiSuggestedPrice) {
+                formData.append('aiSuggestedPrice', data.aiSuggestedPrice.toString());
             }
 
             // Append new images
@@ -567,12 +615,64 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                 <input type="hidden" {...register('lng')} />
                             </div>
 
-                            {/* Price & Duration */}
+                            {/* Prediction and Price Section */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-100">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Starting Price
+                                        Original Price (BDT)
                                     </label>
+                                    <input
+                                        type="number"
+                                        step="0.10"
+                                        {...register('originalPrice')}
+                                        className={`focus:ring-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 ${errors.originalPrice ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                        placeholder="Original buying price"
+                                    />
+                                    {errors.originalPrice && (
+                                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                            <FaExclamationCircle /> {errors.originalPrice.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Product Age (Years)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        {...register('productAge')}
+                                        className={`focus:ring-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 ${errors.productAge ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                        placeholder="How old is the product?"
+                                    />
+                                    {errors.productAge && (
+                                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                            <FaExclamationCircle /> {errors.productAge.message}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Price & Duration */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-100">
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="block text-sm font-medium text-gray-700">
+                                            Starting Price
+                                        </label>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handlePredictPrice}
+                                            isLoading={isPredicting}
+                                            disabled={isPredicting}
+                                            className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                                        >
+                                            <span className="mr-1">🔮</span>
+                                            Predict Price
+                                        </Button>
+                                    </div>
                                     <div className="relative rounded-md shadow-sm">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <span className="text-black sm:text-sm">৳</span>
@@ -581,7 +681,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                             type="number"
                                             step="0.10"
                                             {...register('price')}
-                                            className={`focus:ring-indigo-500 sm:text-black  focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-lg border-gray-300 rounded-md py-3 ${errors.price ? 'border-red-300 ring-1 ring-red-300' : ''
+                                            className={`focus:ring-indigo-500 sm:text-black focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-lg border-gray-300 rounded-md py-3 ${errors.price ? 'border-red-300 ring-1 ring-red-300' : ''
                                                 }`}
                                             placeholder="0.00"
                                         />

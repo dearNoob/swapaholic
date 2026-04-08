@@ -28,6 +28,9 @@ const productSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  aiSuggestedPrice: {
+    type: Number
+  },
   viewCount: {
     type: Number,
     default: 0

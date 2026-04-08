@@ -86,13 +86,18 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ productId }) => {
 
                 <div className="mt-6 border-t border-gray-200 pt-6">
                     <h3 className="text-lg font-medium text-gray-900">Verification Status</h3>
-                    <div className="mt-2 flex items-center">
+                    <div className="mt-2 flex items-center gap-2">
                         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${currentProduct.status === 'verified' ? 'bg-green-100 text-green-800' :
                             currentProduct.status === 'rejected' ? 'bg-red-100 text-red-800' :
                                 'bg-yellow-100 text-yellow-800'
                             }`}>
                             {currentProduct.status.toUpperCase()}
                         </span>
+                        {currentProduct.aiSuggestedPrice && currentProduct.price <= currentProduct.aiSuggestedPrice && (
+                            <span className="px-3 py-1 rounded-full text-sm font-semibold bg-emerald-100 text-emerald-800 flex items-center gap-1 shadow-sm border border-emerald-200">
+                                <span>✨</span> AI Verified Fair Price
+                            </span>
+                        )}
                     </div>
                     {currentProduct.mlScore && (
                         <div className="mt-4">

@@ -2,12 +2,13 @@ import api from './axios';
 
 export interface Notification {
     id: string;
-    type: 'bid' | 'payment' | 'delivery' | 'dispute' | 'system' | 'verification';
+    type: 'bid' | 'payment' | 'delivery' | 'dispute' | 'system' | 'verification' | 'new_product_match';
     title: string;
     message: string;
     isRead: boolean;
     createdAt: string;
     metadata?: any;
+    actionUrl?: string;
 }
 
 export const notificationApi = {

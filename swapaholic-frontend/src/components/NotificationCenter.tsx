@@ -84,18 +84,13 @@ export const NotificationCenter = () => {
 
     const getNotificationIcon = (type: string) => {
         switch (type) {
-            case 'bid':
-                return '🔨';
-            case 'payment':
-                return '💳';
-            case 'delivery':
-                return '📦';
-            case 'dispute':
-                return '⚠️';
-            case 'verification':
-                return '✅';
-            default:
-                return '🔔';
+            case 'bid': return '🔨';
+            case 'payment': return '💳';
+            case 'delivery': return '📦';
+            case 'dispute': return '⚠️';
+            case 'verification': return '✅';
+            case 'new_product_match': return '✨';
+            default: return '🔔';
         }
     };
 
@@ -163,9 +158,11 @@ export const NotificationCenter = () => {
                             notifications.map((notification) => (
                                 <div
                                     key={notification.id}
-                                    className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${!notification.isRead ? 'bg-blue-50' : ''
-                                        }`}
-                                    onClick={() => !notification.isRead && handleMarkAsRead(notification.id)}
+                                    className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${!notification.isRead ? 'bg-blue-50' : ''}`}
+                                    onClick={() => {
+                                        if (!notification.isRead) handleMarkAsRead(notification.id);
+                                        if (notification.actionUrl) window.location.href = notification.actionUrl;
+                                    }}
                                 >
                                     <div className="flex items-start">
                                         <span className="text-2xl mr-3">{getNotificationIcon(notification.type)}</span>
