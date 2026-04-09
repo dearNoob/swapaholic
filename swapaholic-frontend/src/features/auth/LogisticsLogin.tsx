@@ -42,21 +42,21 @@ export const LogisticsLogin = () => {
         try {
             const response = await authApi.logisticsLogin({ email: data.email, password: data.password }) as LoginResponse;
             handleLoginSuccess(response);
-        } catch (error: unknown) {
+        } catch (error: any) {
             let message = 'Login failed. Please try again.';
-            const err = error as { status?: number; response?: { status?: number; data?: { message?: string; accountStatus?: string } } };
 
-            if (err.status === 401 || err.response?.status === 401) {
+            if (error?.message) {
+                message = error.message;
+            }
+
+            if (error?.status === 401) {
                 message = 'Invalid credentials.';
-            } else if (err.status === 403 || err.response?.status === 403) {
-                const serverMsg = err.response?.data?.message || '';
-                if (serverMsg.includes('pending')) {
+            } else if (error?.status === 403) {
+                if (message.toLowerCase().includes('pending')) {
                     message = 'Your account is pending admin approval. Please wait.';
                 } else {
-                    message = 'Access denied. Logistics officer credentials required.';
+                    message = message || 'Access denied. Logistics officer credentials required.';
                 }
-            } else if (err.response?.data?.message) {
-                message = err.response.data.message;
             }
 
             dispatch(setError(message));

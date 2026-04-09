@@ -85,22 +85,21 @@ export const Login = () => {
 
                 handleLoginSuccess(response);
             }
-        } catch (error: unknown) {
+        } catch (error: any) {
             let message = 'Login failed. Please try again.';
-            const err = error as { status?: number; response?: { status?: number; data?: { message?: string } } };
-
-            // Provide specific error messages based on status code
-            if (err.status === 401 || err.response?.status === 401) {
-                message = 'Wrong password. Please try again.';
-            } else if (err.status === 404 || err.response?.status === 404) {
-                message = 'Unauthorized email. Please sign up first.';
-            } else if (err.response?.data?.message) {
-                const serverMessage = err.response.data.message.toLowerCase();
-                if (serverMessage.includes('invalid') || serverMessage.includes('credentials')) {
-                    message = 'Invalid email or username. Please check your credentials.';
-                } else {
-                    message = err.response.data.message;
+            
+            // Handle error response from apiClient
+            if (error?.message) {
+                message = error.message;
+            }
+            
+            // Specific overrides for standard status codes if message is too generic
+            if (error?.status === 401) {
+                if (message.toLowerCase().includes('credential') || message.toLowerCase().includes('password')) {
+                    message = 'Wrong password or email. Please try again.';
                 }
+            } else if (error?.status === 404) {
+                message = 'Account not found. Please sign up first.';
             }
 
             dispatch(setError(message));

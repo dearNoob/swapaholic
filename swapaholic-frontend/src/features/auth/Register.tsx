@@ -70,8 +70,13 @@ export const Register = () => {
 
     function handleError(error: any) {
         let message = 'Registration failed. Please try again.';
-        if (error.status === 409 || error.response?.status === 409) {
-            const serverMessage = error.response?.data?.message?.toLowerCase() || '';
+        
+        if (error?.message) {
+            message = error.message;
+        }
+
+        if (error?.status === 409) {
+            const serverMessage = message.toLowerCase();
             if (serverMessage.includes('email')) {
                 message = 'Already signed up. This email is already registered.';
             } else if (serverMessage.includes('phone')) {
@@ -79,9 +84,8 @@ export const Register = () => {
             } else {
                 message = 'Email or phone already in use.';
             }
-        } else if (error.response?.data?.message) {
-            message = error.response.data.message;
         }
+        
         dispatch(setError(message));
         toast.error(message);
     }
@@ -146,7 +150,7 @@ export const Register = () => {
             }
 
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Verification failed');
+            toast.error(error.message || 'Verification failed');
             setIsLoadingState(false);
         }
     };

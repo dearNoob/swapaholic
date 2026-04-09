@@ -41,13 +41,10 @@ export const LogisticsRegister = () => {
             await authApi.logisticsRegister(registerData);
             setIsRegistered(true);
             toast.success('Registration successful! Awaiting admin approval.');
-        } catch (error: unknown) {
+        } catch (error: any) {
             let message = 'Registration failed. Please try again.';
-            const err = error as { response?: { data?: { message?: string } }; message?: string };
-            if (err.response?.data?.message) {
-                message = err.response.data.message;
-            } else if (err.message) {
-                message = err.message;
+            if (error?.message) {
+                message = error.message;
             }
             toast.error(message);
         } finally {

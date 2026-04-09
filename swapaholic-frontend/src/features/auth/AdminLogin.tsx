@@ -50,16 +50,17 @@ export const AdminLogin = () => {
         try {
             const response = await authApi.adminLogin({ email: data.email, password: data.password }) as LoginResponse;
             handleLoginSuccess(response);
-        } catch (error: unknown) {
+        } catch (error: any) {
             let message = 'Login failed. Please try again.';
-            const err = error as { status?: number; response?: { status?: number; data?: { message?: string } } };
 
-            if (err.status === 401 || err.response?.status === 401) {
+            if (error?.message) {
+                message = error.message;
+            }
+
+            if (error?.status === 401) {
                 message = 'Invalid credentials.';
-            } else if (err.status === 403 || err.response?.status === 403) {
-                message = 'Access denied. Admin credentials required.';
-            } else if (err.response?.data?.message) {
-                message = err.response.data.message;
+            } else if (error?.status === 403) {
+                message = message || 'Access denied. Admin credentials required.';
             }
 
             dispatch(setError(message));
