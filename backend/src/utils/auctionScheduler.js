@@ -8,7 +8,7 @@ const logger = require('./logger');
 const notificationService = require('./notificationService');
 const emailService = require('./emailService');
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND_URL = process.env.FRONTEND_URL;
 const CONFIRMATION_HOURS = 3;
 const RATING_PENALTY = 0.5;
 const PLATFORM_FEE = 30;

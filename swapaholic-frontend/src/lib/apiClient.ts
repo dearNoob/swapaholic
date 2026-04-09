@@ -5,7 +5,7 @@ import { ApiError, TokenPair } from '../types/api';
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api',
-    timeout: 15000,
+    timeout: 60000,
     headers: {
         'Content-Type': 'application/json'
     },
@@ -113,11 +113,14 @@ apiClient.interceptors.response.use(
                 return Promise.reject(refreshError);
             }
         }
+        const isTimeout = error.code === 'ECONNABORTED' || error.message.includes('timeout');
         const apiError = {
-            status: error.response?.status || 500,
-            message: error.response?.data?.message || error.message || 'An unexpected error occurred',
+            status: error.response?.status || (isTimeout ? 408 : 500),
+            message: isTimeout 
+                ? 'The server is taking too long to respond. This usually happens if the backend is starting up. Please try again in 30 seconds.'
+                : (error.response?.data?.message || error.message || 'An unexpected error occurred'),
             errors: error.response?.data?.errors,
-            code: error.response?.data?.code,
+            code: error.response?.data?.code || (isTimeout ? 'TIMEOUT' : undefined),
         };
         return Promise.reject(apiError);
     }
