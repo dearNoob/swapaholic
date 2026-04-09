@@ -43,6 +43,10 @@ const cookieParser = require('cookie-parser');
 
 const app = express();
 
+// Trust proxy for Render/reverse proxy environments
+app.set('trust proxy', 1);
+
+
 // CORS configuration - moved to top to ensure headers are set correctly
 const corsOptions = {
   origin: true, // Reflects the request origin
@@ -97,7 +101,7 @@ app.use('/api/', limiter);
 // Stricter rate limiting for auth routes
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 30,
   message: 'Too many authentication attempts, please try again later.',
 });
 app.use('/api/auth/', authLimiter);
