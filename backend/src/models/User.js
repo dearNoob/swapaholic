@@ -46,7 +46,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'quality_controller', 'delivery_person', 'admin', 'logistics_officer'],
+    enum: ['user', 'buyer', 'seller', 'quality_controller', 'delivery_person', 'admin', 'logistics_officer', 'verifier', 'delivery'],
     default: 'user'
   },
   twoFactorSecret: { type: String, select: false },

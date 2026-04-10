@@ -99,6 +99,9 @@ export const Register = () => {
             const result = await authApi.register(userData); // Changed `authData` to `userData`
 
             if ('requireVerification' in result && result.requireVerification) {
+                // Save state for OTP verification and resend
+                setRegisteredEmail(data.email);
+                setSavedFormData(data);
                 // Show OTP input UI
                 setShowOTP(true);
                 return;
