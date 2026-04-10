@@ -209,10 +209,4 @@ export const productsApi = {
         return response.data;
     },
 
-    /**
-     * Delete a product listing
-     */
-    async deleteProduct(productId: string): Promise<void> {
-        await apiClient.delete(`/products/${productId}`);
-    }
 };
