@@ -12,6 +12,8 @@ const schema = yup.object({
     name: yup.string().required('Product name is required'),
     condition: yup.string().required('Condition is required'),
     category: yup.string().required('Category is required'),
+    brand: yup.string().required('Brand is required for prediction'),
+    deviceModel: yup.string().required('Device model is required for prediction'),
     originalPrice: yup.number().positive().required('Original price is required for prediction'),
     productAge: yup.number().positive().required('Product age (in years) is required'),
     price: yup.number().required('Selling price is required').positive(),
@@ -32,28 +34,28 @@ export const ProductForm = () => {
     const watchedName = watch('name');
     const watchedCategory = watch('category');
     const watchedCondition = watch('condition');
+    const watchedBrand = watch('brand');
+    const watchedDeviceModel = watch('deviceModel');
     const watchedOriginalPrice = watch('originalPrice');
     const watchedAge = watch('productAge');
 
     useEffect(() => {
         const predictTimer = setTimeout(async () => {
-            if (watchedName && watchedCategory && watchedOriginalPrice && watchedAge) {
+            if (watchedBrand && watchedDeviceModel && watchedCategory && watchedOriginalPrice && watchedAge) {
                 setIsPredicting(true);
                 try {
-                    // Simple heuristic: First word as brand, rest as model
-                     const brand = watchedName.split(' ')[0] || 'Unknown';
-                     
                      const response = await productApi.predictPrice({
                          category: watchedCategory,
-                         brand: brand,
-                         model: watchedName,
+                         brand: watchedBrand,
+                         model: watchedDeviceModel,
                          original_price: watchedOriginalPrice,
                          condition: watchedCondition || 'Used',
                          product_age: watchedAge.toString()
                      });
 
                      if (response.success && response.suggestedPrice) {
-                         setPredictedPriceMsg(`✨ AI Predicted Price: ${response.suggestedPrice} BDT`);
+                         const sourceLabel = response.source === 'ml_model' ? '🤖 AI Model' : '📊 Smart Estimate';
+                         setPredictedPriceMsg(`${sourceLabel}: ৳${response.suggestedPrice.toLocaleString()} BDT`);
                          // Auto-fill price if user hasn't touched the price yet
                          const currentPrice = watch('price');
                          if (!currentPrice || currentPrice === 0) {
@@ -76,7 +78,7 @@ export const ProductForm = () => {
         }, 1200);
 
         return () => clearTimeout(predictTimer);
-    }, [watchedName, watchedCategory, watchedOriginalPrice, watchedAge, watchedCondition, setValue]);
+    }, [watchedBrand, watchedDeviceModel, watchedCategory, watchedOriginalPrice, watchedAge, watchedCondition, setValue]);
 
     const onSubmit = async (data: any) => {
         try {
@@ -111,6 +113,8 @@ export const ProductForm = () => {
     return (
         <form onSubmit={handleSubmit(onSubmit)}>
             <Input label="Product Name" {...register('name')} error={errors.name?.message} />
+            <Input label="Brand" {...register('brand')} error={errors.brand?.message} placeholder="e.g., Samsung, Apple, HP" />
+            <Input label="Device / Model" {...register('deviceModel')} error={errors.deviceModel?.message} placeholder="e.g., Galaxy S21, iPhone 13" />
             <Input label="Condition" {...register('condition')} error={errors.condition?.message} />
             <Input label="Category" {...register('category')} error={errors.category?.message} />
             <Input label="Original Price (BDT)" type="number" {...register('originalPrice')} error={errors.originalPrice?.message} />

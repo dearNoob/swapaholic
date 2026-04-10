@@ -91,24 +91,24 @@ export const AdminLogin = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-md w-full space-y-8 animate-fade-in">
                 <div className="text-center">
                     <div className="mx-auto h-16 w-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/30">
                         <FaShieldAlt className="h-8 w-8 text-white" />
                     </div>
-                    <h2 className="text-3xl font-extrabold text-white">
+                    <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">
                         Admin Portal
                     </h2>
-                    <p className="mt-2 text-sm text-gray-400">
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                         Secure access for administrators only
                     </p>
                 </div>
 
-                <form className="mt-8 space-y-6 bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl border border-gray-700 shadow-2xl" onSubmit={handleSubmit(onSubmit)}>
+                <form className="mt-8 space-y-6 bg-white dark:bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl border border-gray-200 dark:border-gray-700 shadow-2xl" onSubmit={handleSubmit(onSubmit)}>
                     <div className="space-y-4">
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
+                            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Email address
                             </label>
                             <input
@@ -119,7 +119,7 @@ export const AdminLogin = () => {
                                 disabled={isLoading}
                                 placeholder="admin@swapaholic.com"
                                 {...register('email')}
-                                className="appearance-none rounded-lg relative block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 placeholder-gray-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                                className="appearance-none rounded-lg relative block w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                             />
                             {errors.email && (
                                 <p className="mt-1 text-sm text-red-400">{errors.email.message}</p>
@@ -127,7 +127,7 @@ export const AdminLogin = () => {
                         </div>
 
                         <div className="relative">
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
+                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Password
                             </label>
                             <input
@@ -137,7 +137,7 @@ export const AdminLogin = () => {
                                 disabled={isLoading}
                                 placeholder="Enter your password"
                                 {...register('password')}
-                                className="appearance-none rounded-lg relative block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 placeholder-gray-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all pr-12"
+                                className="appearance-none rounded-lg relative block w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all pr-12"
                             />
                             <button
                                 type="button"

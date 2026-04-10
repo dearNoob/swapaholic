@@ -87,24 +87,24 @@ export const LogisticsLogin = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-teal-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 to-slate-200 dark:from-slate-900 dark:via-teal-900 dark:to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-md w-full space-y-8 animate-fade-in">
                 <div className="text-center">
                     <div className="mx-auto h-16 w-16 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-teal-500/30">
                         <FaTruck className="h-8 w-8 text-white" />
                     </div>
-                    <h2 className="text-3xl font-extrabold text-white">
+                    <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white">
                         Logistics Portal
                     </h2>
-                    <p className="mt-2 text-sm text-gray-400">
+                    <p className="mt-2 text-sm text-slate-600 dark:text-gray-400">
                         Secure access for logistics officers only
                     </p>
                 </div>
 
-                <form className="mt-8 space-y-6 bg-slate-800/50 backdrop-blur-sm p-8 rounded-xl border border-teal-700/30 shadow-2xl" onSubmit={handleSubmit(onSubmit)}>
+                <form className="mt-8 space-y-6 bg-white dark:bg-slate-800/50 backdrop-blur-sm p-8 rounded-xl border border-slate-200 dark:border-teal-700/30 shadow-2xl" onSubmit={handleSubmit(onSubmit)}>
                     <div className="space-y-4">
                         <div>
-                            <label htmlFor="logistics-email" className="block text-sm font-medium text-gray-300 mb-1">
+                            <label htmlFor="logistics-email" className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">
                                 Email address
                             </label>
                             <input
@@ -115,7 +115,7 @@ export const LogisticsLogin = () => {
                                 disabled={isLoading}
                                 placeholder="officer@swapaholic.com"
                                 {...register('email')}
-                                className="appearance-none rounded-lg relative block w-full px-4 py-3 bg-slate-700/50 border border-slate-600 placeholder-gray-500 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
+                                className="appearance-none rounded-lg relative block w-full px-4 py-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 placeholder-slate-400 dark:placeholder-gray-500 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
                             />
                             {errors.email && (
                                 <p className="mt-1 text-sm text-red-400">{errors.email.message}</p>
@@ -123,7 +123,7 @@ export const LogisticsLogin = () => {
                         </div>
 
                         <div className="relative">
-                            <label htmlFor="logistics-password" className="block text-sm font-medium text-gray-300 mb-1">
+                            <label htmlFor="logistics-password" className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">
                                 Password
                             </label>
                             <input
@@ -133,7 +133,7 @@ export const LogisticsLogin = () => {
                                 disabled={isLoading}
                                 placeholder="Enter your password"
                                 {...register('password')}
-                                className="appearance-none rounded-lg relative block w-full px-4 py-3 bg-slate-700/50 border border-slate-600 placeholder-gray-500 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all pr-12"
+                                className="appearance-none rounded-lg relative block w-full px-4 py-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 placeholder-slate-400 dark:placeholder-gray-500 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all pr-12"
                             />
                             <button
                                 type="button"

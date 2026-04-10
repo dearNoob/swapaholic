@@ -37,6 +37,22 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Global Form Element Base Styles */
+input, textarea, select {
+  color: var(--foreground);
+  background-color: transparent;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #6b7280; /* text-gray-500 equivalent */
+}
+
+@media (prefers-color-scheme: dark) {
+  input::placeholder, textarea::placeholder {
+    color: #9ca3af; /* text-gray-400 equivalent */
+  }
+}
+
 
 /* Scroll Animations */
 @keyframes fadeIn {
@@ -131,4 +147,5 @@ main {
 main {
   background-color: var(--background);
   min-height: calc(100vh - 4rem); /* Header height offset */
+  transition: background-color 0.3s ease;
 }

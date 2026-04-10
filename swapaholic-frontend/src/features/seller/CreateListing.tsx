@@ -37,6 +37,8 @@ const schema = yup.object({
     lng: yup.number().optional().nullable(),
     aiQualityScore: yup.number().optional().default(0),
     aiSuggestedPrice: yup.number().optional().nullable(),
+    brand: yup.string().optional().nullable(),
+    deviceModel: yup.string().optional().nullable(),
     originalPrice: yup.number().typeError('Original price must be a number').positive('Original price must be positive').optional().nullable(),
     productAge: yup.number().typeError('Product age must be a number').min(0, 'Product age cannot be negative').optional().nullable(),
 }).required();
@@ -218,33 +220,36 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
     };
 
     const handlePredictPrice = async () => {
-        const title = watch('title');
+        const brandVal = watch('brand');
+        const modelVal = watch('deviceModel');
         const category = watch('category');
         const condition = watch('condition');
         const originalPrice = watch('originalPrice');
         const productAge = watch('productAge');
+        const location = watch('location');
 
-        if (!title || !category || !originalPrice || productAge === null || productAge === undefined) {
-            toast.error('Please fill in Title, Category, Original Price, and Product Age to predict the price.');
+        if (!brandVal || !modelVal || !category || !originalPrice || productAge === null || productAge === undefined) {
+            toast.error('Please fill in Brand, Model, Category, Original Price, and Product Age to predict the price.');
             return;
         }
 
         setIsPredicting(true);
         try {
-            const brand = title.split(' ')[0] || 'Unknown';
             const response = await productsApi.predictPrice({
                 category,
-                brand,
-                model: title,
+                brand: brandVal,
+                model: modelVal,
                 original_price: originalPrice,
                 condition: condition || 'Used',
-                product_age: productAge.toString()
+                product_age: productAge.toString(),
+                location: location || 'Dhaka'
             });
 
             if (response.success && response.suggestedPrice) {
                 setValue('price', response.suggestedPrice, { shouldValidate: true });
                 setValue('aiSuggestedPrice', response.suggestedPrice);
-                toast.success(`✨ AI Predicted Price: ${response.suggestedPrice} BDT`);
+                const sourceLabel = response.source === 'ml_model' ? '🤖 AI Model' : '📊 Smart Estimate';
+                toast.success(`${sourceLabel}: ৳${response.suggestedPrice.toLocaleString()} BDT`);
             } else {
                 toast.error(`Prediction Failed: ${response.message || 'Model could not predict for this item.'}`);
             }
@@ -566,7 +571,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                         {...register('description')}
                                         rows={6}
                                         placeholder="Describe your item in detail. Include features, condition specifics, and any other relevant information."
-                                        className={`shadow-sm block text-black w-full sm:text-sm border rounded-lg p-4 transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${errors.description ? 'border-red-300' : 'border-gray-300'
+                                        className={`shadow-sm block w-full sm:text-sm border rounded-lg p-4 transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${errors.description ? 'border-red-300' : 'border-gray-300'
                                             }`}
                                     />
                                     <div className={`absolute bottom-3 right-3 text-xs ${watchedDescription.length > 1900 ? 'text-red-500 font-bold' : 'text-blue-500'
@@ -615,41 +620,72 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                 <input type="hidden" {...register('lng')} />
                             </div>
 
-                            {/* Prediction and Price Section */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-100">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Original Price (BDT)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.10"
-                                        {...register('originalPrice')}
-                                        className={`focus:ring-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 ${errors.originalPrice ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                        placeholder="Original buying price"
-                                    />
-                                    {errors.originalPrice && (
-                                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                                            <FaExclamationCircle /> {errors.originalPrice.message}
-                                        </p>
-                                    )}
+                            {/* AI Prediction Fields */}
+                            <div className="pt-4 border-t border-gray-100">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-lg">🔮</span>
+                                    <h4 className="text-sm font-semibold text-indigo-700 uppercase tracking-wide">AI Price Prediction</h4>
+                                    <span className="text-xs text-gray-400">(Fill these fields to get a smart price suggestion)</span>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Product Age (Years)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        {...register('productAge')}
-                                        className={`focus:ring-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 ${errors.productAge ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                        placeholder="How old is the product?"
-                                    />
-                                    {errors.productAge && (
-                                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                                            <FaExclamationCircle /> {errors.productAge.message}
-                                        </p>
-                                    )}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Brand Name <span className="text-gray-400 text-xs">(e.g., Samsung, Apple, HP)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            {...register('brand')}
+                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.brand ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="e.g., Samsung"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Device / Model <span className="text-gray-400 text-xs">(e.g., Galaxy S21, iPhone 13)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            {...register('deviceModel')}
+                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.deviceModel ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="e.g., Galaxy S21"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Original Price (BDT)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.10"
+                                            {...register('originalPrice')}
+                                            className={`focus:ring-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.originalPrice ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="Original buying price"
+                                        />
+                                        {errors.originalPrice && (
+                                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                                <FaExclamationCircle /> {errors.originalPrice.message}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Product Age (Years)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            {...register('productAge')}
+                                            className={`focus:ring-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.productAge ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="How old is the product?"
+                                        />
+                                        {errors.productAge && (
+                                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                                <FaExclamationCircle /> {errors.productAge.message}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -675,18 +711,18 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                     </div>
                                     <div className="relative rounded-md shadow-sm">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <span className="text-black sm:text-sm">৳</span>
+                                            <span className="text-gray-700 dark:text-gray-300 sm:text-sm">৳</span>
                                         </div>
                                         <input
                                             type="number"
                                             step="0.10"
                                             {...register('price')}
-                                            className={`focus:ring-indigo-500 sm:text-black focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-lg border-gray-300 rounded-md py-3 ${errors.price ? 'border-red-300 ring-1 ring-red-300' : ''
+                                            className={`focus:ring-indigo-500 dark:bg-slate-800 focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-lg border-gray-300 rounded-md py-3 ${errors.price ? 'border-red-300 ring-1 ring-red-300' : ''
                                                 }`}
                                             placeholder="0.00"
                                         />
                                         <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                            <span className="text-black sm:text-sm">BDT</span>
+                                            <span className="text-gray-700 dark:text-gray-300 sm:text-sm">BDT</span>
                                         </div>
                                     </div>
                                     {errors.price && (
