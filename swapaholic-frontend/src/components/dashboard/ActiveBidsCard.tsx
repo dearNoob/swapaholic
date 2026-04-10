@@ -121,7 +121,7 @@ export default function ActiveBidsCard({ bids }: ActiveBidsCardProps) {
                         <div key={bid.id} className="p-6 hover:bg-gray-50 transition-colors group">
                             <div className="flex flex-col sm:flex-row gap-6">
                                 {/* Product Image */}
-                                <Link href={`/products/৳{bid.productId}`} className="flex-shrink-0">
+                                <Link href={`/products/${bid.productId}`} className="flex-shrink-0">
                                     <div className="relative w-full sm:w-32 h-32 rounded-xl overflow-hidden shadow-sm group-hover:shadow-md transition">
                                         <Image
                                             src={bid.productImage}
@@ -141,7 +141,7 @@ export default function ActiveBidsCard({ bids }: ActiveBidsCardProps) {
                                 <div className="flex-1 min-w-0 flex flex-col justify-between">
                                     <div>
                                         <div className="flex justify-between items-start mb-2">
-                                            <Link href={`/products/৳{bid.productId}`} className="hover:text-indigo-600 transition">
+                                            <Link href={`/products/${bid.productId}`} className="hover:text-indigo-600 transition">
                                                 <h3 className="text-lg font-bold text-gray-900 line-clamp-1">{bid.productTitle}</h3>
                                             </Link>
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 border ${statusBadge.class}`}>
@@ -174,7 +174,7 @@ export default function ActiveBidsCard({ bids }: ActiveBidsCardProps) {
                                             </button>
                                         ) : (
                                             <Link
-                                                href={`/products/৳{bid.productId}`}
+                                                href={`/products/${bid.productId}`}
                                                 className="px-5 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition flex items-center"
                                             >
                                                 View Details

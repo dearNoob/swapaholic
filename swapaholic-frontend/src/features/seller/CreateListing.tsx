@@ -39,6 +39,7 @@ const schema = yup.object({
     aiSuggestedPrice: yup.number().optional().nullable(),
     brand: yup.string().optional().nullable(),
     deviceModel: yup.string().optional().nullable(),
+    predictionCategory: yup.string().optional().nullable(),
     originalPrice: yup.number().typeError('Original price must be a number').positive('Original price must be positive').optional().nullable(),
     productAge: yup.number().typeError('Product age must be a number').min(0, 'Product age cannot be negative').optional().nullable(),
 }).required();
@@ -222,21 +223,24 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
     const handlePredictPrice = async () => {
         const brandVal = watch('brand');
         const modelVal = watch('deviceModel');
-        const category = watch('category');
+        const listCategory = watch('category');
+        const predictionCategory = watch('predictionCategory');
         const condition = watch('condition');
         const originalPrice = watch('originalPrice');
         const productAge = watch('productAge');
         const location = watch('location');
 
-        if (!brandVal || !modelVal || !category || !originalPrice || productAge === null || productAge === undefined) {
-            toast.error('Please fill in Brand, Model, Category, Original Price, and Product Age to predict the price.');
+        const finalCategory = predictionCategory || listCategory;
+
+        if (!brandVal || !modelVal || !finalCategory || !originalPrice || productAge === null || productAge === undefined) {
+            toast.error('Please fill in Prediction Category, Brand, Model, Original Price, and Product Age to predict the price.');
             return;
         }
 
         setIsPredicting(true);
         try {
             const response = await productsApi.predictPrice({
-                category,
+                category: finalCategory,
                 brand: brandVal,
                 model: modelVal,
                 original_price: originalPrice,
@@ -539,240 +543,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                 </div>
                             </div>
 
-                            {/* Description and AI Section */}
-                            <div>
-                                <div className="flex justify-between items-center mb-2">
-                                    <label className="block text-sm font-medium text-gray-700">
-                                        Description
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        {watch('aiQualityScore') ? (
-                                            <div className="flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">
-                                                <FaCheckCircle /> Quality Score: {watch('aiQualityScore')}
-                                            </div>
-                                        ) : null}
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleAIAnalyze}
-                                            isLoading={isAnalyzing}
-                                            disabled={isAnalyzing || aiLimit <= 0}
-                                            className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                                        >
-                                            <span className="mr-1">✨</span>
-                                            {aiLimit < 2 ? 'Regenerate Description' : 'Auto-Generate Description'}
-                                            <span className="ml-1 text-gray-400 text-xs">({aiLimit} left)</span>
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="relative">
-                                    <textarea
-                                        {...register('description')}
-                                        rows={6}
-                                        placeholder="Describe your item in detail. Include features, condition specifics, and any other relevant information."
-                                        className={`shadow-sm block w-full sm:text-sm border rounded-lg p-4 transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${errors.description ? 'border-red-300' : 'border-gray-300'
-                                            }`}
-                                    />
-                                    <div className={`absolute bottom-3 right-3 text-xs ${watchedDescription.length > 1900 ? 'text-red-500 font-bold' : 'text-blue-500'
-                                        }`}>
-                                        {watchedDescription.length}/2000
-                                    </div>
-                                </div>
-                                {errors.description && (
-                                    <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                                        <FaExclamationCircle /> {errors.description.message}
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Location */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Location
-                                </label>
-                                <div className="flex gap-2">
-                                    <div className="flex-1">
-                                        <Input
-                                            placeholder="e.g., Dhaka, Bangladesh"
-                                            {...register('location')}
-                                            error={errors.location?.message}
-                                            icon={<FaMapMarkerAlt className="text-gray-400" />}
-                                        />
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={handleGetLocation}
-                                        isLoading={gettingLocation}
-                                        className="whitespace-nowrap"
-                                    >
-                                        <FaLocationArrow className="mr-2" />
-                                        Use Current Location
-                                    </Button>
-                                </div>
-                                {watchedLat && watchedLng && (
-                                    <p className="mt-2 text-xs text-green-600 flex items-center gap-1">
-                                        <FaCheckCircle /> Coordinates captured: {watchedLat.toFixed(4)}, {watchedLng.toFixed(4)}
-                                    </p>
-                                )}
-                                <input type="hidden" {...register('lat')} />
-                                <input type="hidden" {...register('lng')} />
-                            </div>
-
-                            {/* AI Prediction Fields */}
-                            <div className="pt-4 border-t border-gray-100">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <span className="text-lg">🔮</span>
-                                    <h4 className="text-sm font-semibold text-indigo-700 uppercase tracking-wide">AI Price Prediction</h4>
-                                    <span className="text-xs text-gray-400">(Fill these fields to get a smart price suggestion)</span>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Brand Name <span className="text-gray-400 text-xs">(e.g., Samsung, Apple, HP)</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            {...register('brand')}
-                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.brand ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                            placeholder="e.g., Samsung"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Device / Model <span className="text-gray-400 text-xs">(e.g., Galaxy S21, iPhone 13)</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            {...register('deviceModel')}
-                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.deviceModel ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                            placeholder="e.g., Galaxy S21"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Original Price (BDT)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.10"
-                                            {...register('originalPrice')}
-                                            className={`focus:ring-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.originalPrice ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                            placeholder="Original buying price"
-                                        />
-                                        {errors.originalPrice && (
-                                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                                                <FaExclamationCircle /> {errors.originalPrice.message}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Product Age (Years)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            {...register('productAge')}
-                                            className={`focus:ring-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.productAge ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                            placeholder="How old is the product?"
-                                        />
-                                        {errors.productAge && (
-                                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                                                <FaExclamationCircle /> {errors.productAge.message}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Price & Duration */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-100">
-                                <div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <label className="block text-sm font-medium text-gray-700">
-                                            Starting Price
-                                        </label>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handlePredictPrice}
-                                            isLoading={isPredicting}
-                                            disabled={isPredicting}
-                                            className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                                        >
-                                            <span className="mr-1">🔮</span>
-                                            Predict Price
-                                        </Button>
-                                    </div>
-                                    <div className="relative rounded-md shadow-sm">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <span className="text-gray-700 dark:text-gray-300 sm:text-sm">৳</span>
-                                        </div>
-                                        <input
-                                            type="number"
-                                            step="0.10"
-                                            {...register('price')}
-                                            className={`focus:ring-indigo-500 dark:bg-slate-800 focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-lg border-gray-300 rounded-md py-3 ${errors.price ? 'border-red-300 ring-1 ring-red-300' : ''
-                                                }`}
-                                            placeholder="0.00"
-                                        />
-                                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                            <span className="text-gray-700 dark:text-gray-300 sm:text-sm">BDT</span>
-                                        </div>
-                                    </div>
-                                    {errors.price && (
-                                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                                            <FaExclamationCircle /> {errors.price.message}
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Auction Duration (Days)
-                                    </label>
-                                    <div className="flex flex-wrap gap-2 mb-3">
-                                        {durationPresets.map(days => (
-                                            <button
-                                                key={days}
-                                                type="button"
-                                                onClick={() => setValue('auctionDuration', days, { shouldValidate: true })}
-                                                className={`px-3 py-1.5 text-sm rounded-md border transition-all ${watchedDuration === days
-                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                                                    }`}
-                                            >
-                                                {days} Days
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="relative rounded-md shadow-sm">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <FaClock className="text-gray-400" />
-                                        </div>
-                                        <input
-                                            type="number"
-                                            {...register('auctionDuration')}
-                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 ${errors.auctionDuration ? 'border-red-300 ring-1 ring-red-300' : ''
-                                                }`}
-                                        />
-                                    </div>
-                                    {errors.auctionDuration && (
-                                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                                            <FaExclamationCircle /> {errors.auctionDuration.message}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Image Upload Section */}
+                               {/* Image Upload Section */}
                     <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100 transition-all hover:shadow-2xl">
                         <div className="px-6 py-4 bg-linear-to-r from-purple-600 to-pink-600 border-b border-gray-200 flex items-center justify-between">
                             <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -895,6 +666,259 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                             )}
                         </div>
                     </div>
+
+                            {/* Description and AI Section */}
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="block text-sm font-medium text-gray-700">
+                                        Description
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        {watch('aiQualityScore') ? (
+                                            <div className="flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">
+                                                <FaCheckCircle /> Quality Score: {watch('aiQualityScore')}
+                                            </div>
+                                        ) : null}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleAIAnalyze}
+                                            isLoading={isAnalyzing}
+                                            disabled={isAnalyzing || aiLimit <= 0}
+                                            className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                                        >
+                                            <span className="mr-1">✨</span>
+                                            {aiLimit < 2 ? 'Regenerate Description' : 'Auto-Generate Description'}
+                                            <span className="ml-1 text-gray-400 text-xs">({aiLimit} left)</span>
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="relative">
+                                    <textarea
+                                        {...register('description')}
+                                        rows={6}
+                                        placeholder="Describe your item in detail. Include features, condition specifics, and any other relevant information."
+                                        className={`shadow-sm block w-full sm:text-sm border rounded-lg p-4 transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${errors.description ? 'border-red-300' : 'border-gray-300'
+                                            }`}
+                                    />
+                                    <div className={`absolute bottom-3 right-3 text-xs ${watchedDescription.length > 1900 ? 'text-red-500 font-bold' : 'text-blue-500'
+                                        }`}>
+                                        {watchedDescription.length}/2000
+                                    </div>
+                                </div>
+                                {errors.description && (
+                                    <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                        <FaExclamationCircle /> {errors.description.message}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Location */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Location
+                                </label>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <Input
+                                            placeholder="e.g., Dhaka, Bangladesh"
+                                            {...register('location')}
+                                            error={errors.location?.message}
+                                            icon={<FaMapMarkerAlt className="text-gray-400" />}
+                                        />
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleGetLocation}
+                                        isLoading={gettingLocation}
+                                        className="whitespace-nowrap"
+                                    >
+                                        <FaLocationArrow className="mr-2" />
+                                        Use Current Location
+                                    </Button>
+                                </div>
+                                {watchedLat && watchedLng && (
+                                    <p className="mt-2 text-xs text-green-600 flex items-center gap-1">
+                                        <FaCheckCircle /> Coordinates captured: {watchedLat.toFixed(4)}, {watchedLng.toFixed(4)}
+                                    </p>
+                                )}
+                                <input type="hidden" {...register('lat')} />
+                                <input type="hidden" {...register('lng')} />
+                            </div>
+
+                            {/* AI Prediction Fields */}
+                            <div className="pt-4 border-t border-gray-100">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-lg">🔮</span>
+                                    <h4 className="text-sm font-semibold text-indigo-700 uppercase tracking-wide">AI Price Prediction</h4>
+                                    <span className="text-xs text-gray-400">(Fill these fields to get a smart price suggestion)</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Device Category <span className="text-gray-400 text-xs">(Select the closest match for accurate prediction)</span>
+                                        </label>
+                                        <select
+                                            {...register('predictionCategory')}
+                                            className={`text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.predictionCategory ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                        >
+                                            <option value="">Select a category</option>
+                                            <option value="Smartphone">Smartphone</option>
+                                            <option value="Laptop">Laptop</option>
+                                            <option value="Tablet">Tablet / iPad</option>
+                                            <option value="Desktop PC">Desktop PC</option>
+                                            <option value="Smartwatch">Smartwatch / Apple Watch</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Brand Name <span className="text-gray-400 text-xs">(e.g., Samsung, Apple, HP)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            {...register('brand')}
+                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.brand ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="e.g., Samsung"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Device / Model <span className="text-gray-400 text-xs">(e.g., Galaxy S21, iPhone 13)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            {...register('deviceModel')}
+                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.deviceModel ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="e.g., Galaxy S21"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Original Price (BDT)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.10"
+                                            {...register('originalPrice')}
+                                            className={`focus:ring-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.originalPrice ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="Original buying price"
+                                        />
+                                        {errors.originalPrice && (
+                                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                                <FaExclamationCircle /> {errors.originalPrice.message}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Product Age (Years)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            {...register('productAge')}
+                                            className={`focus:ring-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.productAge ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="How old is the product?"
+                                        />
+                                        {errors.productAge && (
+                                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                                <FaExclamationCircle /> {errors.productAge.message}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Price & Duration */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-100">
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="block text-sm font-medium text-gray-700">
+                                            Starting Price
+                                        </label>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handlePredictPrice}
+                                            isLoading={isPredicting}
+                                            disabled={isPredicting}
+                                            className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                                        >
+                                            <span className="mr-1">🔮</span>
+                                            Predict Price
+                                        </Button>
+                                    </div>
+                                    <div className="relative rounded-md shadow-sm">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <span className="text-gray-700 dark:text-gray-300 sm:text-sm">৳</span>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            step="0.10"
+                                            {...register('price')}
+                                            className={`focus:ring-indigo-500 dark:bg-slate-800 focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-lg border-gray-300 rounded-md py-3 ${errors.price ? 'border-red-300 ring-1 ring-red-300' : ''
+                                                }`}
+                                            placeholder="0.00"
+                                        />
+                                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                            <span className="text-gray-700 dark:text-gray-300 sm:text-sm">BDT</span>
+                                        </div>
+                                    </div>
+                                    {errors.price && (
+                                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                            <FaExclamationCircle /> {errors.price.message}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Auction Duration (Days)
+                                    </label>
+                                    <div className="flex flex-wrap gap-2 mb-3">
+                                        {durationPresets.map(days => (
+                                            <button
+                                                key={days}
+                                                type="button"
+                                                onClick={() => setValue('auctionDuration', days, { shouldValidate: true })}
+                                                className={`px-3 py-1.5 text-sm rounded-md border transition-all ${watchedDuration === days
+                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                {days} Days
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="relative rounded-md shadow-sm">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <FaClock className="text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="number"
+                                            {...register('auctionDuration')}
+                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 ${errors.auctionDuration ? 'border-red-300 ring-1 ring-red-300' : ''
+                                                }`}
+                                        />
+                                    </div>
+                                    {errors.auctionDuration && (
+                                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                            <FaExclamationCircle /> {errors.auctionDuration.message}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                 
 
                     {/* Action Buttons */}
                     <div className="flex items-center justify-end gap-4 pt-6">

@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   productionBrowserSourceMaps: false,
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'http',

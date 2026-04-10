@@ -54,10 +54,10 @@ export default function RecentlyViewed() {
                 </div>
 
                 <div className="flex overflow-x-auto gap-6 pb-4 scrollbar-hide snap-x">
-                    {recentlyViewed.map((product) => (
+                    {recentlyViewed.map((product, index) => (
                         <Link 
-                            key={product.id} 
-                            href={`/products/${product.id}`} 
+                            key={product.id || (product as any)._id || index} 
+                            href={`/products/${product.id || (product as any)._id}`} 
                             className="min-w-[280px] w-[280px] snap-start group bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden"
                         >
                             <div className="relative aspect-square bg-slate-100 dark:bg-slate-800 p-4 flex items-center justify-center overflow-hidden">

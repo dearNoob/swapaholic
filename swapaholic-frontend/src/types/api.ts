@@ -74,6 +74,10 @@ export interface User {
     updatedAt: string;
     phone?: string;
     address?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    location?: string | { type: string; coordinates: number[] };
     kycVerified?: boolean;
     accountStatus?: 'active' | 'suspended' | 'banned' | 'deleted';
     loginHistory?: Array<{ ip: string; deviceFingerprint: string; lastLogin: string; isTrusted: boolean }>;

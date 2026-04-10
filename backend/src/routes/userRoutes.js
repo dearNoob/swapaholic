@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, optionalAuth } = require('../middleware/auth');
 const userController = require('../controllers/userController');
 
 // @route   GET /api/users/profile
@@ -10,8 +10,8 @@ router.get('/profile', authMiddleware, userController.getCurrentUserProfile);
 
 // @route   GET /api/users/:id
 // @desc    Get user profile by ID
-// @access  Private
-router.get('/:id', authMiddleware, userController.getUserProfile);
+// @access  Public (Optional Auth)
+router.get('/:id', optionalAuth, userController.getUserProfile);
 
 // @route   PUT /api/users/:id
 // @desc    Update user profile

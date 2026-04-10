@@ -92,13 +92,12 @@ const getBidsForProduct = async (req, res) => {
     const product = await Product.findById(productId);
     if (!product) return res.status(404).json({ message: 'Product not found' });
 
-    // Only seller or admin can view all bids for a product
-    if (product.sellerId.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
+    // Mask sensitive bidder details from standard public users
+    const isOwnerOrAdmin = req.user && (product.sellerId.toString() === req.user.id || req.user.role === 'admin');
+    const fieldsToSelect = isOwnerOrAdmin ? 'firstName lastName email ratingAverage' : 'firstName lastName ratingAverage';
 
     const bids = await Bid.find({ productId })
-      .populate('buyerId', 'firstName lastName email ratingAverage')
+      .populate('buyerId', fieldsToSelect)
       .sort({ bidAmount: -1, createdAt: -1 });
 
     res.json({

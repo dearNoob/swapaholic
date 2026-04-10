@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware, roleCheck } = require('../middleware/auth');
+const { authMiddleware, optionalAuth, roleCheck } = require('../middleware/auth');
 const bidController = require('../controllers/bidController');
 
 // @route   GET /api/bids
@@ -37,8 +37,8 @@ router.post('/:bidId/confirm-win', authMiddleware, bidController.confirmAuctionW
 
 // @route   GET /api/bids/:productId
 // @desc    Get all bids for a product
-// @access  Private
-router.get('/:productId', authMiddleware, bidController.getBidsForProduct);
+// @access  Public (Optional Auth)
+router.get('/:productId', optionalAuth, bidController.getBidsForProduct);
 
 // @route   PUT /api/bids/:bidId
 // @desc    Update bid amount (before acceptance)

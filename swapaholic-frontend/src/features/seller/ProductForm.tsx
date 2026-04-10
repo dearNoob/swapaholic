@@ -12,6 +12,7 @@ const schema = yup.object({
     name: yup.string().required('Product name is required'),
     condition: yup.string().required('Condition is required'),
     category: yup.string().required('Category is required'),
+    predictionCategory: yup.string().optional().nullable(),
     brand: yup.string().required('Brand is required for prediction'),
     deviceModel: yup.string().required('Device model is required for prediction'),
     originalPrice: yup.number().positive().required('Original price is required for prediction'),
@@ -38,14 +39,16 @@ export const ProductForm = () => {
     const watchedDeviceModel = watch('deviceModel');
     const watchedOriginalPrice = watch('originalPrice');
     const watchedAge = watch('productAge');
+    const watchedPredictionCategory = watch('predictionCategory');
 
     useEffect(() => {
         const predictTimer = setTimeout(async () => {
-            if (watchedBrand && watchedDeviceModel && watchedCategory && watchedOriginalPrice && watchedAge) {
+            const finalCategory = watchedPredictionCategory || watchedCategory;
+            if (watchedBrand && watchedDeviceModel && finalCategory && watchedOriginalPrice && watchedAge) {
                 setIsPredicting(true);
                 try {
                      const response = await productApi.predictPrice({
-                         category: watchedCategory,
+                         category: finalCategory,
                          brand: watchedBrand,
                          model: watchedDeviceModel,
                          original_price: watchedOriginalPrice,
@@ -117,6 +120,20 @@ export const ProductForm = () => {
             <Input label="Device / Model" {...register('deviceModel')} error={errors.deviceModel?.message} placeholder="e.g., Galaxy S21, iPhone 13" />
             <Input label="Condition" {...register('condition')} error={errors.condition?.message} />
             <Input label="Category" {...register('category')} error={errors.category?.message} />
+            <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Device Category (For AI Prediction)</label>
+                <select
+                    {...register('predictionCategory')}
+                    className="w-full text-gray-900 dark:text-white bg-white dark:bg-slate-800 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                    <option value="">Select a category...</option>
+                    <option value="Smartphone">Smartphone</option>
+                    <option value="Laptop">Laptop</option>
+                    <option value="Tablet">Tablet / iPad</option>
+                    <option value="Desktop PC">Desktop PC</option>
+                    <option value="Smartwatch">Smartwatch / Apple Watch</option>
+                </select>
+            </div>
             <Input label="Original Price (BDT)" type="number" {...register('originalPrice')} error={errors.originalPrice?.message} />
             <Input label="Product Age (Years)" type="number" step="0.1" {...register('productAge')} error={errors.productAge?.message} />
             

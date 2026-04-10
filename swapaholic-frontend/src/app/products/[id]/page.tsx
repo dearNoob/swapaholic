@@ -129,15 +129,23 @@ export default function ProductDetailPage() {
 
         if (!product || !product.sellerId) return;
 
-        if (user?.id === product.sellerId) {
+        const sellerId = (product.sellerId as any)?._id || product.sellerId;
+
+        if (user?.id === sellerId) {
             toast.warning("You cannot message yourself!");
             return;
         }
 
         try {
             // Create or get conversation
-            const conversation = await messagesApi.startConversation(product.sellerId);
-            router.push(`/messages?conversationId=${conversation._id}`);
+            const response = await messagesApi.startConversation(sellerId);
+            // Backend returns: { success, data: { conversationId } }
+            const conversationId = response?.data?.conversationId || response?.conversationId || response?._id;
+            if (conversationId) {
+                router.push(`/messages?conversationId=${conversationId}`);
+            } else {
+                router.push('/messages');
+            }
         } catch (error) {
             console.error('Failed to start conversation:', error);
             toast.error('Failed to start conversation. Please try again.');

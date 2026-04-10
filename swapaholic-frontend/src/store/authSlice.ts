@@ -24,7 +24,7 @@ const loadAuthFromStorage = (): Partial<AuthState> => {
         const userStr = localStorage.getItem('user');
         const activeMode = localStorage.getItem('activeMode') as ActiveMode | null;
 
-        if (token && userStr) {
+        if (token && userStr && userStr !== 'undefined' && userStr !== 'null') {
             const user = JSON.parse(userStr);
             return {
                 accessToken: token,

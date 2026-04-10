@@ -77,13 +77,13 @@ export default function WonAuctionsCard({ auctions }: WonAuctionsCardProps) {
                             <div className="flex flex-col lg:flex-row gap-8">
                                 {/* Product Info */}
                                 <div className="flex gap-4 lg:w-1/3">
-                                    <Link href={`/products/৳{auction.productId}`} className="flex-shrink-0">
+                                    <Link href={`/products/${auction.productId}`} className="flex-shrink-0">
                                         <div className="relative w-24 h-24 rounded-xl overflow-hidden shadow-sm">
                                             <Image src={auction.productImage} alt={auction.productTitle} fill className="object-cover" />
                                         </div>
                                     </Link>
                                     <div>
-                                        <Link href={`/products/৳{auction.productId}`} className="hover:text-indigo-600 transition">
+                                        <Link href={`/products/${auction.productId}`} className="hover:text-indigo-600 transition">
                                             <h3 className="font-bold text-gray-900 line-clamp-2 mb-1">{auction.productTitle}</h3>
                                         </Link>
                                         <p className="text-xs text-gray-500 mb-2">
@@ -144,7 +144,7 @@ export default function WonAuctionsCard({ auctions }: WonAuctionsCardProps) {
 
                                     {auction.paymentStatus === 'paid' && auction.deliveryStatus !== 'delivered' && auction.orderId && (
                                         <Link
-                                            href={`/delivery/৳{auction.orderId}`}
+                                            href={`/delivery/${auction.orderId}`}
                                             className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition shadow-md shadow-blue-200 flex items-center justify-center gap-2"
                                         >
                                             <FaTruck />

@@ -207,5 +207,12 @@ export const productsApi = {
     async predictPrice(data: { category: string; brand: string; model: string; original_price: number; condition?: string; product_age?: string; location?: string }): Promise<{ success: boolean; suggestedPrice?: number; source?: string; message?: string; error?: string }> {
         const response = await apiClient.post('/products/price/predict', data);
         return response.data;
+    },
+
+    /**
+     * Delete a product listing
+     */
+    async deleteProduct(productId: string): Promise<void> {
+        await apiClient.delete(`/products/${productId}`);
     }
 };

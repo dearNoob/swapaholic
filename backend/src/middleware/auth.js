@@ -18,6 +18,19 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+const optionalAuth = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (token) {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = decoded;
+    }
+  } catch (error) {
+    // Ignore error, proceed as guest
+  }
+  next();
+};
+
 const roleCheck = (allowedRoles) => {
   return (req, res, next) => {
     const userRole = req.user?.role;
@@ -36,5 +49,6 @@ const roleCheck = (allowedRoles) => {
 
 module.exports = {
   authMiddleware,
+  optionalAuth,
   roleCheck
 };

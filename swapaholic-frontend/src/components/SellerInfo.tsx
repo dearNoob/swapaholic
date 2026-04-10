@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { FaStar, FaEnvelope, FaUserCircle } from 'react-icons/fa';
 
 interface SellerInfoProps {
@@ -82,9 +83,11 @@ export default function SellerInfo({ seller, onContactSeller }: SellerInfoProps)
                         <FaEnvelope />
                         Contact Seller
                     </button>
-                    <button className="w-full border border-indigo-600 text-indigo-600 py-3 rounded-lg font-medium hover:bg-indigo-50 transition">
-                        View Profile
-                    </button>
+                    <Link href={`/profile/${seller.id}`}>
+                        <button className="w-full border border-indigo-600 text-indigo-600 py-3 rounded-lg font-medium hover:bg-indigo-50 transition">
+                            View Profile
+                        </button>
+                    </Link>
                 </div>
 
                 {/* Trust Indicators */}

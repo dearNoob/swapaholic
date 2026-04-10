@@ -14,7 +14,15 @@ export interface Notification {
 export const notificationApi = {
     getAll: async () => {
         const response = await api.get('/notifications');
-        return response.data;
+        const data = response.data;
+        const notifications = Array.isArray(data) ? data : (data.notifications || []);
+        
+        return notifications.map((n: any) => ({
+            ...n,
+            id: n._id || n.id,
+            isRead: n.read !== undefined ? n.read : n.isRead,
+            createdAt: n.createdAt
+        }));
     },
 
     getUnreadCount: async () => {

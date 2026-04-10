@@ -43,6 +43,11 @@ input, textarea, select {
   background-color: transparent;
 }
 
+select option {
+  color: var(--foreground);
+  background-color: var(--background);
+}
+
 input::placeholder, textarea::placeholder {
   color: #6b7280; /* text-gray-500 equivalent */
 }

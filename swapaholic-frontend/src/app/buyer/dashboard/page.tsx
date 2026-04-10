@@ -123,8 +123,9 @@ export default function BuyerDashboardPage() {
                 const bidsResponse = await bidsApi.getMyBids(1, 50);
 
                 // Process Active Bids
+                // Include both 'active' (no bids yet) and 'bidden' (already has bids)
                 const active = bidsResponse.data
-                    .filter((bid: any) => bid.product.status === 'active')
+                    .filter((bid: any) => bid.product && (bid.product.status === 'active' || bid.product.status === 'bidden'))
                     .map((bid: any) => ({
                         id: bid.id,
                         productId: bid.product.id,
@@ -138,8 +139,9 @@ export default function BuyerDashboardPage() {
                 setActiveBids(active);
 
                 // Process Won Auctions
+                // Only include items where the user has actually won and the auction is closed (status 'sold')
                 const won = bidsResponse.data
-                    .filter((bid: any) => bid.isWinning && bid.product.status !== 'active')
+                    .filter((bid: any) => bid.isWinning && bid.product && bid.product.status === 'sold')
                     .map((bid: any) => ({
                         id: bid.id,
                         productId: bid.product.id,

@@ -94,8 +94,10 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
     const fetchMessages = async () => {
         try {
             setIsLoading(true);
-            const data = await messagesApi.getMessages(conversation.id);
-            setMessages(data.messages || []);
+            const response = await messagesApi.getMessages(conversation.id);
+            // Handle backend returning { success: true, data: { messages: [] } }
+            const messageList = response.data?.messages || response.messages || [];
+            setMessages(messageList);
         } catch (err) {
             console.error('Error fetching messages:', err);
             // Mock data fallback if API fails
@@ -115,29 +117,38 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
+    const formatReactions = (reactions: any) => {
+        if (!reactions) return {};
+        // If it's the raw MongoDB Array format
+        if (Array.isArray(reactions)) {
+            const grouped: { [emoji: string]: string[] } = {};
+            reactions.forEach((r: any) => {
+                const uId = (typeof r.user === 'object' && r.user !== null) ? r.user._id || r.user.id : r.user;
+                if (!uId || !r.emoji) return;
+
+                if (!grouped[r.emoji]) grouped[r.emoji] = [];
+                if (!grouped[r.emoji].includes(uId.toString())) {
+                    grouped[r.emoji].push(uId.toString());
+                }
+            });
+            return grouped;
+        }
+        // If it's already the grouped Dictionary format
+        return reactions;
+    };
+
     const handleSend = async () => {
         if (messageInput.trim()) {
-            // Optimistic update
-            const tempId = Date.now().toString();
-            const newMessage: Message = {
-                id: tempId,
-                senderId: currentUserId,
-                senderName: user?.firstName || 'You',
-                content: messageInput,
-                timestamp: new Date().toISOString(),
-                isRead: false
-            };
-
-            setMessages(prev => [...prev, newMessage]);
+            const content = messageInput;
             setMessageInput('');
 
             try {
                 // Call parent handler which calls API
-                await onSendMessage(messageInput);
-                // Socket will receive the real message, we might need to dedupe or replace
+                await onSendMessage(content);
+                // The socket will receive the real message and append it cleanly without duplicates!
             } catch (error) {
                 toast.error('Failed to send message');
-                setMessages(prev => prev.filter(m => m.id !== tempId));
+                setMessageInput(content); // Restore input on failure
             }
         }
     };
@@ -147,18 +158,19 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
             await messagesApi.reactToMessage(messageId, emoji);
             // Optimistic update
             setMessages(prev => prev.map(msg => {
-                if (msg.id === messageId) {
-                    const currentReactions = msg.reactions?.[emoji] || [];
-                    const hasReacted = currentReactions.includes(currentUserId);
-                    const newReactions = hasReacted
-                        ? currentReactions.filter(id => id !== currentUserId)
-                        : [...currentReactions, currentUserId];
+                if ((msg.id || (msg as any)._id) === messageId) {
+                    const formatted = formatReactions(msg.reactions);
+                    const currentEmojiTaps = formatted[emoji] || [];
+                    const hasReacted = currentEmojiTaps.includes(currentUserId);
+                    const newEmojiTaps = hasReacted
+                        ? currentEmojiTaps.filter((id: string) => id !== currentUserId)
+                        : [...currentEmojiTaps, currentUserId];
 
                     return {
                         ...msg,
                         reactions: {
-                            ...msg.reactions,
-                            [emoji]: newReactions
+                            ...formatted,
+                            [emoji]: newEmojiTaps
                         }
                     };
                 }
@@ -222,7 +234,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                 <div className="flex items-center gap-3">
                     <div className="relative w-10 h-10 rounded-full overflow-hidden">
                         <Image
-                            src={conversation.recipientAvatar || '/placeholder-avatar.png'}
+                            src={conversation.recipientAvatar || '/placeholder-avatar.svg'}
                             alt={conversation.recipientName}
                             fill
                             className="object-cover"
@@ -275,11 +287,14 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                     </div>
                 ) : (
                     <>
-                        {messages.map((message) => {
-                            const isOwnMessage = message.senderId === currentUserId;
+                        {messages.map((message, index) => {
+                            const actualId = message.id || (message as any)._id || `temp-${index}`;
+                            const actualSenderId = (message as any).sender?._id || (message as any).sender || message.senderId;
+                            const msgTime = message.timestamp || (message as any).createdAt || new Date().toISOString();
+                            const isOwnMessage = actualSenderId === currentUserId;
                             return (
                                 <div
-                                    key={message.id}
+                                    key={actualId}
                                     className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                                 >
                                     <div className={`max-w-[70%] ${isOwnMessage ? 'order-2' : 'order-1'}`}>
@@ -293,17 +308,17 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                                         </div>
                                         <div className="flex items-center justify-between mt-1">
                                             <p className={`text-xs text-gray-500 ${isOwnMessage ? 'text-right' : 'text-left'}`}>
-                                                {formatTime(message.timestamp)}
+                                                {formatTime(msgTime)}
                                             </p>
                                             {isOwnMessage && (
                                                 <ReadReceipt message={message} currentUserId={currentUserId} />
                                             )}
                                         </div>
                                         <MessageReactions
-                                            messageId={message.id}
-                                            reactions={message.reactions || {}}
+                                            messageId={actualId}
+                                            reactions={formatReactions(message.reactions)}
                                             currentUserId={currentUserId}
-                                            onReact={(emoji) => handleReaction(message.id, emoji)}
+                                            onReact={(emoji) => handleReaction(actualId, emoji)}
                                         />
                                     </div>
                                 </div>
@@ -336,7 +351,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                         onKeyPress={handleKeyPress}
                         placeholder="Type a message..."
                         rows={1}
-                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
+                        className="flex-1 px-4 py-3 text-gray-900 dark:text-blue-600 bg-white dark:bg-slate-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none" style={{color:"black"}}
                     />
                     <button
                         onClick={handleSend}

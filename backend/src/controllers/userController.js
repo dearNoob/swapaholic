@@ -13,7 +13,7 @@ const getCurrentUserProfile = async (req, res) => {
     }
 
     // console.log('[userController] Profile retrieved:', user.email, 'NID:', user.nidNumber);
-    res.json(user);
+    res.json({ success: true, data: user });
   } catch (error) {
     console.error('[userController] Get current user profile error:', error.message);
     logger.error('Get current user profile error:', error);
@@ -27,12 +27,21 @@ const getUserProfile = async (req, res) => {
     const user = await User.findById(req.params.id).select('-password');
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Only allow users to view their own full profile unless they're admin
-    if (req.user.id !== req.params.id && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
+    // Identify if the request is from the owner or admin
+    const isOwnerOrAdmin = req.user && (req.user.id === req.params.id || req.user.role === 'admin');
+
+    if (!isOwnerOrAdmin) {
+      // Strip sensitive information for public viewing
+      const publicProfile = user.toObject();
+      delete publicProfile.nidNumber;
+      delete publicProfile.phone;
+      delete publicProfile.address;
+      delete publicProfile.loginHistory;
+      delete publicProfile.password; // Just in case, already excluded by select
+      return res.json({ success: true, data: publicProfile });
     }
 
-    res.json(user);
+    res.json({ success: true, data: user });
   } catch (error) {
     logger.error('Get user profile error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -89,7 +98,7 @@ const updateUserProfile = async (req, res) => {
 
     const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password +nidNumber');
 
-    res.json(user);
+    res.json({ success: true, data: user });
   } catch (error) {
     logger.error('Update user profile error:', error);
     res.status(500).json({ message: 'Server error' });

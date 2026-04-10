@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { FaComments, FaSearch, FaPlus } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { messagesApi } from '../../api/messages';
@@ -9,6 +10,7 @@ import ChatWindow from '../../components/messages/ChatWindow';
 import { socketService } from '../../utils/socket';
 
 export default function MessagesPage() {
+    const searchParams = useSearchParams();
     const [conversations, setConversations] = useState<any[]>([]);
     const [selectedConversation, setSelectedConversation] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -57,14 +59,30 @@ export default function MessagesPage() {
         try {
             setIsLoading(true);
             const data = await messagesApi.getConversations();
-            setConversations(data.conversations || []);
+            const convList = data.conversations || data.data || [];
+            setConversations(convList);
+            return convList;
         } catch (err) {
             console.error('Error fetching conversations:', err);
             toast.error('Failed to load conversations');
+            return [];
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Auto-select conversation from URL param (e.g., from Contact Seller)
+    useEffect(() => {
+        const conversationId = searchParams.get('conversationId');
+        if (conversationId && conversations.length > 0 && !selectedConversation) {
+            const targetConv = conversations.find(
+                (c: any) => c.id === conversationId || c._id === conversationId
+            );
+            if (targetConv) {
+                handleSelectConversation(targetConv);
+            }
+        }
+    }, [conversations, searchParams]);
 
     const fetchUnreadCount = async () => {
         try {

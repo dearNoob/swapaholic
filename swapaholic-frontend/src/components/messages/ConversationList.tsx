@@ -5,12 +5,19 @@ import { FaClock, FaCircle, FaBox } from 'react-icons/fa';
 
 interface Conversation {
     id: string;
-    recipientName: string;
-    recipientAvatar: string;
-    lastMessage: string;
-    lastMessageTime: string;
+    otherUser: {
+        id: string;
+        name: string;
+        avatar: string;
+    } | null;
+    lastMessage: {
+        content: string;
+        sender: string;
+        createdAt: string;
+    } | null;
     unreadCount: number;
     orderId?: string;
+    updatedAt: string;
 }
 
 interface ConversationListProps {
@@ -71,10 +78,10 @@ export default function ConversationList({
                 >
                     <div className="flex items-start gap-3">
                         {/* Avatar */}
-                        <div className="relative w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
+                        <div className="relative w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-gray-200">
                             <Image
-                                src={conversation.recipientAvatar}
-                                alt={conversation.recipientName}
+                                src={conversation.otherUser?.avatar || '/placeholder-avatar.svg'}
+                                alt={conversation.otherUser?.name || 'User'}
                                 fill
                                 className="object-cover"
                             />
@@ -90,11 +97,11 @@ export default function ConversationList({
                             <div className="flex items-center justify-between mb-1">
                                 <p className={`font-semibold truncate ${conversation.unreadCount > 0 ? 'text-gray-900' : 'text-gray-700'
                                     }`}>
-                                    {conversation.recipientName}
+                                    {conversation.otherUser?.name || 'Unknown User'}
                                 </p>
                                 <div className="flex items-center gap-1 text-xs text-gray-500">
                                     <FaClock className="text-xs" />
-                                    {getTimeAgo(conversation.lastMessageTime)}
+                                    {getTimeAgo(conversation.lastMessage?.createdAt || conversation.updatedAt)}
                                 </div>
                             </div>
 
@@ -109,7 +116,7 @@ export default function ConversationList({
                             {/* Last Message */}
                             <p className={`text-sm truncate ${conversation.unreadCount > 0 ? 'text-gray-900 font-medium' : 'text-gray-600'
                                 }`}>
-                                {conversation.lastMessage}
+                                {conversation.lastMessage?.content || 'No messages yet'}
                             </p>
                         </div>
                     </div>

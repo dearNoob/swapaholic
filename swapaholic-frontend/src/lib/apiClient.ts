@@ -55,9 +55,38 @@ const processQueue = (error: AxiosError | null, token: string | null = null) => 
 
     failedQueue = [];
 };
+// Recursive function to automatically convert relative image paths from the DB into full API URLs
+function transformImageUrls(obj: any, baseUrl: string): any {
+    if (!obj) return obj;
+    if (typeof obj === 'string') {
+        if (obj.startsWith('/uploads/')) {
+            return `${baseUrl}${obj}`;
+        }
+        return obj;
+    }
+    if (Array.isArray(obj)) {
+        for (let i = 0; i < obj.length; i++) {
+            obj[i] = transformImageUrls(obj[i], baseUrl);
+        }
+        return obj;
+    }
+    if (typeof obj === 'object' && !(obj instanceof Date)) {
+        for (const key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                obj[key] = transformImageUrls(obj[key], baseUrl);
+            }
+        }
+    }
+    return obj;
+}
+
 // Response interceptor - handle errors and token refresh
 apiClient.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
+        response.data = transformImageUrls(response.data, baseUrl);
+        return response;
+    },
     async (error) => {
         const originalRequest = error.config;
         // If unauthorized, attempt token refresh unless request is for analyze endpoint

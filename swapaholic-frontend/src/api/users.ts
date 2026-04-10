@@ -9,6 +9,12 @@ export const usersApi = {
         return response.data.data;
     },
 
+    // Get user by ID
+    async getUserById(userId: string): Promise<User> {
+        const response = await apiClient.get<ApiResponse<User>>(`/users/${userId}`);
+        return response.data.data;
+    },
+
     // Update user profile fields
     async updateProfile(data: Partial<User>): Promise<User> {
         const response = await apiClient.put<ApiResponse<User>>('/users/profile', data);

@@ -13,9 +13,25 @@ export default function NotificationDropdown() {
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+    // Initial fetch for count and notifications on load
+    useEffect(() => {
+        if (user) {
+            fetchUnreadCount();
+        }
+    }, [user]);
+
+    const fetchUnreadCount = async () => {
+        try {
+            const data = await notificationApi.getUnreadCount();
+            setUnreadCount(data.count || 0);
+        } catch (error) {
+            console.error('Error fetching unread count:', error);
+        }
+    };
 
     // Fetch notifications
     useEffect(() => {
@@ -79,6 +95,7 @@ export default function NotificationDropdown() {
             };
 
             setNotifications((prev) => [newNotification, ...prev].slice(0, 5));
+            setUnreadCount((prev) => prev + 1);
             
             if (data.type === 'outbid') {
                 toast.warn(data.message || data.title || "You've been outbid!", {
@@ -102,6 +119,7 @@ export default function NotificationDropdown() {
             setNotifications((prev) =>
                 prev.map((notif) => (notif.id === id ? { ...notif, isRead: true } : notif))
             );
+            setUnreadCount((prev) => Math.max(0, prev - 1));
         } catch (error) {
             console.error('Error marking notification as read:', error);
             // Update locally even if API fails
@@ -115,6 +133,7 @@ export default function NotificationDropdown() {
         try {
             await notificationApi.markAllAsRead();
             setNotifications((prev) => prev.map((notif) => ({ ...notif, isRead: true })));
+            setUnreadCount(0);
             toast.success('All notifications marked as read');
         } catch (error) {
             console.error('Error marking all as read:', error);

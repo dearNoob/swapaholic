@@ -59,11 +59,37 @@ export const MyBids = () => {
             const allBids = Array.isArray(data) ? data : (data.data || []);
 
             // Separate active bids and won auctions
-            const active = allBids.filter((bid: any) => bid.auctionStatus === 'active');
-            const won = allBids.filter((bid: any) => bid.auctionStatus === 'ended' && bid.isLeading);
+            // Include 'bidden' products in active list
+            const active = allBids.filter((bid: any) => 
+                bid.product && (bid.product.status === 'active' || bid.product.status === 'bidden')
+            );
+            const won = allBids.filter((bid: any) => 
+                bid.product && bid.product.status === 'sold' && bid.isWinning
+            );
 
-            setBids(active);
-            setWonAuctions(won);
+            setBids(active.map((b: any) => ({
+                id: b.id,
+                productId: b.product?.id,
+                productTitle: b.product?.title,
+                productImage: b.product?.images?.[0] || '/placeholder.png',
+                bidAmount: b.amount,
+                currentBid: b.product?.currentBid || b.product?.basePrice,
+                isLeading: b.isWinning,
+                auctionEndTime: (b.product as any).endTime || new Date(Date.now() + 86400000).toISOString(),
+                auctionStatus: b.product?.status,
+                bidPlacedAt: b.createdAt
+            })));
+            
+            setWonAuctions(won.map((b: any) => ({
+                id: b.id,
+                productId: b.product?.id,
+                productTitle: b.product?.title,
+                productImage: b.product?.images?.[0] || '/placeholder.png',
+                finalBid: b.amount,
+                wonAt: b.product?.endTime || b.createdAt,
+                paymentStatus: 'pending', // Defaulting to pending, ideally should come from order
+                deliveryStatus: 'pending'
+            })));
         } catch (error) {
             console.error('Error fetching bids:', error);
             // Use mock data for demonstration
@@ -189,7 +215,7 @@ export const MyBids = () => {
                             )}
                         </div>
                         <div className="p-4">
-                            <Link href={`/products/৳{bid.productId}`}>
+                            <Link href={`/products/${bid.productId}`}>
                                 <h3 className="text-lg font-semibold text-gray-900 hover:text-indigo-600 transition-colors mb-2 line-clamp-2">
                                     {bid.productTitle}
                                 </h3>
@@ -202,7 +228,7 @@ export const MyBids = () => {
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-gray-500">Current Bid</span>
-                                    <span className={`text-lg font-bold ৳{bid.isLeading ? 'text-green-600' : 'text-red-600'}`}>
+                                    <span className={`text-lg font-bold ${bid.isLeading ? 'text-green-600' : 'text-red-600'}`}>
                                         ৳{bid.currentBid.toFixed(2)}
                                     </span>
                                 </div>
@@ -213,7 +239,7 @@ export const MyBids = () => {
                                     <FaClock className="text-orange-500" />
                                     <span>{getTimeRemaining(bid.auctionEndTime)}</span>
                                 </div>
-                                <Link href={`/products/৳{bid.productId}`}>
+                                <Link href={`/products/${bid.productId}`}>
                                     <Button size="sm" variant="outline">View Auction</Button>
                                 </Link>
                             </div>
