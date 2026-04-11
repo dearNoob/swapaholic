@@ -3,24 +3,23 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FaBell, FaSearch, FaUserCircle, FaBars, FaTimes, FaTrophy } from 'react-icons/fa';
+import { FaBars, FaTimes, FaTrophy } from 'react-icons/fa';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/authSlice';
 import SearchBar from './SearchBar';
 import NotificationDropdown from './NotificationDropdown';
 import MessageBadge from './MessageBadge';
 import UserDropdown from './UserDropdown';
-import { ConfirmationModal } from '../ui/ConfirmationModal';
 import { authApi } from '../../api/auth';
 import { bidsApi } from '../../api/bids';
 
 export default function Header() {
     const router = useRouter();
     const dispatch = useAppDispatch();
-    const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+    const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-    const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
     const [pendingWonBids, setPendingWonBids] = useState(0);
+    const pendingWonBidsCount = isAuthenticated && user?.role === 'buyer' ? pendingWonBids : 0;
 
     const handleLogout = async () => {
         // 1. Immediately clear Redux state for instant UI response
@@ -46,21 +45,23 @@ export default function Header() {
 
     // Fetch pending won bids count for buyer badge
     useEffect(() => {
-        if (isAuthenticated && user?.role === 'buyer') {
-            const fetchWonCount = async () => {
-                try {
-                    const wonBids = await bidsApi.getWonBids();
-                    setPendingWonBids(wonBids.filter(b => !b.isExpired).length);
-                } catch (e) {
-                    // silently fail
-                }
-            };
-            fetchWonCount();
-            // Refresh every 60 seconds
-            const interval = setInterval(fetchWonCount, 60000);
-            return () => clearInterval(interval);
+        if (isLoading || !isAuthenticated || user?.role !== 'buyer') {
+            return;
         }
-    }, [isAuthenticated, user?.role]);
+
+        const fetchWonCount = async () => {
+            try {
+                const wonBids = await bidsApi.getWonBids();
+                setPendingWonBids(wonBids.filter(b => !b.isExpired).length);
+            } catch {
+                // silently fail
+            }
+        };
+
+        void fetchWonCount();
+        const interval = setInterval(fetchWonCount, 60000);
+        return () => clearInterval(interval);
+    }, [isAuthenticated, isLoading, user?.role]);
 
     return (
         <header className="bg-white dark:bg-slate-900 shadow-sm border-b border-gray-200 dark:border-slate-800 sticky top-0 z-50 transition-colors">
@@ -87,7 +88,12 @@ export default function Header() {
 
                     {/* Right Side - Desktop */}
                     <div className="hidden md:flex items-center space-x-4">
-                        {isAuthenticated ? (
+                        {isLoading ? (
+                            <div className="flex items-center gap-3" aria-hidden="true">
+                                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-slate-700 animate-pulse" />
+                                <div className="h-9 w-24 rounded-md bg-gray-200 dark:bg-slate-700 animate-pulse" />
+                            </div>
+                        ) : isAuthenticated ? (
                             <>
                                 {/* Messages Badge - Hide for Logistics/Delivery */}
                                 {user?.role !== 'logistics_officer' && (
@@ -95,15 +101,15 @@ export default function Header() {
                                 )}
 
                                 {/* Won Auctions Badge */}
-                                {pendingWonBids > 0 && (
+                                {pendingWonBidsCount > 0 && (
                                     <Link
                                         href="/my-bids/won"
                                         className="relative p-2 text-amber-500 hover:text-amber-600 transition-colors"
-                                        title={`${pendingWonBids} auction(s) to confirm`}
+                                        title={`${pendingWonBidsCount} auction(s) to confirm`}
                                     >
                                         <FaTrophy className="h-5 w-5" />
                                         <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center animate-pulse">
-                                            {pendingWonBids}
+                                            {pendingWonBidsCount}
                                         </span>
                                     </Link>
                                 )}
@@ -158,7 +164,7 @@ export default function Header() {
                             <SearchBar />
                         )}
 
-                        {isAuthenticated ? (
+                        {isLoading ? null : isAuthenticated ? (
                             <>
                                 <Link
                                     href={user?.role === 'admin' ? '/admin/dashboard' : 
@@ -183,7 +189,7 @@ export default function Header() {
                                 >
                                     Messages
                                 </Link>
-                                {pendingWonBids > 0 && (
+                                {pendingWonBidsCount > 0 && (
                                     <Link
                                         href="/my-bids/won"
                                         className="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-md font-medium"

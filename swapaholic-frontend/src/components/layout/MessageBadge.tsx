@@ -9,43 +9,66 @@ import { useAppSelector } from '../../store/hooks';
 
 export default function MessageBadge() {
     const [unreadCount, setUnreadCount] = useState(0);
-    const { isAuthenticated } = useAppSelector((state) => state.auth);
+    const { isAuthenticated, isLoading } = useAppSelector((state) => state.auth);
 
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (isLoading) {
+            return;
+        }
+
+        if (!isAuthenticated) {
+            return;
+        }
+
+        let isActive = true;
 
         const fetchUnreadCount = async () => {
             try {
                 const count = await messagesApi.getUnreadCount();
-                setUnreadCount(count);
+                if (isActive) {
+                    setUnreadCount(count);
+                }
+                return true;
             } catch (err) {
                 console.error('Error fetching message count:', err);
+                if (isActive) {
+                    setUnreadCount(0);
+                }
+                return false;
             }
         };
 
-        fetchUnreadCount();
-
         const handleNewMessage = () => {
-            fetchUnreadCount();
+            void fetchUnreadCount();
         };
         const handleMessageRead = () => {
-            fetchUnreadCount();
+            void fetchUnreadCount();
         };
 
-        if (!socketService.isConnected()) {
-            socketService.connect();
-        }
+        const initializeBadge = async () => {
+            const didLoadCount = await fetchUnreadCount();
+            if (!didLoadCount) {
+                return;
+            }
 
-        socketService.on('new-message', handleNewMessage);
-        socketService.on('message-read', handleMessageRead);
+            if (!socketService.isConnected()) {
+                socketService.connect();
+            }
+
+            socketService.on('new-message', handleNewMessage);
+            socketService.on('message-read', handleMessageRead);
+        };
+
+        void initializeBadge();
 
         return () => {
+            isActive = false;
             socketService.off('new-message', handleNewMessage);
             socketService.off('message-read', handleMessageRead);
         };
-    }, [isAuthenticated]);
+    }, [isAuthenticated, isLoading]);
 
-    if (!isAuthenticated) return null;
+    if (isLoading || !isAuthenticated) return null;
 
     return (
         <Link href="/messages" className="relative p-2 text-gray-600 hover:text-indigo-600 transition-colors mr-2">

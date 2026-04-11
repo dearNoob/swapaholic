@@ -53,7 +53,7 @@ const getOrderStatusForCard = (status: Order['status']): OrderCardStatus => {
 
 export default function BuyerDashboardPage() {
     const router = useRouter();
-    const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+    const { user, isAuthenticated, isLoading: isAuthLoading } = useAppSelector((state) => state.auth);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<DashboardTab>('all');
 
@@ -74,6 +74,10 @@ export default function BuyerDashboardPage() {
 
     // Authentication check with localStorage fallback
     useEffect(() => {
+        if (isAuthLoading) {
+            return;
+        }
+
         const hasLocalAuth = typeof window !== 'undefined' &&
             localStorage.getItem('accessToken') &&
             localStorage.getItem('user');
@@ -87,19 +91,19 @@ export default function BuyerDashboardPage() {
             // Only redirect admin users - 'user' role can access both buyer and seller dashboards
             router.push('/admin/dashboard');
         }
-    }, [isAuthenticated, user, router]);
+    }, [isAuthenticated, isAuthLoading, user, router]);
 
     // Cleanup isLoading if we lose auth
     useEffect(() => {
-        if (!isAuthenticated) {
+        if (!isAuthLoading && !isAuthenticated) {
             setIsLoading(false);
         }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, isAuthLoading]);
 
 
     // Fetch Orders (Paginated)
     useEffect(() => {
-        if (!isAuthenticated || (user && user.role === 'admin')) return;
+        if (isAuthLoading || !isAuthenticated || (user && user.role === 'admin')) return;
 
         const fetchOrders = async () => {
             try {
@@ -141,11 +145,11 @@ export default function BuyerDashboardPage() {
         };
 
         fetchOrders();
-    }, [isAuthenticated, user, currentPage]);
+    }, [currentPage, isAuthenticated, isAuthLoading, user]);
 
     // Fetch Other Dashboard Data
     useEffect(() => {
-        if (!isAuthenticated || (user && user.role === 'admin')) return;
+        if (isAuthLoading || !isAuthenticated || (user && user.role === 'admin')) return;
 
         const fetchDashboardData = async () => {
             setIsLoading(true);
@@ -165,7 +169,7 @@ export default function BuyerDashboardPage() {
         };
 
         fetchDashboardData();
-    }, [isAuthenticated, user]);
+    }, [isAuthenticated, isAuthLoading, user]);
 
 
 
@@ -181,7 +185,7 @@ export default function BuyerDashboardPage() {
         }
     };
 
-    if (isLoading) {
+    if (isAuthLoading || isLoading) {
         return (
             <div className="min-h-screen bg-gray-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

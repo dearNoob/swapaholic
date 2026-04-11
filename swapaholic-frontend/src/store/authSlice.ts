@@ -13,44 +13,13 @@ interface AuthState {
     error: string | null;
 }
 
-// Load initial state from localStorage (with SSR check)
-const loadAuthFromStorage = (): Partial<AuthState> => {
-    if (typeof window === 'undefined') {
-        return {};
-    }
-
-    try {
-        const token = localStorage.getItem('accessToken');
-        const userStr = localStorage.getItem('user');
-        const activeMode = localStorage.getItem('activeMode') as ActiveMode | null;
-
-        if (token && userStr && userStr !== 'undefined' && userStr !== 'null') {
-            const user = JSON.parse(userStr);
-            return {
-                accessToken: token,
-                user,
-                isAuthenticated: true,
-                activeMode: activeMode || 'buyer',
-            };
-        }
-    } catch (error) {
-        console.error('Error loading auth from storage:', error);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('user');
-        localStorage.removeItem('activeMode');
-    }
-
-    return {};
-};
-
 const initialState: AuthState = {
     user: null,
     accessToken: null,
     isAuthenticated: false,
     activeMode: 'buyer',
-    isLoading: false,
+    isLoading: true,
     error: null,
-    ...loadAuthFromStorage(),
 };
 
 const authSlice = createSlice({

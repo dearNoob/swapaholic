@@ -193,7 +193,7 @@ const INITIAL_DASHBOARD_STATE: SellerDashboardState = {
 };
 
 export default function SellerDashboardPage() {
-    const { user } = useAppSelector((state) => state.auth);
+    const { user, isAuthenticated, isLoading: isAuthLoading } = useAppSelector((state) => state.auth);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isLiveUpdates, setIsLiveUpdates] = useState(false);
@@ -201,6 +201,10 @@ export default function SellerDashboardPage() {
     const [dashboardData, setDashboardData] = useState<SellerDashboardState>(INITIAL_DASHBOARD_STATE);
 
     useEffect(() => {
+        if (isAuthLoading || !isAuthenticated) {
+            return;
+        }
+
         const fetchDashboardData = async () => {
             try {
                 setIsLoading(true);
@@ -236,12 +240,12 @@ export default function SellerDashboardPage() {
         };
 
         void fetchDashboardData();
-    }, [analyticsPeriod]);
+    }, [analyticsPeriod, isAuthenticated, isAuthLoading]);
 
     useEffect(() => {
         const userId = user?.id;
 
-        if (!userId) {
+        if (isAuthLoading || !isAuthenticated || !userId) {
             setIsLiveUpdates(false);
             return;
         }
@@ -367,7 +371,7 @@ export default function SellerDashboardPage() {
             socketService.off('seller_payout', handlePaymentReleased);
             socketService.disconnect();
         };
-    }, [user]);
+    }, [isAuthenticated, isAuthLoading, user]);
 
     const handleDeleteListing = async (id: string) => {
         try {
@@ -385,7 +389,7 @@ export default function SellerDashboardPage() {
         }
     };
 
-    if (isLoading) {
+    if (isAuthLoading || isLoading) {
         return (
             <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

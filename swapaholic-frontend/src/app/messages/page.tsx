@@ -8,6 +8,7 @@ import { messagesApi } from '../../api/messages';
 import ConversationList from '../../components/messages/ConversationList';
 import ChatWindow from '../../components/messages/ChatWindow';
 import { socketService } from '../../utils/socket';
+import { useAppSelector } from '../../store/hooks';
 import { ChatConversation, ConversationMessage, ConversationSummary } from '../../types/messages';
 
 const toChatConversation = (conversation: ConversationSummary): ChatConversation => ({
@@ -36,6 +37,7 @@ export default function MessagesPage() {
 }
 
 function MessagesPageContent() {
+    const { isAuthenticated, isLoading: isAuthLoading } = useAppSelector((state) => state.auth);
     const searchParams = useSearchParams();
     const [conversations, setConversations] = useState<ConversationSummary[]>([]);
     const [selectedConversation, setSelectedConversation] = useState<ChatConversation | null>(null);
@@ -94,6 +96,10 @@ function MessagesPageContent() {
     }, [conversations, handleSelectConversation, searchParams, selectedConversation]);
 
     useEffect(() => {
+        if (isAuthLoading || !isAuthenticated) {
+            return;
+        }
+
         void fetchConversations();
         void fetchUnreadCount();
 
@@ -136,7 +142,7 @@ function MessagesPageContent() {
             socketService.off('new-message', handleNewMessage);
             socketService.off('message-read', handleMessageRead);
         };
-    }, [fetchConversations, fetchUnreadCount, selectedConversation?.id]);
+    }, [fetchConversations, fetchUnreadCount, isAuthenticated, isAuthLoading, selectedConversation?.id]);
 
     const handleSendMessage = async (content: string, attachments?: File[]) => {
         if (!selectedConversation) return;

@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store/store';
 import { SOCKET_URL } from '../lib/publicUrls';
+import { tokenManager } from './tokenManager';
 
 class SocketService {
     private socket: Socket | null = null;
@@ -14,11 +15,22 @@ class SocketService {
         }
 
         const state = store.getState();
-        const token = state.auth.accessToken;
+        const token = state.auth.accessToken ?? tokenManager.getAccessToken();
 
         if (!token) {
             console.warn('Cannot connect to socket: No access token');
             return null;
+        }
+
+        if (tokenManager.isTokenExpired(token)) {
+            console.warn('Cannot connect to socket: Access token is expired');
+            return null;
+        }
+
+        if (this.socket) {
+            this.socket.removeAllListeners();
+            this.socket.disconnect();
+            this.socket = null;
         }
 
         this.socket = io(SOCKET_URL, {
@@ -42,6 +54,13 @@ class SocketService {
 
         this.socket.on('connect_error', (error) => {
             console.error('Socket.IO connection error:', error);
+
+            if (error.message?.includes('Invalid token')) {
+                console.warn('Socket authentication failed. Skipping reconnect until auth is refreshed.');
+                this.disconnect();
+                return;
+            }
+
             this.reconnectAttempts++;
 
             if (this.reconnectAttempts >= this.maxReconnectAttempts) {
