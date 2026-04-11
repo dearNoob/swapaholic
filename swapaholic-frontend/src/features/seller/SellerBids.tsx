@@ -82,7 +82,7 @@ export const SellerBids = () => {
                             <FaGavel className="mx-auto h-12 w-12 text-gray-400" />
                             <h3 className="mt-2 text-lg font-medium text-gray-900">No Bids Yet</h3>
                             <p className="mt-1 text-gray-500">
-                                You haven't received any bids on your products yet.
+                                You haven&apos;t received any bids on your products yet.
                             </p>
                         </div>
                     ) : (

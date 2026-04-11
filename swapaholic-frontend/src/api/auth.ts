@@ -2,22 +2,45 @@ import apiClient from '../lib/apiClient';
 import { ApiResponse } from '../types/api';
 import { User } from '../types/api';
 
+type RegisterPayload = {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+    phone?: string;
+    role?: User['role'];
+};
+
+type RegisterSuccessResponse = { user: User; accessToken: string };
+type RegisterVerificationResponse = { requireVerification: boolean; message: string; email: string };
+type LoginSuccessResponse = { accessToken: string; user: User };
+type LoginRequiresTwoFactorResponse = { require2FA: boolean; message: string };
+type LogisticsRegistrationResponse = { message: string };
+type VerifyOtpResponse = { message: string; accessToken?: string; user?: User; resetToken?: string };
+
 export const authApi = {
     // Register a new user
-    async register(data: any): Promise<{ user: User; accessToken: string } | { requireVerification: boolean; message: string; email: string }> {
-        const response = await apiClient.post<any>('/auth/register', data);
+    async register(data: RegisterPayload): Promise<RegisterSuccessResponse | RegisterVerificationResponse> {
+        const response = await apiClient.post<ApiResponse<RegisterSuccessResponse> & Partial<RegisterVerificationResponse>>('/auth/register', data);
         // Backend returns { success, requireVerification, message, email } (no data wrapper) when OTP is needed
         if (response.data.requireVerification) {
-            return response.data;
+            return {
+                requireVerification: true,
+                message: response.data.message ?? 'Verification required.',
+                email: response.data.email ?? data.email,
+            };
         }
         return response.data.data;
     },
 
     // Login and receive JWT tokens (access token stored in cookie, refresh token HttpOnly)
-    async login(data: { email: string; password: string }): Promise<{ accessToken: string; user: User } | { require2FA: boolean; message: string }> {
-        const response = await apiClient.post<any>('/auth/login', data);
+    async login(data: { email: string; password: string }): Promise<LoginSuccessResponse | LoginRequiresTwoFactorResponse> {
+        const response = await apiClient.post<ApiResponse<LoginSuccessResponse> & Partial<LoginRequiresTwoFactorResponse>>('/auth/login', data);
         if (response.data.require2FA) {
-            return response.data;
+            return {
+                require2FA: true,
+                message: response.data.message ?? 'Two-factor authentication required.',
+            };
         }
         return response.data.data;
     },
@@ -35,8 +58,8 @@ export const authApi = {
     },
 
     // Logistics Officer Registration
-    async logisticsRegister(data: { firstName: string; lastName: string; email: string; password: string; phone: string; address?: string }): Promise<{ message: string }> {
-        const response = await apiClient.post<any>('/logistics/register', data);
+    async logisticsRegister(data: { firstName: string; lastName: string; email: string; password: string; phone: string; address?: string }): Promise<LogisticsRegistrationResponse> {
+        const response = await apiClient.post<LogisticsRegistrationResponse>('/logistics/register', data);
         return response.data;
     },
 
@@ -101,15 +124,20 @@ export const authApi = {
     },
 
     // Verify OTP (Generic)
-    async verifyOTP(data: { email: string; otp: string; purpose: 'PHONE_VERIFY' | 'LOGIN_2FA' | 'PASSWORD_RESET' }): Promise<{ message: string; accessToken?: string; user?: User; resetToken?: string }> {
-        const response = await apiClient.post<any>('/auth/verify-otp', data);
+    async verifyOTP(data: { email: string; otp: string; purpose: 'PHONE_VERIFY' | 'LOGIN_2FA' | 'PASSWORD_RESET' }): Promise<VerifyOtpResponse> {
+        const response = await apiClient.post<ApiResponse<VerifyOtpResponse> & Partial<VerifyOtpResponse>>('/auth/verify-otp', data);
         // Backend returns inconsistent structures:
         // LOGIN_2FA / PHONE_VERIFY: { success: true, data: { accessToken, user } }
         // PASSWORD_RESET: { success: true, message, resetToken }
         if (response.data.data) {
             return response.data.data;
         }
-        return response.data;
+        return {
+            message: response.data.message ?? 'OTP verified successfully.',
+            accessToken: response.data.accessToken,
+            user: response.data.user,
+            resetToken: response.data.resetToken,
+        };
     },
 
     // Reset Password with OTP Token

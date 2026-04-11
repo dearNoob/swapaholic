@@ -14,7 +14,7 @@ const PUBLIC_ROUTES = [
 export const useRouteGuard = () => {
     const pathname = usePathname();
     const router = useRouter();
-    const { user, isAuthenticated, isLoading } = useAppSelector((state: any) => state.auth);
+    const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth);
 
     useEffect(() => {
         // Wait for auth to initialize before redirecting anywhere

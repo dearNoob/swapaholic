@@ -1,13 +1,17 @@
 const nodemailer = require('nodemailer');
 const logger = require('./logger');
 
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
-});
+const transporter = process.env.NODE_ENV === 'test'
+    ? {
+        sendMail: async () => ({ messageId: 'test-message-id' })
+    }
+    : nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+        },
+    });
 
 const sendOTP = async (email, otp) => {
     try {
@@ -301,6 +305,77 @@ const sendPaymentConfirmationEmail = async (email, buyerName, productTitle, amou
     }
 };
 
+const sendBidPlacedEmail = async (email, sellerName, productTitle, bidAmount, bidderName) => {
+    try {
+        const mailOptions = {
+            from: `"Swapaholic Auctions" <${process.env.SMTP_USER}>`,
+            to: email,
+            subject: `New bid received for "${productTitle}"`,
+            html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 20px; border-radius: 12px;">
+          <div style="background: linear-gradient(135deg, #4F46E5, #7C3AED); padding: 24px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">New Bid Received</h1>
+          </div>
+          <div style="background: white; padding: 24px; border-radius: 10px; border: 1px solid #e2e8f0;">
+            <p style="color: #374151; font-size: 16px;">Hi <strong>${sellerName}</strong>,</p>
+            <p style="color: #4b5563;">${bidderName} just placed a new bid on your listing.</p>
+            <div style="background: #eef2ff; border-left: 4px solid #4F46E5; padding: 16px; border-radius: 4px; margin: 16px 0;">
+              <p style="color: #312e81; margin: 0; font-size: 18px;"><strong>${productTitle}</strong></p>
+              <p style="color: #312e81; margin: 8px 0 0 0; font-size: 20px;">Bid Amount: <strong>BDT ${bidAmount}</strong></p>
+            </div>
+            <p style="color: #4b5563;">You can review the latest activity from your seller dashboard.</p>
+          </div>
+        </div>
+      `,
+        };
+
+        await transporter.sendMail(mailOptions);
+        logger.info(`Bid placed email sent to ${email}`);
+        return true;
+    } catch (error) {
+        logger.error('Error sending bid placed email:', error);
+        return false;
+    }
+};
+
+const sendOrderShippedEmail = async (email, buyerName, productTitle, orderId) => {
+    try {
+        const orderUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/orders/${orderId}`;
+        const mailOptions = {
+            from: `"Swapaholic Orders" <${process.env.SMTP_USER}>`,
+            to: email,
+            subject: `Your order for "${productTitle}" is on the way`,
+            html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 20px; border-radius: 12px;">
+          <div style="background: linear-gradient(135deg, #0f766e, #0891b2); padding: 24px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">Order Shipped</h1>
+          </div>
+          <div style="background: white; padding: 24px; border-radius: 10px; border: 1px solid #e2e8f0;">
+            <p style="color: #374151; font-size: 16px;">Hi <strong>${buyerName}</strong>,</p>
+            <p style="color: #4b5563;">Your seller has marked the following order as shipped:</p>
+            <div style="background: #ecfeff; border-left: 4px solid #0891b2; padding: 16px; border-radius: 4px; margin: 16px 0;">
+              <p style="color: #155e75; margin: 0; font-size: 18px;"><strong>${productTitle}</strong></p>
+              <p style="color: #155e75; margin: 8px 0 0 0;">Order ID: <strong>${orderId}</strong></p>
+            </div>
+            <div style="text-align: center; margin: 24px 0 8px 0;">
+              <a href="${orderUrl}" style="background: linear-gradient(135deg, #0f766e, #0891b2); color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
+                View Order
+              </a>
+            </div>
+          </div>
+        </div>
+      `,
+        };
+
+        await transporter.sendMail(mailOptions);
+        logger.info(`Order shipped email sent to ${email}`);
+        return true;
+    } catch (error) {
+        logger.error('Error sending order shipped email:', error);
+        return false;
+    }
+};
+
 module.exports = {
     sendOTP,
     sendLogisticsApprovalEmail,
@@ -310,4 +385,6 @@ module.exports = {
     sendConfirmationExpiredEmail,
     sendPayoutReceiptEmail,
     sendPaymentConfirmationEmail,
+    sendBidPlacedEmail,
+    sendOrderShippedEmail,
 };

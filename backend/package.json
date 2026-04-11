@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest --detectOpenHandles"
+    "test": "jest --config jest.config.js --runInBand --detectOpenHandles",
+    "smoke:dashboards": "node src/scripts/live-dashboard-smoke.js"
   },
   "keywords": [
     "swapaholic",
@@ -47,7 +48,11 @@
   },
   "devDependencies": {
     "jest": "^29.7.0",
+    "mongodb-memory-server": "^11.0.1",
     "nodemon": "^3.0.2",
     "supertest": "^6.3.3"
+  },
+  "overrides": {
+    "baseline-browser-mapping": "^2.10.17"
   }
 }

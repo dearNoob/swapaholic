@@ -3,12 +3,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import Link from 'next/link';
 import { FaUserCircle, FaEnvelope, FaMapMarkerAlt, FaCalendarAlt, FaCheckCircle, FaStar } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { usersApi } from '../../../api/users';
 import { productsApi, Product } from '../../../api/products';
-import { User, PaginatedResponse } from '../../../types/api';
+import { User } from '../../../types/api';
 import ProductCard from '../../../components/ProductCard';
 import { ReviewList } from '../../../components/reviews/ReviewList';
 import { messagesApi } from '../../../api/messages';
@@ -34,7 +33,7 @@ export default function PublicProfilePage() {
             ]);
             
             setUserProfile(profileData);
-            setUserProducts((productsResponse as any).products || (productsResponse as any).data || productsResponse || []);
+            setUserProducts(productsResponse.data || []);
         } catch (err: unknown) {
             console.error(err);
             setError('Failed to load user profile or this user does not exist.');
@@ -62,7 +61,7 @@ export default function PublicProfilePage() {
 
         try {
             const response = await messagesApi.startConversation(userId);
-            const conversationId = response?.data?.conversationId || response?.conversationId || response?._id;
+            const conversationId = response.conversationId;
             if (conversationId) {
                 router.push(`/messages?conversationId=${conversationId}`);
             } else {
@@ -179,7 +178,7 @@ export default function PublicProfilePage() {
                             {userProducts.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {userProducts.map((product) => (
-                                        <ProductCard key={product.id || (product as any)._id} product={product} />
+                                        <ProductCard key={product.id} product={product} />
                                     ))}
                                 </div>
                             ) : (

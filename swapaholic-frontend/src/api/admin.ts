@@ -1,5 +1,7 @@
 import api from './axios';
 
+type AdminContentPayload = Record<string, unknown>;
+
 export const adminApi = {
     // Dashboard
     getDashboardStats: async () => {
@@ -84,7 +86,7 @@ export const adminApi = {
         return response.data;
     },
 
-    updateContent: async (type: string, content: any) => {
+    updateContent: async (type: string, content: AdminContentPayload) => {
         const response = await api.put(`/admin/content/${type}`, content);
         return response.data;
     },

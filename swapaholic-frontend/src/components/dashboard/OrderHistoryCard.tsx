@@ -27,6 +27,7 @@ import { FileDisputeModal } from '../orders/FileDisputeModal';
 import { ordersApi } from '../../api/orders';
 import { toast } from 'react-toastify';
 import { FaFlag } from 'react-icons/fa';
+import { handleApiError } from '../../utils/errorHandler';
 
 export default function OrderHistoryCard({ orders, currentPage, totalPages, onPageChange }: OrderHistoryCardProps) {
     const [searchQuery, setSearchQuery] = useState('');
@@ -49,9 +50,9 @@ export default function OrderHistoryCard({ orders, currentPage, totalPages, onPa
             toast.success('Dispute filed successfully. Support will contact you.');
             // Ideally refresh orders here, but we'd need a prop callback for that. 
             // For now, toast is sufficient feedback.
-        } catch (error: any) {
+        } catch (error) {
             console.error('Failed to file dispute:', error);
-            toast.error(error.response?.data?.message || 'Failed to file dispute');
+            toast.error(handleApiError(error) || 'Failed to file dispute');
         }
     };
 
@@ -88,7 +89,7 @@ export default function OrderHistoryCard({ orders, currentPage, totalPages, onPa
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">No Orders Yet</h2>
                 <p className="text-gray-500 mb-8 max-w-md mx-auto">
-                    You haven't placed any orders yet. Win auctions to start shopping!
+                    You haven&apos;t placed any orders yet. Win auctions to start shopping!
                 </p>
             </div>
         );

@@ -47,22 +47,22 @@ router.get('/:id', productController.getProductById);
 // @route   POST /api/products/analyze
 // @desc    Analyze product image and generate description/score (Seller)
 // @access  Private - Seller only
-router.post('/analyze', authMiddleware, roleCheck(['seller', 'user', 'buyer']), upload.array('images'), productController.analyzeProduct);
+router.post('/analyze', authMiddleware, roleCheck(['seller', 'user']), upload.array('images'), productController.analyzeProduct);
 
 // @route   POST /api/products/regenerate-description
 // @desc    Regenerate description (Seller)
-router.post('/regenerate-description', authMiddleware, roleCheck(['seller', 'user', 'buyer']), upload.array('images'), productController.regenerateDescription);
+router.post('/regenerate-description', authMiddleware, roleCheck(['seller', 'user']), upload.array('images'), productController.regenerateDescription);
 
 
 // @route   POST /api/products
 // @desc    Create new product (Seller)
 // @access  Private - Seller only
-router.post('/', authMiddleware, roleCheck(['seller', 'user', 'buyer']), upload.array('images'), productController.createProduct);
+router.post('/', authMiddleware, roleCheck(['seller', 'user']), upload.array('images'), productController.createProduct);
 
 // @route   PUT /api/products/:id
 // @desc    Update product
 // @access  Private - Seller only
-router.put('/:id', authMiddleware, roleCheck(['seller', 'user', 'buyer']), upload.array('images'), productController.updateProduct);
+router.put('/:id', authMiddleware, roleCheck(['seller', 'user']), upload.array('images'), productController.updateProduct);
 
 // @route   DELETE /api/products/:id
 // @desc    Delete product

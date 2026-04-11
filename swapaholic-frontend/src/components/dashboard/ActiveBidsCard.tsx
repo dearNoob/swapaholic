@@ -21,26 +21,30 @@ interface ActiveBidsCardProps {
 }
 
 export default function ActiveBidsCard({ bids }: ActiveBidsCardProps) {
-    const [timeRemainingMap, setTimeRemainingMap] = useState<Record<string, string>>({});
+    const [bidStatusMap, setBidStatusMap] = useState<Record<string, { timeRemaining: string; isEndingSoon: boolean }>>({});
 
     useEffect(() => {
         const updateTimers = () => {
-            const newMap: Record<string, string> = {};
+            const newMap: Record<string, { timeRemaining: string; isEndingSoon: boolean }> = {};
             bids.forEach((bid) => {
                 const now = new Date().getTime();
                 const end = new Date(bid.endTime).getTime();
                 const distance = end - now;
+                const isEndingSoon = distance > 0 && distance < 3600000;
 
                 if (distance < 0) {
-                    newMap[bid.id] = 'Ended';
+                    newMap[bid.id] = { timeRemaining: 'Ended', isEndingSoon: false };
                 } else {
                     const hours = Math.floor(distance / (1000 * 60 * 60));
                     const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                     const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-                    newMap[bid.id] = `${hours}h ${minutes}m ${seconds}s`;
+                    newMap[bid.id] = {
+                        timeRemaining: `${hours}h ${minutes}m ${seconds}s`,
+                        isEndingSoon
+                    };
                 }
             });
-            setTimeRemainingMap(newMap);
+            setBidStatusMap(newMap);
         };
 
         updateTimers();
@@ -82,7 +86,7 @@ export default function ActiveBidsCard({ bids }: ActiveBidsCardProps) {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">No Active Bids</h2>
                 <p className="text-gray-500 mb-8 max-w-md mx-auto">
-                    You haven't placed any bids yet. Explore our marketplace to find unique items and start bidding!
+                    You haven&apos;t placed any bids yet. Explore our marketplace to find unique items and start bidding!
                 </p>
                 <Link
                     href="/products"
@@ -115,7 +119,8 @@ export default function ActiveBidsCard({ bids }: ActiveBidsCardProps) {
                 {bids.map((bid) => {
                     const statusBadge = getStatusBadge(bid.status);
                     const StatusIcon = statusBadge.icon;
-                    const isEndingSoon = bid.endTime && new Date(bid.endTime).getTime() - Date.now() < 3600000; // < 1 hour
+                    const bidStatus = bidStatusMap[bid.id];
+                    const isEndingSoon = bidStatus?.isEndingSoon ?? false;
 
                     return (
                         <div key={bid.id} className="p-6 hover:bg-gray-50 transition-colors group">
@@ -165,7 +170,7 @@ export default function ActiveBidsCard({ bids }: ActiveBidsCardProps) {
                                     <div className="flex items-center justify-between mt-4">
                                         <div className={`flex items-center gap-2 text-sm font-medium ${isEndingSoon ? 'text-red-600 animate-pulse' : 'text-gray-500'}`}>
                                             <FaClock />
-                                            <span>{timeRemainingMap[bid.id] || 'Calculating...'}</span>
+                                            <span>{bidStatus?.timeRemaining || 'Calculating...'}</span>
                                         </div>
 
                                         {bid.status === 'outbid' ? (

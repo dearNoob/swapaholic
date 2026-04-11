@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
-    FaCheckCircle, FaBan, FaUndo, FaSearch, FaEye, FaShoppingCart,
+    FaCheckCircle, FaBan, FaUndo, FaSearch, FaShoppingCart,
     FaStore, FaTimes, FaUsers, FaPause, FaChevronLeft, FaChevronRight,
-    FaFilter, FaUserShield, FaSyncAlt, FaCalendarAlt, FaPhone,
-    FaEnvelope, FaStar, FaArrowLeft
+    FaUserShield, FaSyncAlt, FaCalendarAlt, FaPhone,
+    FaEnvelope, FaArrowLeft
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { adminApi } from '../../../api/admin';
@@ -34,11 +34,11 @@ interface User {
 interface DashboardData {
     viewAs: 'buyer' | 'seller';
     user: { id: string; name: string; email: string; role: string };
-    stats: Record<string, any>;
-    recentBids?: any[];
-    recentOrders?: any[];
-    wonAuctions?: any[];
-    recentListings?: any[];
+    stats: Record<string, string | number>;
+    recentBids?: DashboardBid[];
+    recentOrders?: DashboardOrder[];
+    wonAuctions?: DashboardWonAuction[];
+    recentListings?: DashboardListing[];
 }
 
 interface Pagination {
@@ -46,6 +46,41 @@ interface Pagination {
     limit: number;
     total: number;
     pages: number;
+}
+
+interface DashboardBid {
+    id: string;
+    productTitle: string;
+    bidAmount: number;
+    status: string;
+}
+
+interface DashboardOrder {
+    id: string;
+    productTitle: string;
+    sellerName?: string;
+    buyerName?: string;
+    amount: number;
+    status: string;
+}
+
+interface DashboardWonAuction {
+    id: string;
+    productTitle: string;
+    finalPrice: number;
+    wonAt?: string;
+}
+
+interface DashboardListing {
+    id: string;
+    title: string;
+    basePrice: number;
+    currentBid: number;
+    status: string;
+}
+
+interface DashboardModalResponse {
+    data?: DashboardData;
 }
 
 export default function UserManagementPage() {
@@ -70,7 +105,10 @@ export default function UserManagementPage() {
     const fetchUsers = useCallback(async (page = 1) => {
         try {
             setIsDataLoading(true);
-            const params: any = { page, limit: pagination.limit };
+            const params: { page: number; limit: number; role?: string; status?: string; search?: string } = {
+                page,
+                limit: pagination.limit,
+            };
             if (roleFilter !== 'all') params.role = roleFilter;
             if (statusFilter !== 'all') params.status = statusFilter;
             if (searchTerm) params.search = searchTerm;
@@ -91,7 +129,7 @@ export default function UserManagementPage() {
         if (isAdmin) {
             fetchUsers(1);
         }
-    }, [isAdmin, roleFilter, statusFilter, searchTerm]);
+    }, [isAdmin, fetchUsers]);
 
     // Debounced search
     useEffect(() => {
@@ -106,7 +144,7 @@ export default function UserManagementPage() {
             await adminApi.verifyUser(userId);
             toast.success('User verified successfully');
             fetchUsers(pagination.page);
-        } catch (err) {
+        } catch {
             toast.error('Failed to verify user');
         }
     };
@@ -118,7 +156,7 @@ export default function UserManagementPage() {
                 await adminApi.banUser(userId, reason);
                 toast.success('User banned successfully');
                 fetchUsers(pagination.page);
-            } catch (err) {
+            } catch {
                 toast.error('Failed to ban user');
             }
         }
@@ -131,7 +169,7 @@ export default function UserManagementPage() {
                 await adminApi.suspendUser(userId, reason);
                 toast.success('User suspended successfully');
                 fetchUsers(pagination.page);
-            } catch (err) {
+            } catch {
                 toast.error('Failed to suspend user');
             }
         }
@@ -142,7 +180,7 @@ export default function UserManagementPage() {
             await adminApi.unbanUser(userId);
             toast.success('User reactivated successfully');
             fetchUsers(pagination.page);
-        } catch (err) {
+        } catch {
             toast.error('Failed to reactivate user');
         }
     };
@@ -152,7 +190,7 @@ export default function UserManagementPage() {
             await adminApi.unsuspendUser(userId);
             toast.success('User unsuspended successfully');
             fetchUsers(pagination.page);
-        } catch (err) {
+        } catch {
             toast.error('Failed to unsuspend user');
         }
     };
@@ -161,8 +199,9 @@ export default function UserManagementPage() {
         try {
             setDashboardLoading(true);
             setShowDashboard(true);
-            const response = await adminApi.getUserDashboard(userId, viewAs);
-            setDashboardData(response.data);
+            const response = await adminApi.getUserDashboard(userId, viewAs) as DashboardData | DashboardModalResponse;
+            const dashboard = (response as DashboardModalResponse).data ?? (response as DashboardData);
+            setDashboardData(dashboard);
         } catch (err) {
             console.error('Error fetching dashboard:', err);
             toast.error('Failed to load user dashboard');
@@ -593,7 +632,7 @@ export default function UserManagementPage() {
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-100">
-                                                            {dashboardData.recentBids.slice(0, 5).map((bid: any) => (
+                                                            {dashboardData.recentBids.slice(0, 5).map((bid) => (
                                                                 <tr key={bid.id} className="hover:bg-white/50">
                                                                     <td className="px-4 py-2.5 text-gray-900">{bid.productTitle}</td>
                                                                     <td className="px-4 py-2.5 font-semibold">৳{bid.bidAmount}</td>
@@ -625,7 +664,7 @@ export default function UserManagementPage() {
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-100">
-                                                            {dashboardData.recentListings.slice(0, 5).map((product: any) => (
+                                                            {dashboardData.recentListings.slice(0, 5).map((product) => (
                                                                 <tr key={product.id} className="hover:bg-white/50">
                                                                     <td className="px-4 py-2.5 text-gray-900">{product.title}</td>
                                                                     <td className="px-4 py-2.5">৳{product.basePrice}</td>
@@ -658,7 +697,7 @@ export default function UserManagementPage() {
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-100">
-                                                            {dashboardData.recentOrders.slice(0, 5).map((order: any) => (
+                                                            {dashboardData.recentOrders.slice(0, 5).map((order) => (
                                                                 <tr key={order.id} className="hover:bg-white/50">
                                                                     <td className="px-4 py-2.5 text-gray-900">{order.productTitle}</td>
                                                                     <td className="px-4 py-2.5">{order.sellerName || order.buyerName}</td>

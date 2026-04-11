@@ -5,6 +5,12 @@ import { FaShieldAlt, FaMobileAlt, FaKey, FaQrcode, FaCheck, FaTimes, FaCopy } f
 import { toast } from 'react-toastify';
 import { authApi } from '../../api/auth';
 
+type ErrorWithResponse = {
+    response?: {
+        data?: unknown;
+    };
+};
+
 export default function TwoFactorAuth() {
     const [isEnabled, setIsEnabled] = useState(false);
     const [step, setStep] = useState<'disabled' | 'setup' | 'verify' | 'enabled'>('disabled');
@@ -40,7 +46,7 @@ export default function TwoFactorAuth() {
         } catch (error) {
             console.error('2FA Verification Error:', error);
             if (error && typeof error === 'object' && 'response' in error) {
-                console.error('Server Response:', (error as any).response?.data);
+                console.error('Server Response:', (error as ErrorWithResponse).response?.data);
             }
             toast.error('Invalid verification code');
         }
@@ -282,7 +288,7 @@ export default function TwoFactorAuth() {
                             onClick={handleComplete}
                             className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
                         >
-                            I've Saved My Codes
+                            I&apos;ve Saved My Codes
                         </button>
                     </div>
                 </div>

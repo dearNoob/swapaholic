@@ -2,11 +2,25 @@ const express = require('express');
 const router = express.Router();
 const { authMiddleware, optionalAuth } = require('../middleware/auth');
 const userController = require('../controllers/userController');
+const buyerDashboardController = require('../controllers/buyerDashboardController');
 
 // @route   GET /api/users/profile
 // @desc    Get current user profile
 // @access  Private
 router.get('/profile', authMiddleware, userController.getCurrentUserProfile);
+
+// @route   PUT /api/users/profile
+// @desc    Update current user profile
+// @access  Private
+router.put('/profile', authMiddleware, (req, res, next) => {
+  req.params.id = req.user.id;
+  next();
+}, userController.updateUserProfile);
+
+// @route   GET /api/users/dashboard/buyer
+// @desc    Get buyer dashboard summary
+// @access  Private
+router.get('/dashboard/buyer', authMiddleware, buyerDashboardController.getBuyerDashboard);
 
 // @route   GET /api/users/:id
 // @desc    Get user profile by ID

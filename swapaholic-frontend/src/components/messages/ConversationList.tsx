@@ -1,29 +1,13 @@
 'use client';
 
 import Image from 'next/image';
-import { FaClock, FaCircle, FaBox } from 'react-icons/fa';
-
-interface Conversation {
-    id: string;
-    otherUser: {
-        id: string;
-        name: string;
-        avatar: string;
-    } | null;
-    lastMessage: {
-        content: string;
-        sender: string;
-        createdAt: string;
-    } | null;
-    unreadCount: number;
-    orderId?: string;
-    updatedAt: string;
-}
+import { FaClock, FaBox } from 'react-icons/fa';
+import { ChatConversation, ConversationSummary } from '../../types/messages';
 
 interface ConversationListProps {
-    conversations: Conversation[];
-    selectedConversation: Conversation | null;
-    onSelectConversation: (conversation: Conversation) => void;
+    conversations: ConversationSummary[];
+    selectedConversation: ChatConversation | null;
+    onSelectConversation: (conversation: ConversationSummary) => void;
     isLoading: boolean;
 }
 
@@ -33,16 +17,17 @@ export default function ConversationList({
     onSelectConversation,
     isLoading,
 }: ConversationListProps) {
-    const getTimeAgo = (timestamp: string) => {
-        const diff = Date.now() - new Date(timestamp).getTime();
-        const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(minutes / 60);
-        const days = Math.floor(hours / 24);
+    const getTimestampLabel = (timestamp: string) => {
+        const date = new Date(timestamp);
 
-        if (days > 0) return `${days}d`;
-        if (hours > 0) return `${hours}h`;
-        if (minutes > 0) return `${minutes}m`;
-        return 'now';
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric'
+        });
     };
 
     if (isLoading) {
@@ -101,7 +86,7 @@ export default function ConversationList({
                                 </p>
                                 <div className="flex items-center gap-1 text-xs text-gray-500">
                                     <FaClock className="text-xs" />
-                                    {getTimeAgo(conversation.lastMessage?.createdAt || conversation.updatedAt)}
+                                    {getTimestampLabel(conversation.lastMessage?.createdAt || conversation.updatedAt)}
                                 </div>
                             </div>
 

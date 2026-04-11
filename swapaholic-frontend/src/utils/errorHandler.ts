@@ -1,44 +1,66 @@
-import { ApiError } from '../types/api';
 import { toast } from 'react-toastify';
+import { ApiError } from '../types/api';
+
+type ErrorLike = Partial<ApiError> & {
+    response?: {
+        status?: number;
+        data?: {
+            message?: string;
+        };
+    };
+};
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null;
+
+const toErrorLike = (error: unknown): ErrorLike => {
+    if (!isObject(error)) {
+        return {};
+    }
+
+    return error as ErrorLike;
+};
 
 /**
  * Standard error handler for API errors
  * Extracts user-friendly error messages and displays them
  */
-export const handleApiError = (error: any): string => {
+export const handleApiError = (error: unknown): string => {
+    const normalizedError = toErrorLike(error);
+
     // Check if it's our standardized ApiError
-    if (error.message && typeof error.message === 'string') {
-        return error.message;
+    if (normalizedError.message && typeof normalizedError.message === 'string') {
+        return normalizedError.message;
     }
 
     // Check for axios error response
-    if (error.response?.data?.message) {
-        return error.response.data.message;
+    if (normalizedError.response?.data?.message) {
+        return normalizedError.response.data.message;
     }
 
     // Check for validation errors
-    if (error.errors && typeof error.errors === 'object') {
-        const errorMessages = Object.values(error.errors).flat();
+    if (normalizedError.errors && typeof normalizedError.errors === 'object') {
+        const errorMessages = Object.values(normalizedError.errors).flat();
         return errorMessages.join(', ');
     }
 
     // Generic network error
-    if (error.code === 'ECONNABORTED') {
+    if (normalizedError.code === 'ECONNABORTED') {
         return 'Request timeout. Please try again.';
     }
 
-    if (error.code === 'ERR_NETWORK') {
+    if (normalizedError.code === 'ERR_NETWORK') {
         return 'Network error. Please check your connection.';
     }
 
     // Fallback error message
-    return error.message || 'An unexpected error occurred. Please try again.';
+    return normalizedError.message || 'An unexpected error occurred. Please try again.';
 };
 
 /**
  * Show error toast with standardized formatting
  */
-export const showErrorToast = (error: any, customMessage?: string) => {
+export const showErrorToast = (error: unknown, customMessage?: string) => {
     const errorMessage = customMessage || handleApiError(error);
     toast.error(errorMessage, {
         position: 'top-right',
@@ -59,27 +81,31 @@ export const showSuccessToast = (message: string) => {
 /**
  * Check if error is 404 Not Found
  */
-export const isNotFoundError = (error: any): boolean => {
-    return error.status === 404 || error.response?.status === 404;
+export const isNotFoundError = (error: unknown): boolean => {
+    const normalizedError = toErrorLike(error);
+    return normalizedError.status === 404 || normalizedError.response?.status === 404;
 };
 
 /**
  * Check if error is 401 Unauthorized
  */
-export const isUnauthorizedError = (error: any): boolean => {
-    return error.status === 401 || error.response?.status === 401;
+export const isUnauthorizedError = (error: unknown): boolean => {
+    const normalizedError = toErrorLike(error);
+    return normalizedError.status === 401 || normalizedError.response?.status === 401;
 };
 
 /**
  * Check if error is 403 Forbidden
  */
-export const isForbiddenError = (error: any): boolean => {
-    return error.status === 403 || error.response?.status === 403;
+export const isForbiddenError = (error: unknown): boolean => {
+    const normalizedError = toErrorLike(error);
+    return normalizedError.status === 403 || normalizedError.response?.status === 403;
 };
 
 /**
  * Check if error is validation error (422)
  */
-export const isValidationError = (error: any): boolean => {
-    return error.status === 422 || error.response?.status === 422;
+export const isValidationError = (error: unknown): boolean => {
+    const normalizedError = toErrorLike(error);
+    return normalizedError.status === 422 || normalizedError.response?.status === 422;
 };

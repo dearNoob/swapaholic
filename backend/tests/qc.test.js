@@ -1,6 +1,7 @@
 const request = require('supertest');
-const app = require('../src/index');
+const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const app = require('../src/index');
 const User = require('../src/models/User');
 const Product = require('../src/models/Product');
 const Bid = require('../src/models/Bid');
@@ -11,260 +12,285 @@ const { connectDB, disconnectDB } = require('../src/config/mongodb');
 
 jest.setTimeout(30000);
 
+const uniqueSuffix = () => `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+
+const getId = (value) => {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (value.id) return value.id.toString();
+  if (value._id) return value._id.toString();
+  return value.toString();
+};
+
 describe('QC Verification System', () => {
-  let sellerToken, buyerToken, adminToken, seller, buyer, admin, product, bid, order, qc;
+  let sellerToken;
+  let buyerToken;
+  let adminToken;
+  let seller;
+  let buyer;
+  let mainFlow;
+  let mainQcId;
+  const createdUserIds = [];
 
-  beforeAll(async () => {
-    await connectDB();
-
-    // Create seller
-    const sellerRes = await request(app)
+  const registerUser = async ({ role, label }) => {
+    const suffix = uniqueSuffix();
+    const response = await request(app)
       .post('/api/auth/register')
       .send({
-        firstName: 'QC',
-        lastName: 'Seller',
-        phone: `+1555${Math.random().toString().slice(2, 8)}`,
-        email: `seller_qc_${Math.random()}@test.com`,
+        firstName: label,
+        lastName: 'Tester',
+        phone: `+1555${suffix.slice(-7)}`,
+        email: `${label.toLowerCase()}_${suffix}@test.com`,
         password: 'Test1234',
-        role: 'user'
-      });
-    sellerToken = sellerRes.body.token;
-    seller = sellerRes.body.user;
+        role
+      })
+      .expect(201);
 
-    // Create buyer
-    const buyerRes = await request(app)
-      .post('/api/auth/register')
-      .send({
-        firstName: 'QC',
-        lastName: 'Buyer',
-        phone: `+1555${Math.random().toString().slice(2, 8)}`,
-        email: `buyer_qc_${Math.random()}@test.com`,
-        password: 'Test1234',
-        role: 'user'
-      });
-    buyerToken = buyerRes.body.token;
-    buyer = buyerRes.body.user;
+    const user = response.body.data.user;
+    const normalizedUser = {
+      ...user,
+      id: getId(user)
+    };
 
-    // Create admin
-    const adminRes = await request(app)
-      .post('/api/auth/register')
-      .send({
-        firstName: 'QC',
-        lastName: 'Admin',
-        phone: `+1555${Math.random().toString().slice(2, 8)}`,
-        email: `admin_qc_${Math.random()}@test.com`,
-        password: 'Test1234',
-        role: 'admin'
-      });
-    adminToken = adminRes.body.token;
-    admin = adminRes.body.user;
+    createdUserIds.push(normalizedUser.id);
 
-    // Create product
-    const productRes = await request(app)
+    return {
+      token: response.body.data.accessToken,
+      user: normalizedUser
+    };
+  };
+
+  const createAdminToken = () => jwt.sign(
+    {
+      id: new mongoose.Types.ObjectId().toString(),
+      role: 'admin',
+      email: `qc_admin_${uniqueSuffix()}@test.com`
+    },
+    process.env.JWT_SECRET
+  );
+
+  const createAuctionOrder = async ({
+    titlePrefix = 'QC Test Product',
+    description = 'Product for QC verification testing',
+    basePrice = 500,
+    bidAmount = 550
+  } = {}) => {
+    const productResponse = await request(app)
       .post('/api/products')
       .set('Authorization', `Bearer ${sellerToken}`)
       .send({
-        title: 'QC Test Product',
-        description: 'Product for QC verification testing',
+        title: `${titlePrefix} ${uniqueSuffix()}`,
+        description,
         category: 'electronics',
-        basePrice: 500,
+        basePrice,
         condition: 'brand_new'
-      });
-    product = productRes.body;
+      })
+      .expect(201);
 
-    // Create bid
-    const bidRes = await request(app)
+    const product = productResponse.body;
+
+    const bidResponse = await request(app)
       .post('/api/bids')
       .set('Authorization', `Bearer ${buyerToken}`)
       .send({
         productId: product._id,
-        bidAmount: 550
-      });
-    bid = bidRes.body;
+        bidAmount
+      })
+      .expect(201);
 
-    // Accept bid to create order
-    const acceptRes = await request(app)
-      .post(`/api/bids/${bid._id}/accept`)
-      .set('Authorization', `Bearer ${sellerToken}`);
+    const bidId = bidResponse.body.data.id;
 
-    order = acceptRes.body.order || acceptRes.body;
+    await request(app)
+      .post(`/api/bids/${bidId}/accept`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .expect(200);
 
-    // Create payment record
+    const confirmResponse = await request(app)
+      .post(`/api/bids/${bidId}/confirm-win`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(200);
+
+    return {
+      productId: product._id.toString(),
+      bidId,
+      orderId: confirmResponse.body.data.order.id,
+      finalPrice: confirmResponse.body.data.order.finalPrice
+    };
+  };
+
+  const createOrderWithPayment = async ({
+    titlePrefix = 'QC Flow Product',
+    basePrice = 500,
+    bidAmount = 550
+  } = {}) => {
+    const flow = await createAuctionOrder({ titlePrefix, basePrice, bidAmount });
+
     await Payment.create({
-      orderId: order._id,
-      buyerId: buyer.id || buyer._id,
-      sellerId: seller.id || seller._id,
-      amount: order.finalPrice || 550,
+      orderId: flow.orderId,
+      buyerId: buyer.id,
+      sellerId: seller.id,
+      amount: flow.finalPrice,
       status: 'escrowed',
       paymentMethod: 'card',
-      transactionId: `txn_${Math.random().toString().slice(2, 10)}`
+      transactionId: `txn_${uniqueSuffix()}`
     });
+
+    return flow;
+  };
+
+  const initiateQcForFlow = (flow, payload = {}, token = sellerToken) => (
+    request(app)
+      .post('/api/qc/initiate')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        orderId: flow.orderId,
+        inspectionNotes: 'Product in excellent condition, all components functional.',
+        ...payload
+      })
+  );
+
+  beforeAll(async () => {
+    await connectDB();
+
+    const sellerAccount = await registerUser({ role: 'seller', label: 'QCSeller' });
+    sellerToken = sellerAccount.token;
+    seller = sellerAccount.user;
+
+    const buyerAccount = await registerUser({ role: 'buyer', label: 'QCBuyer' });
+    buyerToken = buyerAccount.token;
+    buyer = buyerAccount.user;
+
+    adminToken = createAdminToken();
+
+    mainFlow = await createOrderWithPayment({ titlePrefix: 'QC Main Product' });
   });
 
   afterAll(async () => {
-    await User.deleteMany({ email: /qc_/ }).catch(() => {});
-    await Product.deleteMany({ title: /QC Test/ }).catch(() => {});
-    await Bid.deleteMany({ productId: product._id }).catch(() => {});
-    await Order.deleteOne({ _id: order._id }).catch(() => {});
-    await Payment.deleteOne({ orderId: order._id }).catch(() => {});
-    await QCVerification.deleteMany({ orderId: order._id }).catch(() => {});
+    await QCVerification.deleteMany({}).catch(() => {});
+    await Payment.deleteMany({}).catch(() => {});
+    await Order.deleteMany({}).catch(() => {});
+    await Bid.deleteMany({}).catch(() => {});
+    await Product.deleteMany({}).catch(() => {});
+    await User.deleteMany({ _id: { $in: createdUserIds.filter(Boolean) } }).catch(() => {});
     await disconnectDB();
   });
 
   describe('QC Initiation', () => {
-    test('POST /api/qc/initiate -> Seller can initiate QC', async () => {
-      const res = await request(app)
+    test('POST /api/qc/initiate -> seller can initiate QC', async () => {
+      const response = await initiateQcForFlow(mainFlow, {
+        images: ['image_url_1.jpg', 'image_url_2.jpg']
+      }).expect(201);
+
+      expect(response.body).toHaveProperty('_id');
+      expect(response.body.status).toBe('pending');
+      expect(response.body.inspectionNotes).toContain('excellent');
+      expect(response.body.images).toHaveLength(2);
+      expect(response.body.images[0].url).toBe('image_url_1.jpg');
+
+      mainQcId = response.body._id.toString();
+    });
+
+    test('POST /api/qc/initiate -> rejects duplicate QC initiation', async () => {
+      const response = await initiateQcForFlow(mainFlow, {
+        inspectionNotes: 'Duplicate attempt'
+      }).expect(400);
+
+      expect(response.body.message).toContain('QC already initiated');
+    });
+
+    test('POST /api/qc/initiate -> rejects non-sellers', async () => {
+      const otherAccount = await registerUser({ role: 'buyer', label: 'QCOtherInit' });
+
+      const response = await initiateQcForFlow(mainFlow, {
+        inspectionNotes: 'Unauthorized attempt'
+      }, otherAccount.token).expect(403);
+
+      expect(response.body.message).toContain('Access denied');
+    });
+
+    test('POST /api/qc/initiate -> rejects missing order IDs', async () => {
+      const response = await request(app)
         .post('/api/qc/initiate')
         .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          orderId: order._id,
-          inspectionNotes: 'Product in excellent condition, all components functional',
-          images: ['image_url_1.jpg', 'image_url_2.jpg']
-        });
+        .send({ inspectionNotes: 'No order ID provided' })
+        .expect(400);
 
-      expect(res.status).toBe(201);
-      expect(res.body).toHaveProperty('_id');
-      expect(res.body.status).toBe('pending');
-      expect(res.body.inspectionNotes).toContain('excellent');
-      expect(res.body.images.length).toBe(2);
-
-      qc = res.body;
+      expect(response.body.message).toContain('Order ID');
     });
 
-    test('POST /api/qc/initiate -> Reject duplicate QC initiation', async () => {
-      const res = await request(app)
-        .post('/api/qc/initiate')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          orderId: order._id,
-          inspectionNotes: 'Duplicate attempt'
-        });
+    test('POST /api/qc/initiate -> rejects non-existent orders', async () => {
+      const fakeOrderId = new mongoose.Types.ObjectId().toString();
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('QC already initiated');
-    });
-
-    test('POST /api/qc/initiate -> Reject non-seller from initiating', async () => {
-      const otherRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Other',
-          lastName: 'User',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `other_qc_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const otherToken = otherRes.body.token;
-
-      const res = await request(app)
-        .post('/api/qc/initiate')
-        .set('Authorization', `Bearer ${otherToken}`)
-        .send({
-          orderId: order._id,
-          inspectionNotes: 'Unauthorized attempt'
-        });
-
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('Access denied');
-
-      await User.deleteOne({ email: new RegExp('other_qc') }).catch(() => {});
-    });
-
-    test('POST /api/qc/initiate -> Reject missing order ID', async () => {
-      const res = await request(app)
-        .post('/api/qc/initiate')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          inspectionNotes: 'No order ID provided'
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('Order ID');
-    });
-
-    test('POST /api/qc/initiate -> Reject non-existent order', async () => {
-      const fakeOrderId = new mongoose.Types.ObjectId();
-      const res = await request(app)
+      const response = await request(app)
         .post('/api/qc/initiate')
         .set('Authorization', `Bearer ${sellerToken}`)
         .send({
           orderId: fakeOrderId,
           inspectionNotes: 'Order does not exist'
-        });
+        })
+        .expect(404);
 
-      expect(res.status).toBe(404);
-      expect(res.body.message).toContain('Order not found');
+      expect(response.body.message).toContain('Order not found');
     });
   });
 
   describe('QC Status Retrieval', () => {
-    test('GET /api/qc/:orderId/status -> Seller can view QC status', async () => {
-      const res = await request(app)
-        .get(`/api/qc/${order._id}/status`)
-        .set('Authorization', `Bearer ${sellerToken}`);
+    test('GET /api/qc/:orderId/status -> seller can view QC status', async () => {
+      const response = await request(app)
+        .get(`/api/qc/${mainFlow.orderId}/status`)
+        .set('Authorization', `Bearer ${sellerToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('pending');
-      expect(res.body).toHaveProperty('inspectionNotes');
+      expect(response.body.status).toBe('pending');
+      expect(response.body).toHaveProperty('inspectionNotes');
     });
 
-    test('GET /api/qc/:orderId/status -> Buyer can view QC status', async () => {
-      const res = await request(app)
-        .get(`/api/qc/${order._id}/status`)
-        .set('Authorization', `Bearer ${buyerToken}`);
+    test('GET /api/qc/:orderId/status -> buyer can view QC status', async () => {
+      const response = await request(app)
+        .get(`/api/qc/${mainFlow.orderId}/status`)
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('pending');
+      expect(response.body.status).toBe('pending');
     });
 
-    test('GET /api/qc/:orderId/status -> Admin can view QC status', async () => {
-      const res = await request(app)
-        .get(`/api/qc/${order._id}/status`)
-        .set('Authorization', `Bearer ${adminToken}`);
+    test('GET /api/qc/:orderId/status -> admin can view QC status', async () => {
+      const response = await request(app)
+        .get(`/api/qc/${mainFlow.orderId}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('sellerId');
+      expect(response.body).toHaveProperty('sellerId');
+      expect(getId(response.body.sellerId)).toBe(seller.id);
     });
 
-    test('GET /api/qc/:orderId/status -> Non-participant cannot view', async () => {
-      const otherRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Other',
-          lastName: 'User2',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `other_qc2_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const otherToken = otherRes.body.token;
+    test('GET /api/qc/:orderId/status -> non-participants cannot view QC', async () => {
+      const otherAccount = await registerUser({ role: 'buyer', label: 'QCOtherStatus' });
 
-      const res = await request(app)
-        .get(`/api/qc/${order._id}/status`)
-        .set('Authorization', `Bearer ${otherToken}`);
+      const response = await request(app)
+        .get(`/api/qc/${mainFlow.orderId}/status`)
+        .set('Authorization', `Bearer ${otherAccount.token}`)
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('Access denied');
-
-      await User.deleteOne({ email: new RegExp('other_qc2') }).catch(() => {});
+      expect(response.body.message).toContain('Access denied');
     });
 
-    test('GET /api/qc/:orderId/status -> Return 404 for non-existent QC', async () => {
-      const fakeOrderId = new mongoose.Types.ObjectId();
-      const res = await request(app)
-        .get(`/api/qc/${fakeOrderId}/status`)
-        .set('Authorization', `Bearer ${adminToken}`);
+    test('GET /api/qc/:orderId/status -> returns 404 for missing QC records', async () => {
+      const otherFlow = await createOrderWithPayment({ titlePrefix: 'QC Missing Status Product' });
 
-      expect(res.status).toBe(404);
-      expect(res.body.message).toContain('QC record not found');
+      const response = await request(app)
+        .get(`/api/qc/${otherFlow.orderId}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(404);
+
+      expect(response.body.message).toContain('QC record not found');
     });
   });
 
   describe('Admin QC Review & Approval', () => {
-    test('PUT /api/qc/:qcId/review -> Admin can move QC to in_review', async () => {
-      const res = await request(app)
-        .put(`/api/qc/${qc._id}/review`)
+    test('PUT /api/qc/:qcId/review -> admin can move QC to in_review', async () => {
+      const response = await request(app)
+        .put(`/api/qc/${mainQcId}/review`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           qualityChecklist: {
@@ -273,308 +299,214 @@ describe('QC Verification System', () => {
             packaging: { passed: true, notes: 'Original box intact' },
             documentation: { passed: true, notes: 'Manual included' }
           }
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('in_review');
-      expect(res.body).toHaveProperty('reviewedBy');
+      expect(response.body.status).toBe('in_review');
+      expect(response.body).toHaveProperty('reviewedBy');
     });
 
-    test('PUT /api/qc/:qcId/approve -> Admin can approve QC', async () => {
-      const res = await request(app)
-        .put(`/api/qc/${qc._id}/approve`)
+    test('PUT /api/qc/:qcId/approve -> admin can approve QC', async () => {
+      const response = await request(app)
+        .put(`/api/qc/${mainQcId}/approve`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           qualityValidation: 95,
           notes: 'Product meets all quality standards'
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.qc.status).toBe('approved');
-      expect(res.body.qc.qualityValidation).toBe(95);
-      expect(res.body.message).toContain('Payment release enabled');
+      expect(response.body.qc.status).toBe('approved');
+      expect(response.body.qc.qualityValidation).toBe(95);
+      expect(response.body.message).toContain('Payment release enabled');
     });
 
-    test('PUT /api/qc/:qcId/approve -> Verify order marked as qc_approved', async () => {
-      const updatedOrder = await Order.findById(order._id);
+    test('PUT /api/qc/:qcId/approve -> marks the order as qc_approved', async () => {
+      const updatedOrder = await Order.findById(mainFlow.orderId);
+
       expect(updatedOrder.qcApproved).toBe(true);
       expect(updatedOrder.qcApprovedAt).toBeDefined();
+      expect(updatedOrder.status).toBe('qc_approved');
     });
 
-    test('PUT /api/qc/:qcId/approve -> Verify payment flagged for release', async () => {
-      const payment = await Payment.findOne({ orderId: order._id });
+    test('PUT /api/qc/:qcId/approve -> flags escrowed payments for release', async () => {
+      const payment = await Payment.findOne({ orderId: mainFlow.orderId });
+
       expect(payment.escrowReleaseEligible).toBe(true);
     });
 
-    test('PUT /api/qc/:qcId/approve -> Non-admin cannot approve', async () => {
-      // Create a new order for rejection test
-      const product2Res = await request(app)
-        .post('/api/products')
+    test('PUT /api/qc/:qcId/approve -> non-admins cannot approve QC', async () => {
+      const flow = await createOrderWithPayment({ titlePrefix: 'QC Non Admin Approve Product' });
+      const qcResponse = await initiateQcForFlow(flow, {
+        inspectionNotes: 'Product for non-admin approval test'
+      }).expect(201);
+
+      const response = await request(app)
+        .put(`/api/qc/${qcResponse.body._id}/approve`)
         .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          title: 'QC Test Product 2',
-          description: 'For rejection test',
-          category: 'electronics',
-          basePrice: 600,
-          condition: 'brand_new'
-        });
-      const product2 = product2Res.body;
+        .send({ qualityValidation: 90 })
+        .expect(403);
 
-      const bid2Res = await request(app)
-        .post('/api/bids')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          productId: product2._id,
-          bidAmount: 650
-        });
-      const bid2 = bid2Res.body;
-
-      const acceptRes2 = await request(app)
-        .post(`/api/bids/${bid2._id}/accept`)
-        .set('Authorization', `Bearer ${sellerToken}`);
-
-      const order2 = acceptRes2.body.order || acceptRes2.body;
-
-      const qcRes = await request(app)
-        .post('/api/qc/initiate')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          orderId: order2._id,
-          inspectionNotes: 'Product for rejection test'
-        });
-      const qc2 = qcRes.body;
-
-      const res = await request(app)
-        .put(`/api/qc/${qc2._id}/approve`)
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          qualityValidation: 90
-        });
-
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('permission');
-
-      await Product.deleteOne({ _id: product2._id }).catch(() => {});
-      await Bid.deleteOne({ _id: bid2._id }).catch(() => {});
-      await Order.deleteOne({ _id: order2._id }).catch(() => {});
-      await QCVerification.deleteOne({ _id: qc2._id }).catch(() => {});
+      expect(response.body.message).toContain('permission');
     });
   });
 
   describe('Admin QC Rejection', () => {
-    test('PUT /api/qc/:qcId/reject -> Admin can reject QC', async () => {
-      // Create new test QC for rejection
-      const product3Res = await request(app)
-        .post('/api/products')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          title: 'QC Rejection Test Product',
-          description: 'For rejection workflow',
-          category: 'electronics',
-          basePrice: 700,
-          condition: 'brand_new'
-        });
-      const product3 = product3Res.body;
+    test('PUT /api/qc/:qcId/reject -> admin can reject QC', async () => {
+      const flow = await createOrderWithPayment({ titlePrefix: 'QC Rejection Product' });
+      const qcResponse = await initiateQcForFlow(flow, {
+        inspectionNotes: 'Product with issues'
+      }).expect(201);
 
-      const bid3Res = await request(app)
-        .post('/api/bids')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          productId: product3._id,
-          bidAmount: 750
-        });
-      const bid3 = bid3Res.body;
-
-      const acceptRes3 = await request(app)
-        .post(`/api/bids/${bid3._id}/accept`)
-        .set('Authorization', `Bearer ${sellerToken}`);
-
-      const order3 = acceptRes3.body.order || acceptRes3.body;
-
-      const qcRes = await request(app)
-        .post('/api/qc/initiate')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          orderId: order3._id,
-          inspectionNotes: 'Product with issues'
-        });
-      const qc3 = qcRes.body;
-
-      const res = await request(app)
-        .put(`/api/qc/${qc3._id}/reject`)
+      const response = await request(app)
+        .put(`/api/qc/${qcResponse.body._id}/reject`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           rejectionReason: 'Product has visible defects and scratches',
           notes: 'Recommend seller for refund'
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.qc.status).toBe('rejected');
-      expect(res.body.qc.rejectionReason).toContain('defects');
-      expect(res.body.message).toContain('Seller notified');
-
-      await Product.deleteOne({ _id: product3._id }).catch(() => {});
-      await Bid.deleteOne({ _id: bid3._id }).catch(() => {});
-      await Order.deleteOne({ _id: order3._id }).catch(() => {});
-      await QCVerification.deleteOne({ _id: qc3._id }).catch(() => {});
+      expect(response.body.qc.status).toBe('rejected');
+      expect(response.body.qc.rejectionReason).toContain('defects');
+      expect(response.body.message).toContain('Seller notified');
     });
 
-    test('PUT /api/qc/:qcId/reject -> Reject without reason returns error', async () => {
-      const res = await request(app)
-        .put(`/api/qc/${qc._id}/reject`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({});
+    test('PUT /api/qc/:qcId/reject -> rejecting without a reason fails', async () => {
+      const flow = await createOrderWithPayment({ titlePrefix: 'QC Missing Rejection Reason Product' });
+      const qcResponse = await initiateQcForFlow(flow, {
+        inspectionNotes: 'Needs a rejection reason test'
+      }).expect(201);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('reason required');
+      const response = await request(app)
+        .put(`/api/qc/${qcResponse.body._id}/reject`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({})
+        .expect(400);
+
+      expect(response.body.message).toContain('reason required');
     });
   });
 
   describe('Image Upload', () => {
-    test('POST /api/qc/:qcId/images -> Seller can upload images', async () => {
-      // Create new QC for image upload test
-      const product4Res = await request(app)
-        .post('/api/products')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          title: 'QC Image Upload Test',
-          description: 'For image testing',
-          category: 'electronics',
-          basePrice: 800,
-          condition: 'brand_new'
-        });
-      const product4 = product4Res.body;
+    test('POST /api/qc/:qcId/images -> seller can upload images to pending QC', async () => {
+      const flow = await createOrderWithPayment({ titlePrefix: 'QC Image Upload Product' });
+      const qcResponse = await initiateQcForFlow(flow, {
+        inspectionNotes: 'Initial QC'
+      }).expect(201);
 
-      const bid4Res = await request(app)
-        .post('/api/bids')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          productId: product4._id,
-          bidAmount: 850
-        });
-      const bid4 = bid4Res.body;
-
-      const acceptRes4 = await request(app)
-        .post(`/api/bids/${bid4._id}/accept`)
-        .set('Authorization', `Bearer ${sellerToken}`);
-
-      const order4 = acceptRes4.body.order || acceptRes4.body;
-
-      const qcRes = await request(app)
-        .post('/api/qc/initiate')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          orderId: order4._id,
-          inspectionNotes: 'Initial QC'
-        });
-      const qc4 = qcRes.body;
-
-      const res = await request(app)
-        .post(`/api/qc/${qc4._id}/images`)
+      const response = await request(app)
+        .post(`/api/qc/${qcResponse.body._id}/images`)
         .set('Authorization', `Bearer ${sellerToken}`)
         .send({
           images: ['image_3.jpg', 'image_4.jpg', 'image_5.jpg']
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.message).toContain('3 images uploaded');
-      expect(res.body.qc.images.length).toBeGreaterThanOrEqual(3);
-
-      await Product.deleteOne({ _id: product4._id }).catch(() => {});
-      await Bid.deleteOne({ _id: bid4._id }).catch(() => {});
-      await Order.deleteOne({ _id: order4._id }).catch(() => {});
-      await QCVerification.deleteOne({ _id: qc4._id }).catch(() => {});
+      expect(response.body.message).toContain('3 images uploaded');
+      expect(response.body.qc.images.length).toBeGreaterThanOrEqual(3);
     });
 
-    test('POST /api/qc/:qcId/images -> Reject empty images array', async () => {
-      const res = await request(app)
-        .post(`/api/qc/${qc._id}/images`)
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          images: []
-        });
+    test('POST /api/qc/:qcId/images -> rejects empty image arrays', async () => {
+      const flow = await createOrderWithPayment({ titlePrefix: 'QC Empty Images Product' });
+      const qcResponse = await initiateQcForFlow(flow, {
+        inspectionNotes: 'QC for empty image validation'
+      }).expect(201);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('Images array');
+      const response = await request(app)
+        .post(`/api/qc/${qcResponse.body._id}/images`)
+        .set('Authorization', `Bearer ${sellerToken}`)
+        .send({ images: [] })
+        .expect(400);
+
+      expect(response.body.message).toContain('Images array');
     });
   });
 
   describe('Admin QC List & Stats', () => {
-    test('GET /api/qc/all/list -> Admin can view all QC records', async () => {
-      const res = await request(app)
+    test('GET /api/qc/all/list -> admin can view all QC records', async () => {
+      const response = await request(app)
         .get('/api/qc/all/list?page=1&limit=10')
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('qcRecords');
-      expect(res.body).toHaveProperty('pagination');
-      expect(Array.isArray(res.body.qcRecords)).toBe(true);
+      expect(response.body).toHaveProperty('qcRecords');
+      expect(response.body).toHaveProperty('pagination');
+      expect(Array.isArray(response.body.qcRecords)).toBe(true);
+      expect(response.body.qcRecords.length).toBeGreaterThan(0);
     });
 
-    test('GET /api/qc/all/list -> Non-admin cannot view', async () => {
-      const res = await request(app)
+    test('GET /api/qc/all/list -> non-admins cannot view the QC list', async () => {
+      await request(app)
         .get('/api/qc/all/list')
-        .set('Authorization', `Bearer ${sellerToken}`);
-
-      expect(res.status).toBe(403);
+        .set('Authorization', `Bearer ${sellerToken}`)
+        .expect(403);
     });
 
-    test('GET /api/qc/stats/overview -> Admin can view QC statistics', async () => {
-      const res = await request(app)
+    test('GET /api/qc/stats/overview -> admin can view QC statistics', async () => {
+      const response = await request(app)
         .get('/api/qc/stats/overview')
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('total');
-      expect(res.body).toHaveProperty('pending');
-      expect(res.body).toHaveProperty('approved');
-      expect(res.body).toHaveProperty('rejected');
-      expect(res.body).toHaveProperty('approvalRate');
-      expect(res.body).toHaveProperty('averageQualityScore');
+      expect(response.body).toHaveProperty('total');
+      expect(response.body).toHaveProperty('pending');
+      expect(response.body).toHaveProperty('approved');
+      expect(response.body).toHaveProperty('rejected');
+      expect(response.body).toHaveProperty('approvalRate');
+      expect(response.body).toHaveProperty('averageQualityScore');
     });
 
-    test('GET /api/qc/stats/overview -> Non-admin cannot view stats', async () => {
-      const res = await request(app)
+    test('GET /api/qc/stats/overview -> non-admins cannot view stats', async () => {
+      await request(app)
         .get('/api/qc/stats/overview')
-        .set('Authorization', `Bearer ${buyerToken}`);
-
-      expect(res.status).toBe(403);
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(403);
     });
   });
 
   describe('QC Workflow Edge Cases', () => {
     test('QC blocks payment release until approved', async () => {
-      // Payment should have escrowReleaseEligible = false initially
-      const initialPayment = await Payment.findOne({ orderId: order._id });
-      expect(initialPayment).toBeDefined();
-      // After approve in earlier test, it should be true
-      const approvedPayment = await Payment.findOne({ orderId: order._id });
+      const flow = await createOrderWithPayment({ titlePrefix: 'QC Payment Block Product' });
+      const pendingPayment = await Payment.findOne({ orderId: flow.orderId });
+
+      expect(pendingPayment).toBeDefined();
+      expect(pendingPayment.escrowReleaseEligible).toBe(false);
+
+      const qcResponse = await initiateQcForFlow(flow, {
+        inspectionNotes: 'Pending QC payment gate test'
+      }).expect(201);
+
+      await request(app)
+        .put(`/api/qc/${qcResponse.body._id}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ qualityValidation: 88 })
+        .expect(200);
+
+      const approvedPayment = await Payment.findOne({ orderId: flow.orderId });
       expect(approvedPayment.escrowReleaseEligible).toBe(true);
     });
 
     test('Cannot finalize QC twice', async () => {
-      // Try to approve already approved QC
-      const res = await request(app)
-        .put(`/api/qc/${qc._id}/approve`)
+      const response = await request(app)
+        .put(`/api/qc/${mainQcId}/approve`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({
-          qualityValidation: 90
-        });
+        .send({ qualityValidation: 90 })
+        .expect(400);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('already finalized');
+      expect(response.body.message).toContain('already finalized');
     });
 
     test('Seller cannot upload images after QC approved', async () => {
-      const res = await request(app)
-        .post(`/api/qc/${qc._id}/images`)
+      const response = await request(app)
+        .post(`/api/qc/${mainQcId}/images`)
         .set('Authorization', `Bearer ${sellerToken}`)
         .send({
           images: ['late_image.jpg']
-        });
+        })
+        .expect(400);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('finalized');
+      expect(response.body.message).toContain('finalized');
     });
   });
 });

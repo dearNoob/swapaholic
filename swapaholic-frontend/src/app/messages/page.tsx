@@ -1,65 +1,52 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { FaComments, FaSearch, FaPlus } from 'react-icons/fa';
+import { FaComments, FaSearch } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { messagesApi } from '../../api/messages';
 import ConversationList from '../../components/messages/ConversationList';
 import ChatWindow from '../../components/messages/ChatWindow';
 import { socketService } from '../../utils/socket';
+import { ChatConversation, ConversationMessage, ConversationSummary } from '../../types/messages';
+
+const toChatConversation = (conversation: ConversationSummary): ChatConversation => ({
+    ...conversation,
+    recipientId: conversation.otherUser?.id || '',
+    recipientName: conversation.otherUser?.name || 'Unknown User',
+    recipientAvatar: conversation.otherUser?.avatar || '/placeholder-avatar.svg',
+    messages: []
+});
 
 export default function MessagesPage() {
+    return (
+        <Suspense
+            fallback={(
+                <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+                    <div className="text-center text-gray-500">
+                        <FaComments className="mx-auto text-5xl mb-4 text-gray-300" />
+                        <p>Loading messages...</p>
+                    </div>
+                </div>
+            )}
+        >
+            <MessagesPageContent />
+        </Suspense>
+    );
+}
+
+function MessagesPageContent() {
     const searchParams = useSearchParams();
-    const [conversations, setConversations] = useState<any[]>([]);
-    const [selectedConversation, setSelectedConversation] = useState<any>(null);
+    const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+    const [selectedConversation, setSelectedConversation] = useState<ChatConversation | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [unreadCount, setUnreadCount] = useState(0);
 
-    useEffect(() => {
-        fetchConversations();
-        fetchUnreadCount();
-        setupSocketListeners();
-
-        return () => {
-            socketService.off('new-message');
-            socketService.off('message-read');
-        };
-    }, []);
-
-    const setupSocketListeners = () => {
-        // Listen for new messages
-        socketService.on('new-message', (message: any) => {
-            // Update conversation list
-            fetchConversations();
-            // If message is for current conversation, update chat
-            if (selectedConversation && message.conversationId === selectedConversation.id) {
-                setSelectedConversation((prev: any) => ({
-                    ...prev,
-                    messages: [...(prev.messages || []), message],
-                }));
-            } else {
-                // Show notification
-                toast.info(`New message from ${message.senderName}`);
-                fetchUnreadCount();
-            }
-        });
-
-        // Listen for read receipts
-        socketService.on('message-read', (data: any) => {
-            if (selectedConversation && data.conversationId === selectedConversation.id) {
-                fetchConversations();
-            }
-            fetchUnreadCount();
-        });
-    };
-
-    const fetchConversations = async () => {
+    const fetchConversations = useCallback(async () => {
         try {
             setIsLoading(true);
-            const data = await messagesApi.getConversations();
-            const convList = data.conversations || data.data || [];
+            const convList = await messagesApi.getConversations();
             setConversations(convList);
             return convList;
         } catch (err) {
@@ -69,42 +56,87 @@ export default function MessagesPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
+
+    const fetchUnreadCount = useCallback(async () => {
+        try {
+            const count = await messagesApi.getUnreadCount();
+            setUnreadCount(count);
+        } catch (err) {
+            console.error('Error fetching unread count:', err);
+        }
+    }, []);
 
     // Auto-select conversation from URL param (e.g., from Contact Seller)
+    const handleSelectConversation = useCallback(async (conversation: ConversationSummary) => {
+        const normalizedConversation = toChatConversation(conversation);
+        setSelectedConversation(normalizedConversation);
+
+        try {
+            await messagesApi.markAsRead(conversation.id);
+            void fetchConversations();
+            void fetchUnreadCount();
+        } catch (err) {
+            console.error('Error marking as read:', err);
+        }
+    }, [fetchConversations, fetchUnreadCount]);
+
     useEffect(() => {
         const conversationId = searchParams.get('conversationId');
         if (conversationId && conversations.length > 0 && !selectedConversation) {
             const targetConv = conversations.find(
-                (c: any) => c.id === conversationId || c._id === conversationId
+                (conversation) => conversation.id === conversationId
             );
             if (targetConv) {
-                handleSelectConversation(targetConv);
+                void handleSelectConversation(targetConv);
             }
         }
-    }, [conversations, searchParams]);
+    }, [conversations, handleSelectConversation, searchParams, selectedConversation]);
 
-    const fetchUnreadCount = async () => {
-        try {
-            const data = await messagesApi.getUnreadCount();
-            setUnreadCount(data.count || 0);
-        } catch (err) {
-            console.error('Error fetching unread count:', err);
+    useEffect(() => {
+        void fetchConversations();
+        void fetchUnreadCount();
+
+        if (!socketService.isConnected()) {
+            socketService.connect();
         }
-    };
 
-    const handleSelectConversation = async (conversation: any) => {
-        setSelectedConversation(conversation);
+        const handleNewMessage = (message: ConversationMessage) => {
+            void fetchConversations();
 
-        // Mark as read
-        try {
-            await messagesApi.markAsRead(conversation.id);
-            fetchConversations();
-            fetchUnreadCount();
-        } catch (err) {
-            console.error('Error marking as read:', err);
-        }
-    };
+            if (selectedConversation?.id === message.conversationId) {
+                setSelectedConversation((prev) => {
+                    if (!prev || prev.id !== message.conversationId) {
+                        return prev;
+                    }
+
+                    return {
+                        ...prev,
+                        messages: [...(prev.messages || []), message],
+                    };
+                });
+                return;
+            }
+
+            toast.info(`New message from ${message.senderName || 'a user'}`);
+            void fetchUnreadCount();
+        };
+
+        const handleMessageRead = (data: { conversationId: string }) => {
+            if (selectedConversation?.id === data.conversationId) {
+                void fetchConversations();
+            }
+            void fetchUnreadCount();
+        };
+
+        socketService.on('new-message', handleNewMessage);
+        socketService.on('message-read', handleMessageRead);
+
+        return () => {
+            socketService.off('new-message', handleNewMessage);
+            socketService.off('message-read', handleMessageRead);
+        };
+    }, [fetchConversations, fetchUnreadCount, selectedConversation?.id]);
 
     const handleSendMessage = async (content: string, attachments?: File[]) => {
         if (!selectedConversation) return;
@@ -112,7 +144,7 @@ export default function MessagesPage() {
         try {
             await messagesApi.sendMessage(selectedConversation.id, content, attachments);
             // Socket will handle updating the UI
-        } catch (err) {
+        } catch {
             toast.error('Failed to send message');
         }
     };
@@ -121,13 +153,13 @@ export default function MessagesPage() {
         setSearchTerm(query);
         if (query.trim()) {
             try {
-                const data = await messagesApi.searchConversations(query);
-                setConversations(data.conversations || []);
+                const matchingConversations = await messagesApi.searchConversations(query);
+                setConversations(matchingConversations);
             } catch (err) {
                 console.error('Error searching:', err);
             }
         } else {
-            fetchConversations();
+            void fetchConversations();
         }
     };
 

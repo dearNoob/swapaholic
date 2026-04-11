@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const stripe = process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.includes('your_')
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -9,6 +10,74 @@ const logger = require('../utils/logger');
 // Generate unique transaction ID
 const generateTransactionId = () => {
   return `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const toId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value._id) return value._id.toString();
+  if (typeof value.toString === 'function') return value.toString();
+  return null;
+};
+
+const serializePayment = (payment, extras = {}) => {
+  const orderId = payment.orderId && payment.orderId._id ? payment.orderId._id : payment.orderId;
+
+  return {
+    id: toId(payment._id),
+    orderId: toId(orderId),
+    amount: payment.amount,
+    method: payment.paymentMethod,
+    paymentMethod: payment.paymentMethod,
+    status: payment.status,
+    transactionId: payment.transactionId,
+    createdAt: payment.createdAt,
+    updatedAt: payment.updatedAt,
+    clientSecret: extras.clientSecret,
+    gatewayUrl: extras.gatewayUrl,
+    sessionKey: extras.sessionKey,
+    releaseDate: payment.escrowReleaseDate,
+    refundDate: payment.refundDate,
+    refundReason: payment.refundReason,
+    order: payment.orderId && payment.orderId._id ? payment.orderId : undefined,
+    buyerId: payment.buyerId,
+    sellerId: payment.sellerId
+  };
+};
+
+const serializePaymentMethod = (paymentMethod) => ({
+  id: toId(paymentMethod._id),
+  type: paymentMethod.type,
+  brand: paymentMethod.details?.brand || paymentMethod.type,
+  last4: paymentMethod.details?.last4 || paymentMethod.details?.accountNumber?.slice(-4),
+  expiryMonth: paymentMethod.details?.expiryMonth,
+  expiryYear: paymentMethod.details?.expiryYear,
+  isDefault: Boolean(paymentMethod.isDefault)
+});
+
+const withPaymentRelations = (query) => query
+  .populate('orderId', 'status finalPrice')
+  .populate('buyerId', 'firstName lastName email')
+  .populate('sellerId', 'firstName lastName email');
+
+const findPaymentByIdentifier = async (identifier, includeRelations = false) => {
+  const queryBuilder = includeRelations ? withPaymentRelations : (query) => query;
+
+  if (mongoose.Types.ObjectId.isValid(identifier)) {
+    const paymentById = await queryBuilder(Payment.findById(identifier));
+    if (paymentById) {
+      return paymentById;
+    }
+  }
+
+  return queryBuilder(Payment.findOne({ orderId: identifier }));
 };
 
 const mockGatewayController = require('./mockGatewayController');
@@ -40,7 +109,7 @@ const initiatePayment = async (req, res) => {
 
     // --- MOCK GATEWAY REDIRECTION ---
     // If method is mobile banking or we want to force mock gateway
-    if (['bkash', 'rocket', 'nagad', 'card'].includes(method)) { // Including card for mock demo
+    if (['bkash', 'rocket', 'nagad', 'card'].includes(method) || (method === 'stripe' && !stripe)) { // Including card for mock demo
       // Delegate to Mock Gateway
       // We need to adapt the request object or call the function logic directly.
       // calling logic directly is cleaner to avoid request/response stubbing.
@@ -59,6 +128,9 @@ const initiatePayment = async (req, res) => {
       paymentMethod: method || 'card',
       transactionId: generateTransactionId()
     });
+
+    payment.amount = order.finalPrice;
+    payment.paymentMethod = method || payment.paymentMethod || 'card';
 
     // Only create Stripe intent if Stripe key is configured AND method is stripe
     if (stripe && method === 'stripe') {
@@ -87,9 +159,11 @@ const initiatePayment = async (req, res) => {
       : 'test_secret_no_stripe_configured';
 
     res.json({
-      clientSecret,
-      paymentId: payment._id,
-      amount: order.finalPrice
+      success: true,
+      message: 'Payment initiated successfully',
+      data: serializePayment(payment, {
+        clientSecret
+      })
     });
   } catch (error) {
     logger.error('Initiate payment error:', {
@@ -108,14 +182,19 @@ const initiatePayment = async (req, res) => {
 // Confirm payment - mark as escrowed after Stripe confirmation
 const processPayment = async (req, res) => {
   try {
-    const { paymentId, stripePaymentIntentId } = req.body;
+    const { paymentId } = req.body;
+    const stripePaymentIntentId = req.body.stripePaymentIntentId || req.body.details?.stripePaymentIntentId;
 
     if (!paymentId || !stripePaymentIntentId) {
       return res.status(400).json({ message: 'Payment ID and Stripe intent ID required' });
     }
 
+    if (!stripe) {
+      return res.status(503).json({ message: 'Stripe is not configured for payment processing' });
+    }
+
     // Fetch payment
-    const payment = await Payment.findById(paymentId);
+    const payment = await findPaymentByIdentifier(paymentId);
     if (!payment) return res.status(404).json({ message: 'Payment not found' });
 
     // Verify Stripe payment intent
@@ -143,12 +222,9 @@ const processPayment = async (req, res) => {
     logger.info(`Payment escrowed: ${payment._id}`);
 
     res.json({
+      success: true,
       message: 'Payment escrowed successfully',
-      payment: {
-        id: payment._id,
-        status: payment.status,
-        amount: payment.amount
-      }
+      data: serializePayment(payment)
     });
   } catch (error) {
     logger.error('Process payment error:', error);
@@ -159,12 +235,9 @@ const processPayment = async (req, res) => {
 // Get payment details
 const getPayment = async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const { orderId: paymentIdentifier } = req.params;
 
-    const payment = await Payment.findOne({ orderId })
-      .populate('orderId', 'status finalPrice')
-      .populate('buyerId', 'firstName lastName email')
-      .populate('sellerId', 'firstName lastName email');
+    const payment = await findPaymentByIdentifier(paymentIdentifier, true);
 
     if (!payment) return res.status(404).json({ message: 'Payment not found' });
 
@@ -175,28 +248,148 @@ const getPayment = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    res.json(payment);
+    res.json({
+      success: true,
+      data: serializePayment(payment)
+    });
   } catch (error) {
     logger.error('Get payment error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
+// Generate a lightweight HTML invoice/receipt
+const generateInvoice = async (req, res) => {
+  try {
+    const { orderId: paymentIdentifier } = req.params;
+
+    const payment = await Payment.findById(paymentIdentifier)
+      .populate({
+        path: 'orderId',
+        populate: [
+          { path: 'productId', select: 'title category' },
+          { path: 'buyerId', select: 'firstName lastName email' },
+          { path: 'sellerId', select: 'firstName lastName email' }
+        ]
+      })
+      .populate('buyerId', 'firstName lastName email')
+      .populate('sellerId', 'firstName lastName email');
+
+    const resolvedPayment = payment || await findPaymentByIdentifier(paymentIdentifier, true);
+    if (!resolvedPayment) return res.status(404).json({ message: 'Payment not found' });
+
+    const buyerId = resolvedPayment.buyerId?._id ? resolvedPayment.buyerId._id.toString() : toId(resolvedPayment.buyerId);
+    const sellerId = resolvedPayment.sellerId?._id ? resolvedPayment.sellerId._id.toString() : toId(resolvedPayment.sellerId);
+
+    if (buyerId !== req.user.id && sellerId !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const order = resolvedPayment.orderId && resolvedPayment.orderId._id ? resolvedPayment.orderId : null;
+    const product = order?.productId && typeof order.productId === 'object' ? order.productId : null;
+    const invoiceNumber = `INV-${toId(resolvedPayment._id).slice(-8).toUpperCase()}`;
+    const buyerName = resolvedPayment.buyerId?.firstName
+      ? `${resolvedPayment.buyerId.firstName} ${resolvedPayment.buyerId.lastName || ''}`.trim()
+      : 'Buyer';
+    const sellerName = resolvedPayment.sellerId?.firstName
+      ? `${resolvedPayment.sellerId.firstName} ${resolvedPayment.sellerId.lastName || ''}`.trim()
+      : 'Seller';
+    const totalAmount = Number(resolvedPayment.amount || 0);
+
+    const invoiceHtml = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(invoiceNumber)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; color: #1f2937; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
+    .brand { font-size: 24px; font-weight: bold; color: #312e81; }
+    .muted { color: #6b7280; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+    .row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .total { font-size: 20px; font-weight: bold; color: #111827; border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #e5e7eb; }
+    th { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand">Swapaholic</div>
+      <div class="muted">Payment receipt / invoice</div>
+    </div>
+    <div>
+      <div><strong>${escapeHtml(invoiceNumber)}</strong></div>
+      <div class="muted">Generated ${escapeHtml(new Date().toLocaleString())}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row"><span>Order ID</span><strong>${escapeHtml(toId(order?._id || resolvedPayment.orderId))}</strong></div>
+    <div class="row"><span>Payment ID</span><strong>${escapeHtml(toId(resolvedPayment._id))}</strong></div>
+    <div class="row"><span>Transaction ID</span><strong>${escapeHtml(resolvedPayment.transactionId || 'Pending')}</strong></div>
+    <div class="row"><span>Payment Method</span><strong>${escapeHtml(resolvedPayment.paymentMethod || 'N/A')}</strong></div>
+    <div class="row"><span>Status</span><strong>${escapeHtml(resolvedPayment.status || 'N/A')}</strong></div>
+    <div class="row"><span>Created At</span><strong>${escapeHtml(new Date(resolvedPayment.createdAt).toLocaleString())}</strong></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><span>Buyer</span><strong>${escapeHtml(buyerName)}</strong></div>
+    <div class="row"><span>Buyer Email</span><strong>${escapeHtml(resolvedPayment.buyerId?.email || '')}</strong></div>
+    <div class="row"><span>Seller</span><strong>${escapeHtml(sellerName)}</strong></div>
+    <div class="row"><span>Seller Email</span><strong>${escapeHtml(resolvedPayment.sellerId?.email || '')}</strong></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Category</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>${escapeHtml(product?.title || 'Order payment')}</td>
+          <td>${escapeHtml(product?.category || 'General')}</td>
+          <td>${escapeHtml(totalAmount.toFixed(2))}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="row total"><span>Total Paid</span><span>${escapeHtml(totalAmount.toFixed(2))}</span></div>
+  </div>
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="${invoiceNumber}.html"`);
+    res.send(invoiceHtml);
+  } catch (error) {
+    logger.error('Generate invoice error:', error);
+    res.status(500).json({ message: 'Failed to generate invoice' });
+  }
+};
+
 // Release payment from escrow to seller (after order delivery confirmed)
 const releasePayment = async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const { orderId: paymentIdentifier } = req.params;
 
     // Fetch payment
-    const payment = await Payment.findOne({ orderId });
+    const payment = await findPaymentByIdentifier(paymentIdentifier);
     if (!payment) return res.status(404).json({ message: 'Payment not found' });
 
     if (payment.status !== 'escrowed') {
       return res.status(400).json({ message: 'Payment is not in escrow' });
     }
 
+    const resolvedOrderId = toId(payment.orderId);
+
     // Fetch order to verify status
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(resolvedOrderId);
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
     if (order.status !== 'completed') {
@@ -210,19 +403,18 @@ const releasePayment = async (req, res) => {
     await payment.save();
 
     // Update order escrow status
-    await Order.findByIdAndUpdate(orderId, { escrowStatus: 'released' });
+    await Order.findByIdAndUpdate(resolvedOrderId, { escrowStatus: 'released' });
 
     // In a real implementation, you would transfer funds to seller's Stripe Connect account
     // For now, we'll just mark it as released
     logger.info(`Payment released: ${payment._id}, amount: ${payment.amount}`);
 
     res.json({
+      success: true,
       message: 'Payment released to seller',
-      payment: {
-        id: payment._id,
-        status: payment.status,
-        amount: payment.amount,
-        releaseDate: payment.escrowReleaseDate
+      data: {
+        message: 'Payment released to seller',
+        payment: serializePayment(payment)
       }
     });
   } catch (error) {
@@ -234,7 +426,7 @@ const releasePayment = async (req, res) => {
 // Refund payment (in case of dispute or cancellation)
 const refundPayment = async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const { orderId: paymentIdentifier } = req.params;
     const { reason } = req.body;
 
     if (!reason) {
@@ -242,19 +434,21 @@ const refundPayment = async (req, res) => {
     }
 
     // Fetch payment
-    const payment = await Payment.findOne({ orderId });
+    const payment = await findPaymentByIdentifier(paymentIdentifier);
     if (!payment) return res.status(404).json({ message: 'Payment not found' });
 
     if (!['escrowed', 'released'].includes(payment.status)) {
       return res.status(400).json({ message: 'Payment cannot be refunded in current status' });
     }
 
+    const resolvedOrderId = toId(payment.orderId);
+
     // Refund via Stripe
     if (payment.stripeChargeId) {
       try {
         const refund = await stripe.refunds.create({
           charge: payment.stripeChargeId,
-          metadata: { orderId: orderId.toString(), reason }
+          metadata: { orderId: resolvedOrderId, reason }
         });
 
         logger.info(`Stripe refund created: ${refund.id}`);
@@ -272,18 +466,16 @@ const refundPayment = async (req, res) => {
     await payment.save();
 
     // Update order escrow status
-    await Order.findByIdAndUpdate(orderId, { escrowStatus: 'refunded' });
+    await Order.findByIdAndUpdate(resolvedOrderId, { escrowStatus: 'refunded' });
 
     logger.info(`Payment refunded: ${payment._id}, reason: ${reason}`);
 
     res.json({
+      success: true,
       message: 'Payment refunded to buyer',
-      payment: {
-        id: payment._id,
-        status: payment.status,
-        amount: payment.amount,
-        refundDate: payment.refundDate,
-        reason: payment.refundReason
+      data: {
+        message: 'Payment refunded to buyer',
+        payment: serializePayment(payment)
       }
     });
   } catch (error) {
@@ -396,15 +588,7 @@ const handleChargeRefunded = async (charge) => {
 const getPaymentMethods = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('paymentMethods');
-
-    // Map to frontend structure
-    const methods = user.paymentMethods.map(pm => ({
-      id: pm._id,
-      type: pm.type,
-      brand: pm.details?.brand || pm.type,
-      last4: pm.details?.last4 || pm.details?.accountNumber?.slice(-4),
-      isDefault: pm.isDefault
-    }));
+    const methods = (user?.paymentMethods || []).map(serializePaymentMethod);
 
     res.json({
       success: true,
@@ -429,30 +613,55 @@ const addPaymentMethod = async (req, res) => {
     if (!type) return res.status(400).json({ success: false, message: 'Payment Method Type required' });
 
     const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
     const newMethod = {
       type,
       details: {},
-      isDefault: user.paymentMethods.length === 0 // Make default if first one
+      isDefault: user.paymentMethods.length === 0 || !user.paymentMethods.some((method) => method.isDefault)
     };
 
     if (type === 'card') {
+      if (!cardNumber || !expiryMonth || !expiryYear || !cardholderName || !cvv) {
+        return res.status(400).json({ success: false, message: 'Complete card details are required' });
+      }
+
       newMethod.details = {
         brand: 'Unknown', // In real app, detect from number
-        last4: cardNumber.slice(-4),
-        expiryMonth,
-        expiryYear,
+        last4: String(cardNumber).slice(-4),
+        expiryMonth: Number(expiryMonth),
+        expiryYear: Number(expiryYear),
         accountName: cardholderName
       };
     } else if (['bkash', 'rocket', 'nagad'].includes(type)) {
+      const accountNumber = mobileNumber || cardNumber;
+      if (!accountNumber) {
+        return res.status(400).json({ success: false, message: 'Account number is required for mobile wallet methods' });
+      }
+
       newMethod.details = {
         brand: type,
-        accountNumber: mobileNumber || cardNumber, // Frontend might send as mobileNumber
+        accountNumber: String(accountNumber),
         accountName: cardholderName || 'Mobile Wallet'
       };
+    } else if (type === 'bank') {
+      if (!cardholderName || !cardNumber) {
+        return res.status(400).json({ success: false, message: 'Bank account details are required' });
+      }
+
+      newMethod.details = {
+        brand: 'bank',
+        accountNumber: String(cardNumber),
+        accountName: cardholderName
+      };
+    } else {
+      return res.status(400).json({ success: false, message: 'Unsupported payment method type' });
     }
 
     user.paymentMethods.push(newMethod);
+    user.updatedAt = new Date();
     await user.save();
 
     // Return the newly added method
@@ -460,13 +669,7 @@ const addPaymentMethod = async (req, res) => {
 
     res.json({
       success: true,
-      data: {
-        id: added._id,
-        type: added.type,
-        brand: added.details.brand,
-        last4: added.details.last4 || added.details.accountNumber?.slice(-4),
-        isDefault: added.isDefault
-      }
+      data: serializePaymentMethod(added)
     });
 
   } catch (error) {
@@ -474,6 +677,79 @@ const addPaymentMethod = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to add payment method'
+    });
+  }
+};
+
+const removePaymentMethod = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('paymentMethods updatedAt');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const { id } = req.params;
+    const method = user.paymentMethods.id(id);
+    if (!method) {
+      return res.status(404).json({ success: false, message: 'Payment method not found' });
+    }
+
+    const wasDefault = Boolean(method.isDefault);
+    method.deleteOne();
+
+    if (wasDefault && user.paymentMethods.length > 0) {
+      user.paymentMethods[0].isDefault = true;
+    }
+
+    user.updatedAt = new Date();
+    await user.save();
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Payment method removed'
+      }
+    });
+  } catch (error) {
+    logger.error('Remove payment method error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to remove payment method'
+    });
+  }
+};
+
+const setDefaultPaymentMethod = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('paymentMethods updatedAt');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const { id } = req.params;
+    const method = user.paymentMethods.id(id);
+    if (!method) {
+      return res.status(404).json({ success: false, message: 'Payment method not found' });
+    }
+
+    user.paymentMethods.forEach((paymentMethod) => {
+      paymentMethod.isDefault = paymentMethod._id.toString() === id;
+    });
+
+    user.updatedAt = new Date();
+    await user.save();
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Default payment method updated'
+      }
+    });
+  } catch (error) {
+    logger.error('Set default payment method error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update default payment method'
     });
   }
 };
@@ -685,11 +961,14 @@ module.exports = {
   initiatePayment,
   processPayment,
   getPayment,
+  generateInvoice,
   releasePayment,
   refundPayment,
   handleWebhook,
   getPaymentMethods,
   addPaymentMethod,
+  removePaymentMethod,
+  setDefaultPaymentMethod,
   getUserTransactions,
   adminReleasePayment,
   getPendingPayouts

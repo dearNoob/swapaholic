@@ -219,7 +219,7 @@ export default function NotificationPreferences() {
                 <h4 className="font-semibold text-blue-900 mb-2">About Notifications</h4>
                 <ul className="text-sm text-blue-800 space-y-1">
                     <li>• <strong>Email:</strong> Sent to your registered email address</li>
-                    <li>• <strong>Push:</strong> Browser notifications when you're online</li>
+                    <li>• <strong>Push:</strong> Browser notifications when you&apos;re online</li>
                     <li>• <strong>SMS:</strong> Text messages to your phone number (standard rates may apply)</li>
                 </ul>
             </div>

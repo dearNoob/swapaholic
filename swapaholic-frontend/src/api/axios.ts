@@ -1,8 +1,7 @@
 import axios from 'axios';
 import { store } from '../store/store';
 import { logout, setCredentials } from '../store/authSlice';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
+import { API_BASE_URL } from '../lib/publicUrls';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -41,7 +40,12 @@ api.interceptors.response.use(
                     { withCredentials: true }
                 );
 
-                const { accessToken, user } = response.data;
+                const refreshPayload = response.data?.data ?? response.data;
+                const { accessToken, user } = refreshPayload;
+
+                if (!accessToken || !user) {
+                    throw new Error('Invalid refresh token response');
+                }
 
                 // Update store with new token
                 store.dispatch(setCredentials({ user, accessToken }));

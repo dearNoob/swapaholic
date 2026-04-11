@@ -2,19 +2,37 @@
 // Supports: Google Analytics, Mixpanel, custom analytics
 
 type EventCategory = 'user' | 'product' | 'bid' | 'order' | 'navigation' | 'engagement';
+type AnalyticsProperties = Record<string, unknown>;
+type AnalyticsItem = Record<string, unknown>;
+type GtagFn = (command: string, action: string, params?: AnalyticsProperties) => void;
+type MixpanelClient = {
+    identify: (userId: string) => void;
+    people?: {
+        set: (properties: AnalyticsProperties) => void;
+    };
+    track: (action: string, event: AnalyticsPayload) => void;
+};
+
+declare global {
+    interface Window {
+        gtag?: GtagFn;
+        mixpanel?: MixpanelClient;
+    }
+}
 
 interface AnalyticsEvent {
     category: EventCategory;
     action: string;
     label?: string;
     value?: number;
-    properties?: Record<string, any>;
+    properties?: AnalyticsProperties;
 }
 
-interface ConversionFunnel {
-    name: string;
-    steps: string[];
-    userId?: string;
+interface AnalyticsPayload extends AnalyticsEvent {
+    userId: string | null;
+    sessionId: string;
+    timestamp: string;
+    url: string;
 }
 
 class Analytics {
@@ -58,28 +76,28 @@ class Analytics {
         }
     }
 
-    public setUser(userId: string, properties?: Record<string, any>) {
+    public setUser(userId: string, properties?: AnalyticsProperties) {
         this.userId = userId;
 
         // Send to analytics providers
-        if (typeof window !== 'undefined' && (window as any).gtag) {
-            (window as any).gtag('config', 'GA_MEASUREMENT_ID', {
+        if (typeof window !== 'undefined' && window.gtag) {
+            window.gtag('config', 'GA_MEASUREMENT_ID', {
                 user_id: userId,
                 ...properties
             });
         }
 
         // Mixpanel
-        if (typeof window !== 'undefined' && (window as any).mixpanel) {
-            (window as any).mixpanel.identify(userId);
+        if (typeof window !== 'undefined' && window.mixpanel) {
+            window.mixpanel.identify(userId);
             if (properties) {
-                (window as any).mixpanel.people.set(properties);
+                window.mixpanel.people?.set(properties);
             }
         }
     }
 
     public trackEvent(event: AnalyticsEvent) {
-        const enrichedEvent = {
+        const enrichedEvent: AnalyticsPayload = {
             ...event,
             userId: this.userId,
             sessionId: this.sessionId,
@@ -88,8 +106,8 @@ class Analytics {
         };
 
         // Google Analytics 4
-        if (typeof window !== 'undefined' && (window as any).gtag) {
-            (window as any).gtag('event', event.action, {
+        if (typeof window !== 'undefined' && window.gtag) {
+            window.gtag('event', event.action, {
                 event_category: event.category,
                 event_label: event.label,
                 value: event.value,
@@ -98,8 +116,8 @@ class Analytics {
         }
 
         // Mixpanel
-        if (typeof window !== 'undefined' && (window as any).mixpanel) {
-            (window as any).mixpanel.track(event.action, enrichedEvent);
+        if (typeof window !== 'undefined' && window.mixpanel) {
+            window.mixpanel.track(event.action, enrichedEvent);
         }
 
         // Custom analytics endpoint
@@ -209,7 +227,7 @@ class Analytics {
         });
     }
 
-    public trackPurchase(orderId: string, amount: number, items: any[]) {
+    public trackPurchase(orderId: string, amount: number, items: AnalyticsItem[]) {
         this.trackEvent({
             category: 'order',
             action: 'purchase',
@@ -247,7 +265,7 @@ class Analytics {
         });
     }
 
-    private async sendToBackend(event: any) {
+    private async sendToBackend(event: AnalyticsPayload) {
         try {
             await fetch('/api/analytics/events', {
                 method: 'POST',

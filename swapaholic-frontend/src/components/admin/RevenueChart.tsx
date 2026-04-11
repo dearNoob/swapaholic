@@ -18,17 +18,31 @@ interface RevenueChartProps {
     currentPeriod: '7d' | '30d' | '90d' | '1y';
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+type ActiveMetric = 'all' | 'revenue' | 'orders' | 'users';
+
+interface CustomTooltipEntry {
+    color: string;
+    name: string;
+    value: number;
+}
+
+interface CustomTooltipProps {
+    active?: boolean;
+    payload?: CustomTooltipEntry[];
+    label?: string;
+}
+
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (!active || !payload) return null;
     return (
         <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 shadow-2xl">
             <p className="text-gray-400 text-sm mb-2 font-medium">{label}</p>
-            {payload.map((entry: any, index: number) => (
+            {payload.map((entry, index) => (
                 <div key={index} className="flex items-center gap-2 text-sm">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
                     <span className="text-gray-300">{entry.name}:</span>
                     <span className="font-bold text-white">
-                        {entry.name === 'Revenue' ? `৳${entry.value.toLocaleString()}` : entry.value}
+                        {entry.name === 'Revenue' ? `BDT ${entry.value.toLocaleString()}` : entry.value}
                     </span>
                 </div>
             ))}
@@ -37,7 +51,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function RevenueChart({ analytics, onPeriodChange, currentPeriod }: RevenueChartProps) {
-    const [activeMetric, setActiveMetric] = useState<'all' | 'revenue' | 'orders' | 'users'>('all');
+    const [activeMetric, setActiveMetric] = useState<ActiveMetric>('all');
 
     if (!analytics) {
         return (
@@ -64,7 +78,7 @@ export default function RevenueChart({ analytics, onPeriodChange, currentPeriod 
         { value: '1y', label: '1Y' },
     ];
 
-    const metrics = [
+    const metrics: Array<{ key: ActiveMetric; label: string }> = [
         { key: 'all', label: 'All' },
         { key: 'revenue', label: 'Revenue' },
         { key: 'orders', label: 'Orders' },
@@ -86,7 +100,7 @@ export default function RevenueChart({ analytics, onPeriodChange, currentPeriod 
                         {metrics.map((m) => (
                             <button
                                 key={m.key}
-                                onClick={() => setActiveMetric(m.key as any)}
+                                onClick={() => setActiveMetric(m.key)}
                                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
                                     activeMetric === m.key
                                         ? 'bg-white text-gray-900 shadow-sm'

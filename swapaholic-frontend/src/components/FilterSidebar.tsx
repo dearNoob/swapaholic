@@ -11,7 +11,7 @@ interface FilterSidebarProps {
     condition: string[];
     status: string[];
   };
-  onFilterChange: (filters: any) => void;
+  onFilterChange: (filters: Partial<FilterSidebarProps['filters']>) => void;
   onClearFilters: () => void;
 }
 

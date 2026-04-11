@@ -16,7 +16,7 @@ export const BuyerOrders = () => {
     const fetchOrders = async () => {
         try {
             setIsLoading(true);
-            const data = await ordersApi.getOrders();
+            const data = await ordersApi.getBuyerOrders();
             // Data has an array of orders inside 'data' property due to pagination structure
             setOrders(data.data || []);
         } catch (error) {

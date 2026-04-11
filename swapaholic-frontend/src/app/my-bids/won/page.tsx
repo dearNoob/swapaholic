@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { bidsApi, WonBid } from '../../../api/bids';
+import { resolvePublicAssetUrl } from '../../../lib/publicUrls';
 
 export default function WonBidsPage() {
   const router = useRouter();
@@ -12,13 +14,20 @@ export default function WonBidsPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  const getErrorMessage = (err: unknown, fallback: string) => {
+    if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: string }).message === 'string') {
+      return (err as { message: string }).message;
+    }
+    return fallback;
+  };
+
   const fetchWonBids = useCallback(async () => {
     try {
       setLoading(true);
       const data = await bidsApi.getWonBids();
       setWonBids(data);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to load won bids');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to load won bids'));
     } finally {
       setLoading(false);
     }
@@ -62,12 +71,12 @@ export default function WonBidsPage() {
       setSuccessMsg(result.message);
       // Remove from list
       setWonBids(prev => prev.filter(b => b.id !== bidId));
-      // Redirect to payment after short delay
+      // Redirect to the real payment page after short delay
       setTimeout(() => {
-        router.push(`/payment/gateway?orderId=${result.order.id}`);
+        router.push(`/payments/${result.order.id}`);
       }, 1500);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to confirm purchase');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to confirm purchase'));
     } finally {
       setConfirming(null);
     }
@@ -140,12 +149,11 @@ export default function WonBidsPage() {
               {/* Product image */}
               <div style={styles.cardTop}>
                 {bid.product?.images?.[0] && (
-                  <img
-                    src={bid.product.images[0].startsWith('http')
-                      ? bid.product.images[0]
-                      : `${process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '')}/${bid.product.images[0]}`
-                    }
+                  <Image
+                    src={resolvePublicAssetUrl(bid.product.images[0])}
                     alt={bid.product?.title}
+                    width={100}
+                    height={100}
                     style={styles.productImage}
                   />
                 )}

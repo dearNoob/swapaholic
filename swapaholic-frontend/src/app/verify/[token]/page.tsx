@@ -9,14 +9,13 @@ import { showSuccessToast, showErrorToast } from '@/utils/errorHandler';
 export default function VerifyEmailPage() {
     const router = useRouter();
     const params = useParams();
-    const token = params?.token as string;
-    const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-    const [message, setMessage] = useState('Verifying your email...');
+    const token = typeof params?.token === 'string' ? params.token : '';
+    const hasToken = Boolean(token);
+    const [status, setStatus] = useState<'loading' | 'success' | 'error'>(hasToken ? 'loading' : 'error');
+    const [message, setMessage] = useState(hasToken ? 'Verifying your email...' : 'Invalid verification link');
 
     useEffect(() => {
         if (!token) {
-            setStatus('error');
-            setMessage('Invalid verification link');
             return;
         }
 
@@ -28,7 +27,8 @@ export default function VerifyEmailPage() {
                 showSuccessToast('Email verified! Redirecting to login...');
 
                 // Redirect to login after 2 seconds
-                setTimeout(() => router.push('/login'), 2000);
+                const redirectTimeout = setTimeout(() => router.push('/login'), 2000);
+                return () => clearTimeout(redirectTimeout);
             } catch (error) {
                 setStatus('error');
                 setMessage('Verification failed. The link may be invalid or expired.');
@@ -36,7 +36,15 @@ export default function VerifyEmailPage() {
             }
         };
 
-        verify();
+        let cleanup: (() => void) | undefined;
+
+        void verify().then((result) => {
+            cleanup = result;
+        });
+
+        return () => {
+            cleanup?.();
+        };
     }, [token, router]);
 
     return (

@@ -7,8 +7,15 @@ export interface Notification {
     message: string;
     isRead: boolean;
     createdAt: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
     actionUrl?: string;
+}
+
+interface NotificationApiPayload extends Omit<Notification, 'id' | 'isRead'> {
+    _id?: string;
+    id?: string;
+    read?: boolean;
+    isRead?: boolean;
 }
 
 export const notificationApi = {
@@ -17,7 +24,7 @@ export const notificationApi = {
         const data = response.data;
         const notifications = Array.isArray(data) ? data : (data.notifications || []);
         
-        return notifications.map((n: any) => ({
+        return notifications.map((n: NotificationApiPayload) => ({
             ...n,
             id: n._id || n.id,
             isRead: n.read !== undefined ? n.read : n.isRead,

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
-    FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaSearch,
+    FaExclamationTriangle, FaCheckCircle, FaTimesCircle,
     FaBalanceScale, FaUserTie, FaClock, FaClipboardList, FaGavel,
     FaArrowLeft, FaSyncAlt, FaFileAlt, FaChevronLeft, FaChevronRight,
     FaComments, FaUserEdit, FaMoneyBillWave, FaHandshake, FaUndo
@@ -60,6 +60,17 @@ interface Pagination {
     pages: number;
 }
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error && typeof error === 'object' && 'response' in error) {
+        const response = error.response as { data?: { message?: string } };
+        if (response?.data?.message) {
+            return response.data.message;
+        }
+    }
+
+    return fallback;
+};
+
 export default function AdminDisputesPage() {
     const { isLoading: isAuthLoading, isAdmin, user } = useRequireAdminAuth();
     const [disputes, setDisputes] = useState<AdminDispute[]>([]);
@@ -105,22 +116,22 @@ export default function AdminDisputesPage() {
 
     useEffect(() => {
         if (isAdmin) {
-            fetchDashboardData(1);
+            void fetchDashboardData(1);
         }
-    }, [isAdmin, statusFilter]);
+    }, [isAdmin, fetchDashboardData]);
 
     const handleAssignDispute = async (orderId: string) => {
         if (!user?.id) return;
         try {
             await adminApi.assignDispute(orderId, user.id);
             toast.success('Dispute claimed successfully');
-            fetchDashboardData(pagination.page);
+            void fetchDashboardData(pagination.page);
             if (selectedDispute && selectedDispute._id === orderId) {
                 // Optimistically update the selected dispute in modal
                 setSelectedDispute({ ...selectedDispute, disputeAssignedTo: user.id });
             }
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Failed to claim dispute');
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, 'Failed to claim dispute'));
         }
     };
 
@@ -128,14 +139,14 @@ export default function AdminDisputesPage() {
         if (!selectedDispute || !adminNotes.trim()) return;
         try {
             setIsActionLoading(true);
-            const res = await adminApi.addInvestigationNotes(selectedDispute._id, adminNotes);
+            const res = await adminApi.addInvestigationNotes(selectedDispute._id, adminNotes) as { order?: { notes?: string } };
             toast.success('Investigation note added');
             setAdminNotes('');
             // Update selected dispute's notes optimistically
-            setSelectedDispute({ ...selectedDispute, notes: res.order.notes });
-            fetchDashboardData(pagination.page);
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Failed to add notes');
+            setSelectedDispute({ ...selectedDispute, notes: res.order?.notes });
+            void fetchDashboardData(pagination.page);
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, 'Failed to add notes'));
         } finally {
             setIsActionLoading(false);
         }
@@ -160,9 +171,9 @@ export default function AdminDisputesPage() {
             setIsModalOpen(false);
             setResolutionAction(null);
             setResolutionNotes('');
-            fetchDashboardData(pagination.page);
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Failed to resolve dispute');
+            void fetchDashboardData(pagination.page);
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, 'Failed to resolve dispute'));
         } finally {
             setIsActionLoading(false);
         }

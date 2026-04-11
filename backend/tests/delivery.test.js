@@ -1,243 +1,260 @@
 const request = require('supertest');
-const app = require('../src/index');
+const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const app = require('../src/index');
 const User = require('../src/models/User');
 const Product = require('../src/models/Product');
 const Bid = require('../src/models/Bid');
 const Order = require('../src/models/Order');
 const Delivery = require('../src/models/Delivery');
-const logger = require('../src/utils/logger');
 const { connectDB, disconnectDB } = require('../src/config/mongodb');
 
 jest.setTimeout(30000);
 
+const uniqueSuffix = () => `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+
+const getId = (value) => {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (value.id) return value.id.toString();
+  if (value._id) return value._id.toString();
+  return value.toString();
+};
+
 describe('Delivery Tracking System', () => {
-  let sellerToken, buyerToken, adminToken, seller, buyer, admin, product, bid, order, delivery;
+  let sellerToken;
+  let buyerToken;
+  let deliveryPersonToken;
+  let adminToken;
+  let seller;
+  let buyer;
+  let deliveryPerson;
+  let sharedFlow;
+  const createdUserIds = [];
+
+  const registerUser = async ({ role, label }) => {
+    const suffix = uniqueSuffix();
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({
+        firstName: label,
+        lastName: 'Tester',
+        phone: `+1555${suffix.slice(-7)}`,
+        email: `${label.toLowerCase()}_${suffix}@test.com`,
+        password: 'Test1234',
+        role
+      })
+      .expect(201);
+
+    const user = response.body.data.user;
+    const normalizedUser = {
+      ...user,
+      id: getId(user)
+    };
+
+    createdUserIds.push(normalizedUser.id);
+
+    return {
+      token: response.body.data.accessToken,
+      user: normalizedUser
+    };
+  };
+
+  const createAdminToken = () => jwt.sign(
+    {
+      id: new mongoose.Types.ObjectId().toString(),
+      role: 'admin',
+      email: `delivery_admin_${uniqueSuffix()}@test.com`
+    },
+    process.env.JWT_SECRET
+  );
+
+  const createAuctionOrder = async ({
+    titlePrefix = 'Delivery Test Product',
+    description = 'This is a product for testing delivery tracking system',
+    basePrice = 500,
+    bidAmount = 550
+  } = {}) => {
+    const productResponse = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({
+        title: `${titlePrefix} ${uniqueSuffix()}`,
+        description,
+        category: 'electronics',
+        condition: 'brand_new',
+        basePrice,
+        location: 'New York',
+        geometry: {
+          type: 'Point',
+          coordinates: [-74.006, 40.7128]
+        }
+      })
+      .expect(201);
+
+    const product = productResponse.body;
+
+    const bidResponse = await request(app)
+      .post('/api/bids')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({
+        productId: product._id,
+        bidAmount
+      })
+      .expect(201);
+
+    const bidId = bidResponse.body.data.id;
+
+    await request(app)
+      .post(`/api/bids/${bidId}/accept`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .expect(200);
+
+    const confirmResponse = await request(app)
+      .post(`/api/bids/${bidId}/confirm-win`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(200);
+
+    return {
+      productId: product._id.toString(),
+      bidId,
+      orderId: confirmResponse.body.data.order.id
+    };
+  };
+
+  const createDeliveryFlow = async ({
+    titlePrefix = 'Delivery Flow Product',
+    basePrice = 500,
+    bidAmount = 550,
+    deliveryPersonId = deliveryPerson?.id,
+    pickupLocation = 'New York',
+    deliveryLocation = 'Los Angeles',
+    status = 'assigned'
+  } = {}) => {
+    const auction = await createAuctionOrder({ titlePrefix, basePrice, bidAmount });
+
+    const delivery = await Delivery.create({
+      orderId: auction.orderId,
+      deliveryPersonId,
+      status,
+      pickupLocation,
+      deliveryLocation,
+      estimatedArrival: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    });
+
+    return {
+      ...auction,
+      deliveryId: delivery._id.toString()
+    };
+  };
 
   beforeAll(async () => {
-    try {
-      await connectDB();
+    await connectDB();
 
-      // Create seller
-      const sellerRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Delivery',
-          lastName: 'Seller',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `seller_delivery_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      sellerToken = sellerRes.body.token;
-      seller = sellerRes.body.user;
+    const sellerAccount = await registerUser({ role: 'seller', label: 'DeliverySeller' });
+    sellerToken = sellerAccount.token;
+    seller = sellerAccount.user;
 
-      // Create buyer
-      const buyerRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Delivery',
-          lastName: 'Buyer',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `buyer_delivery_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      buyerToken = buyerRes.body.token;
-      buyer = buyerRes.body.user;
+    const buyerAccount = await registerUser({ role: 'buyer', label: 'DeliveryBuyer' });
+    buyerToken = buyerAccount.token;
+    buyer = buyerAccount.user;
 
-      // Create admin
-      const adminRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Delivery',
-          lastName: 'Admin',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `admin_delivery_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'admin'
-        });
-      adminToken = adminRes.body.token;
-      admin = adminRes.body.user;
+    const deliveryPersonAccount = await registerUser({ role: 'buyer', label: 'DeliveryPerson' });
+    deliveryPersonToken = deliveryPersonAccount.token;
+    deliveryPerson = deliveryPersonAccount.user;
 
-      // Create delivery person
-      const deliveryRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Delivery',
-          lastName: 'Person',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `deliveryman_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const deliveryPerson = deliveryRes.body.user;
-      if (!deliveryPerson || !(deliveryPerson._id || deliveryPerson.id)) {
-        throw new Error(`Delivery person creation failed: ${JSON.stringify(deliveryRes.body)}`);
-      }
+    adminToken = createAdminToken();
 
-      // Create product
-      const productRes = await request(app)
-        .post('/api/products')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          title: 'Delivery Test Product',
-          description: 'This is a product for testing delivery tracking system',
-          category: 'Electronics',
-          condition: 'brand_new',
-          basePrice: 500,
-          location: 'New York',
-          geometry: {
-            type: 'Point',
-            coordinates: [-74.0060, 40.7128]
-          }
-        });
-      product = productRes.body;
-
-      if (!product._id) {
-        throw new Error('Product creation failed');
-      }
-
-      // Create bid
-      const bidRes = await request(app)
-        .post('/api/bids')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          productId: product._id,
-          bidAmount: 550
-        });
-      bid = bidRes.body;
-
-      if (!bid._id) {
-        throw new Error('Bid creation failed');
-      }
-
-      // Accept bid to create order
-      const orderRes = await request(app)
-        .post(`/api/bids/${bid._id}/accept`)
-        .set('Authorization', `Bearer ${sellerToken}`);
-
-      // Accept response may include { message, bid, order }
-      if (orderRes.status !== 200) {
-        throw new Error(`Order accept failed: ${JSON.stringify(orderRes.body)}`);
-      }
-
-      order = orderRes.body.order || orderRes.body;
-
-      if (!order || !order._id) {
-        throw new Error(`Order creation failed, response: ${JSON.stringify(orderRes.body)}`);
-      }
-
-      // Create delivery record directly using mongoose
-      delivery = await Delivery.create({
-        orderId: order._id,
-        deliveryPersonId: deliveryPerson.id || deliveryPerson._id,
-        status: 'assigned',
-        pickupLocation: 'New York',
-        deliveryLocation: 'Los Angeles',
-        estimatedArrival: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
-      });
-    } catch (error) {
-      logger.error('BeforeAll setup error:', error);
-      throw error;
-    }
+    sharedFlow = await createDeliveryFlow({ titlePrefix: 'Shared Delivery Product' });
   });
 
   afterAll(async () => {
-    await Delivery.deleteMany({ orderId: order._id }).catch(() => {});
-    await Order.deleteOne({ _id: order._id }).catch(() => {});
-    await Bid.deleteOne({ _id: bid._id }).catch(() => {});
-    await Product.deleteOne({ _id: product._id }).catch(() => {});
-    await User.deleteMany({ email: new RegExp('delivery') }).catch(() => {});
+    await Delivery.deleteMany({}).catch(() => {});
+    await Order.deleteMany({}).catch(() => {});
+    await Bid.deleteMany({}).catch(() => {});
+    await Product.deleteMany({}).catch(() => {});
+    await User.deleteMany({ _id: { $in: createdUserIds.filter(Boolean) } }).catch(() => {});
     await disconnectDB();
   });
 
   describe('Delivery Tracking', () => {
-    test('GET /api/delivery/:orderId/track -> Buyer can track delivery', async () => {
-      const res = await request(app)
-        .get(`/api/delivery/${order._id}/track`)
-        .set('Authorization', `Bearer ${buyerToken}`);
+    test('GET /api/delivery/:orderId/track -> buyer can track delivery', async () => {
+      const response = await request(app)
+        .get(`/api/delivery/${sharedFlow.orderId}/track`)
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('orderId');
-      expect(res.body).toHaveProperty('status');
-      expect(res.body.status).toBe('assigned');
+      expect(getId(response.body.orderId)).toBe(sharedFlow.orderId);
+      expect(response.body.status).toBe('assigned');
     });
 
-    test('GET /api/delivery/:orderId/track -> Seller can track delivery', async () => {
-      const res = await request(app)
-        .get(`/api/delivery/${order._id}/track`)
-        .set('Authorization', `Bearer ${sellerToken}`);
+    test('GET /api/delivery/:orderId/track -> seller can track delivery', async () => {
+      const response = await request(app)
+        .get(`/api/delivery/${sharedFlow.orderId}/track`)
+        .set('Authorization', `Bearer ${sellerToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.orderId._id || res.body.orderId).toEqual(order._id.toString());
+      expect(getId(response.body.orderId)).toBe(sharedFlow.orderId);
     });
 
-    test('GET /api/delivery/:orderId/track -> Admin can track delivery', async () => {
-      const res = await request(app)
-        .get(`/api/delivery/${order._id}/track`)
-        .set('Authorization', `Bearer ${adminToken}`);
+    test('GET /api/delivery/:orderId/track -> admin can track delivery', async () => {
+      const response = await request(app)
+        .get(`/api/delivery/${sharedFlow.orderId}/track`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('deliveryPersonId');
+      expect(response.body).toHaveProperty('deliveryPersonId');
+      expect(getId(response.body.deliveryPersonId)).toBe(deliveryPerson.id);
     });
 
-    test('GET /api/delivery/:orderId/track -> Non-participant cannot track', async () => {
-      const otherRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Other',
-          lastName: 'User',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `other_delivery_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const otherToken = otherRes.body.token;
+    test('GET /api/delivery/:orderId/track -> non-participants cannot track', async () => {
+      const otherAccount = await registerUser({ role: 'buyer', label: 'DeliveryOtherTrack' });
 
-      const res = await request(app)
-        .get(`/api/delivery/${order._id}/track`)
-        .set('Authorization', `Bearer ${otherToken}`);
+      const response = await request(app)
+        .get(`/api/delivery/${sharedFlow.orderId}/track`)
+        .set('Authorization', `Bearer ${otherAccount.token}`)
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('Access denied');
-
-      await User.deleteOne({ email: new RegExp('other_delivery') }).catch(() => {});
+      expect(response.body.message).toContain('Access denied');
     });
 
-    test('GET /api/delivery/:orderId/track -> Return 404 for non-existent delivery', async () => {
-      const fakeOrderId = new mongoose.Types.ObjectId();
-      const res = await request(app)
+    test('GET /api/delivery/:orderId/track -> returns 404 for unknown orders', async () => {
+      const fakeOrderId = new mongoose.Types.ObjectId().toString();
+      const response = await request(app)
         .get(`/api/delivery/${fakeOrderId}/track`)
-        .set('Authorization', `Bearer ${buyerToken}`);
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(404);
 
-      expect(res.status).toBe(404);
-      expect(res.body.message).toContain('not found');
+      expect(response.body.message).toContain('Order not found');
     });
   });
 
   describe('Delivery Status Updates', () => {
-    test('PUT /api/delivery/:orderId/status -> Update to picked_up', async () => {
-      const res = await request(app)
-        .put(`/api/delivery/${order._id}/status`)
-        .set('Authorization', `Bearer ${buyerToken}`)
+    test('PUT /api/delivery/:orderId/status -> delivery person can update to picked_up', async () => {
+      const flow = await createDeliveryFlow({ titlePrefix: 'Picked Up Delivery Product' });
+
+      const response = await request(app)
+        .put(`/api/delivery/${flow.orderId}/status`)
+        .set('Authorization', `Bearer ${deliveryPersonToken}`)
         .send({
           status: 'picked_up',
           currentLocation: {
             latitude: 40.7128,
-            longitude: -74.0060
+            longitude: -74.006
           }
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('picked_up');
-      expect(res.body).toHaveProperty('pickupTime');
+      expect(response.body.status).toBe('picked_up');
+      expect(response.body).toHaveProperty('pickupTime');
     });
 
-    test('PUT /api/delivery/:orderId/status -> Update to in_transit with route tracking', async () => {
-      const res = await request(app)
-        .put(`/api/delivery/${order._id}/status`)
-        .set('Authorization', `Bearer ${buyerToken}`)
+    test('PUT /api/delivery/:orderId/status -> tracks route updates while in transit', async () => {
+      const flow = await createDeliveryFlow({ titlePrefix: 'Transit Delivery Product' });
+
+      const response = await request(app)
+        .put(`/api/delivery/${flow.orderId}/status`)
+        .set('Authorization', `Bearer ${deliveryPersonToken}`)
         .send({
           status: 'in_transit',
           currentLocation: {
@@ -245,18 +262,20 @@ describe('Delivery Tracking System', () => {
             longitude: -104.9903
           },
           notes: 'On the way to Los Angeles'
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('in_transit');
-      expect(res.body.deliveryRoute.length).toBeGreaterThan(0);
-      expect(res.body.geoTag).toHaveProperty('latitude');
+      expect(response.body.status).toBe('in_transit');
+      expect(response.body.deliveryRoute.length).toBeGreaterThan(0);
+      expect(response.body.geoTag).toHaveProperty('latitude', 39.7392);
     });
 
-    test('PUT /api/delivery/:orderId/status -> Update to delivered with proof', async () => {
-      const res = await request(app)
-        .put(`/api/delivery/${order._id}/status`)
-        .set('Authorization', `Bearer ${buyerToken}`)
+    test('PUT /api/delivery/:orderId/status -> delivered updates store proof and complete the order', async () => {
+      const flow = await createDeliveryFlow({ titlePrefix: 'Delivered Delivery Product' });
+
+      const response = await request(app)
+        .put(`/api/delivery/${flow.orderId}/status`)
+        .set('Authorization', `Bearer ${deliveryPersonToken}`)
         .send({
           status: 'delivered',
           currentLocation: {
@@ -264,244 +283,198 @@ describe('Delivery Tracking System', () => {
             longitude: -118.2437
           },
           proofOfDelivery: 'base64_encoded_image_here'
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('delivered');
-      expect(res.body).toHaveProperty('deliveryTime');
-      expect(res.body.proofOfDelivery).toBe('base64_encoded_image_here');
+      expect(response.body.status).toBe('delivered');
+      expect(response.body).toHaveProperty('deliveryTime');
+      expect(response.body.proofOfDelivery).toBe('base64_encoded_image_here');
+
+      const updatedOrder = await Order.findById(flow.orderId);
+      expect(updatedOrder.status).toBe('completed');
     });
 
-    test('PUT /api/delivery/:orderId/status -> Invalid status returns error', async () => {
-      const res = await request(app)
-        .put(`/api/delivery/${order._id}/status`)
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          status: 'invalid_status'
-        });
+    test('PUT /api/delivery/:orderId/status -> invalid statuses are rejected', async () => {
+      const response = await request(app)
+        .put(`/api/delivery/${sharedFlow.orderId}/status`)
+        .set('Authorization', `Bearer ${deliveryPersonToken}`)
+        .send({ status: 'invalid_status' })
+        .expect(400);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('must be one of');
+      expect(response.body.message).toContain('must be one of');
     });
 
-    test('PUT /api/delivery/:orderId/status -> Non-delivery person cannot update', async () => {
-      const otherRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Other',
-          lastName: 'User',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `other_delivery2_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const otherToken = otherRes.body.token;
+    test('PUT /api/delivery/:orderId/status -> non-participants cannot update delivery', async () => {
+      const otherAccount = await registerUser({ role: 'buyer', label: 'DeliveryOtherUpdate' });
 
-      const res = await request(app)
-        .put(`/api/delivery/${order._id}/status`)
-        .set('Authorization', `Bearer ${otherToken}`)
-        .send({
-          status: 'in_transit'
-        });
+      const response = await request(app)
+        .put(`/api/delivery/${sharedFlow.orderId}/status`)
+        .set('Authorization', `Bearer ${otherAccount.token}`)
+        .send({ status: 'in_transit' })
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('Access denied');
-
-      await User.deleteOne({ email: new RegExp('other_delivery2') }).catch(() => {});
+      expect(response.body.message).toContain('Access denied');
     });
   });
 
   describe('Delivery History', () => {
-    test('GET /api/delivery/:orderId/history -> Get delivery history with milestones', async () => {
-      const res = await request(app)
-        .get(`/api/delivery/${order._id}/history`)
-        .set('Authorization', `Bearer ${buyerToken}`);
+    test('GET /api/delivery/:orderId/history -> returns milestones and current status', async () => {
+      const response = await request(app)
+        .get(`/api/delivery/${sharedFlow.orderId}/history`)
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('orderId');
-      expect(res.body).toHaveProperty('currentStatus');
-      expect(res.body).toHaveProperty('milestones');
-      expect(Array.isArray(res.body.milestones)).toBe(true);
+      expect(response.body).toHaveProperty('orderId', sharedFlow.orderId);
+      expect(response.body).toHaveProperty('currentStatus', 'assigned');
+      expect(Array.isArray(response.body.milestones)).toBe(true);
     });
 
-    test('GET /api/delivery/:orderId/history -> Milestones show completion status', async () => {
-      const res = await request(app)
-        .get(`/api/delivery/${order._id}/history`)
-        .set('Authorization', `Bearer ${buyerToken}`);
+    test('GET /api/delivery/:orderId/history -> assigned milestone is marked complete', async () => {
+      const response = await request(app)
+        .get(`/api/delivery/${sharedFlow.orderId}/history`)
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      const assignedMilestone = res.body.milestones.find(m => m.status === 'assigned');
+      const assignedMilestone = response.body.milestones.find((milestone) => milestone.status === 'assigned');
       expect(assignedMilestone.completed).toBe(true);
     });
 
-    test('GET /api/delivery/:orderId/history -> Includes route and current location', async () => {
-      const res = await request(app)
-        .get(`/api/delivery/${order._id}/history`)
-        .set('Authorization', `Bearer ${buyerToken}`);
+    test('GET /api/delivery/:orderId/history -> includes route and current location', async () => {
+      const response = await request(app)
+        .get(`/api/delivery/${sharedFlow.orderId}/history`)
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('route');
-      expect(res.body).toHaveProperty('currentLocation');
+      expect(response.body).toHaveProperty('route');
+      expect(response.body).toHaveProperty('currentLocation');
     });
 
-    test('GET /api/delivery/:orderId/history -> Non-participant cannot view history', async () => {
-      const otherRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Other',
-          lastName: 'User',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `other_delivery3_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const otherToken = otherRes.body.token;
+    test('GET /api/delivery/:orderId/history -> non-participants cannot view history', async () => {
+      const otherAccount = await registerUser({ role: 'buyer', label: 'DeliveryOtherHistory' });
 
-      const res = await request(app)
-        .get(`/api/delivery/${order._id}/history`)
-        .set('Authorization', `Bearer ${otherToken}`);
+      const response = await request(app)
+        .get(`/api/delivery/${sharedFlow.orderId}/history`)
+        .set('Authorization', `Bearer ${otherAccount.token}`)
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('Access denied');
-
-      await User.deleteOne({ email: new RegExp('other_delivery3') }).catch(() => {});
+      expect(response.body.message).toContain('Access denied');
     });
   });
 
   describe('Delivery Assignment', () => {
-    test('PUT /api/delivery/:orderId/assign -> Admin can assign delivery to person', async () => {
-      const newPersonRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'New',
-          lastName: 'DeliveryPerson',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `newdelivery_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const newPerson = newPersonRes.body.user;
+    test('PUT /api/delivery/:orderId/assign -> admin can assign a delivery person', async () => {
+      const flow = await createDeliveryFlow({ titlePrefix: 'Assignment Delivery Product' });
+      const newPersonAccount = await registerUser({ role: 'buyer', label: 'DeliveryAssignee' });
 
-      const res = await request(app)
-        .put(`/api/delivery/${order._id}/assign`)
+      const response = await request(app)
+        .put(`/api/delivery/${flow.orderId}/assign`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
-          deliveryPersonId: newPerson.id || newPerson._id,
+          deliveryPersonId: newPersonAccount.user.id,
           estimatedArrival: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.deliveryPersonId._id || res.body.deliveryPersonId).toEqual((newPerson.id || newPerson._id).toString());
-      expect(res.body).toHaveProperty('estimatedArrival');
-
-      await User.deleteOne({ email: new RegExp('newdelivery') }).catch(() => {});
+      expect(getId(response.body.deliveryPersonId)).toBe(newPersonAccount.user.id);
+      expect(response.body).toHaveProperty('estimatedArrival');
     });
 
-    test('PUT /api/delivery/:orderId/assign -> Non-admin cannot assign', async () => {
-      const newPersonRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'New',
-          lastName: 'DeliveryPerson2',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `newdelivery2_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const newPerson = newPersonRes.body.user;
+    test('PUT /api/delivery/:orderId/assign -> non-admins cannot assign deliveries', async () => {
+      const flow = await createDeliveryFlow({ titlePrefix: 'Assignment Permission Delivery Product' });
+      const newPersonAccount = await registerUser({ role: 'buyer', label: 'DeliveryAssigneeDenied' });
 
-      const res = await request(app)
-        .put(`/api/delivery/${order._id}/assign`)
+      const response = await request(app)
+        .put(`/api/delivery/${flow.orderId}/assign`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .send({
-          deliveryPersonId: newPerson._id
-        });
+          deliveryPersonId: newPersonAccount.user.id
+        })
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('permissions');
-
-      await User.deleteOne({ email: new RegExp('newdelivery2') }).catch(() => {});
+      expect(response.body.message).toContain('permissions');
     });
 
-    test('PUT /api/delivery/:orderId/assign -> Reject missing delivery person ID', async () => {
-      const res = await request(app)
-        .put(`/api/delivery/${order._id}/assign`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({});
+    test('PUT /api/delivery/:orderId/assign -> rejects missing delivery person IDs', async () => {
+      const flow = await createDeliveryFlow({ titlePrefix: 'Assignment Missing Delivery Product' });
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('Delivery person ID');
+      const response = await request(app)
+        .put(`/api/delivery/${flow.orderId}/assign`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({})
+        .expect(400);
+
+      expect(response.body.message).toContain('Delivery person ID');
     });
   });
 
   describe('Active Deliveries', () => {
-    test('GET /api/delivery/active -> Get active deliveries with pagination', async () => {
-      const res = await request(app)
+    test('GET /api/delivery/active -> delivery person gets paginated active deliveries', async () => {
+      const response = await request(app)
         .get('/api/delivery/active?page=1&limit=10')
-        .set('Authorization', `Bearer ${buyerToken}`);
+        .set('Authorization', `Bearer ${deliveryPersonToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('deliveries');
-      expect(res.body).toHaveProperty('pagination');
-      expect(res.body.pagination).toHaveProperty('page');
-      expect(res.body.pagination).toHaveProperty('limit');
-      expect(res.body.pagination).toHaveProperty('total');
+      expect(response.body).toHaveProperty('deliveries');
+      expect(response.body).toHaveProperty('pagination');
+      expect(response.body.pagination).toHaveProperty('page', 1);
+      expect(response.body.pagination).toHaveProperty('limit', 10);
+      expect(response.body.pagination.total).toBeGreaterThan(0);
     });
 
-    test('GET /api/delivery/active -> Admin sees all active deliveries', async () => {
-      const res = await request(app)
+    test('GET /api/delivery/active -> admin sees all active deliveries', async () => {
+      const response = await request(app)
         .get('/api/delivery/active')
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.deliveries)).toBe(true);
+      expect(Array.isArray(response.body.deliveries)).toBe(true);
+      expect(response.body.deliveries.length).toBeGreaterThan(0);
     });
 
-    test('GET /api/delivery/active -> Only includes active statuses', async () => {
-      const res = await request(app)
+    test('GET /api/delivery/active -> only active statuses are returned', async () => {
+      const response = await request(app)
         .get('/api/delivery/active')
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
       const validStatuses = ['assigned', 'picked_up', 'in_transit'];
-      res.body.deliveries.forEach(delivery => {
-        expect(validStatuses).toContain(delivery.status);
+      response.body.deliveries.forEach((item) => {
+        expect(validStatuses).toContain(item.status);
       });
     });
   });
 
   describe('Delivery Statistics', () => {
-    test('GET /api/delivery/stats -> Admin can view delivery statistics', async () => {
-      const res = await request(app)
+    test('GET /api/delivery/stats -> admin can view delivery statistics', async () => {
+      const response = await request(app)
         .get('/api/delivery/stats')
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('total');
-      expect(res.body).toHaveProperty('assigned');
-      expect(res.body).toHaveProperty('delivered');
-      expect(res.body).toHaveProperty('failed');
-      expect(res.body).toHaveProperty('avgDeliveryTimeHours');
+      expect(response.body).toHaveProperty('total');
+      expect(response.body).toHaveProperty('assigned');
+      expect(response.body).toHaveProperty('delivered');
+      expect(response.body).toHaveProperty('failed');
+      expect(response.body).toHaveProperty('avgDeliveryTimeHours');
     });
 
-    test('GET /api/delivery/stats -> Non-admin cannot view statistics', async () => {
-      const res = await request(app)
+    test('GET /api/delivery/stats -> non-admins cannot view statistics', async () => {
+      const response = await request(app)
         .get('/api/delivery/stats')
-        .set('Authorization', `Bearer ${buyerToken}`);
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('permissions');
+      expect(response.body.message).toContain('permissions');
     });
 
-    test('GET /api/delivery/stats -> Statistics include all status counts', async () => {
-      const res = await request(app)
+    test('GET /api/delivery/stats -> includes all status counts', async () => {
+      const response = await request(app)
         .get('/api/delivery/stats')
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      const statuses = ['total', 'assigned', 'pickedUp', 'inTransit', 'delivered', 'failed', 'returned'];
-      statuses.forEach(status => {
-        expect(res.body).toHaveProperty(status);
+      ['total', 'assigned', 'pickedUp', 'inTransit', 'delivered', 'failed', 'returned'].forEach((field) => {
+        expect(response.body).toHaveProperty(field);
       });
     });
   });

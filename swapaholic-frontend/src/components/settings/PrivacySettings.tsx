@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FaLock, FaEye, FaEyeSlash, FaSave, FaUserShield } from 'react-icons/fa';
+import { FaSave, FaUserShield } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 
 interface PrivacySettings {
@@ -46,7 +46,7 @@ export default function PrivacySettings() {
         }
     };
 
-    const handleSelect = (key: keyof PrivacySettings, value: any) => {
+    const handleSelect = <K extends keyof PrivacySettings>(key: K, value: PrivacySettings[K]) => {
         setSettings(prev => ({ ...prev, [key]: value }));
         setHasChanges(true);
     };
@@ -58,7 +58,7 @@ export default function PrivacySettings() {
             await new Promise(resolve => setTimeout(resolve, 1000));
             toast.success('Privacy settings saved!');
             setHasChanges(false);
-        } catch (error) {
+        } catch {
             toast.error('Failed to save settings');
         } finally {
             setIsSaving(false);
@@ -124,7 +124,7 @@ export default function PrivacySettings() {
                             </label>
                             <select
                                 value={settings.profileVisibility}
-                                onChange={(e) => handleSelect('profileVisibility', e.target.value)}
+                                onChange={(e) => handleSelect('profileVisibility', e.target.value as PrivacySettings['profileVisibility'])}
                                 className="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                             >
                                 <option value="public">Everyone (Public)</option>
@@ -188,7 +188,7 @@ export default function PrivacySettings() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="font-medium text-gray-900">Show Online Status</p>
-                                <p className="text-sm text-gray-500">Display when you're online</p>
+                                <p className="text-sm text-gray-500">Display when you&apos;re online</p>
                             </div>
                             <ToggleSwitch
                                 enabled={settings.showOnlineStatus}
@@ -210,7 +210,7 @@ export default function PrivacySettings() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="font-medium text-gray-900">Show Won Auctions</p>
-                                <p className="text-sm text-gray-500">Display auctions you've won</p>
+                                <p className="text-sm text-gray-500">Display auctions you&apos;ve won</p>
                             </div>
                             <ToggleSwitch
                                 enabled={settings.showWonAuctions}
@@ -232,7 +232,7 @@ export default function PrivacySettings() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="font-medium text-gray-900">Show Following</p>
-                                <p className="text-sm text-gray-500">Display who you're following</p>
+                                <p className="text-sm text-gray-500">Display who you&apos;re following</p>
                             </div>
                             <ToggleSwitch
                                 enabled={settings.showFollowing}
@@ -252,7 +252,7 @@ export default function PrivacySettings() {
                         </label>
                         <select
                             value={settings.allowMessages}
-                            onChange={(e) => handleSelect('allowMessages', e.target.value)}
+                            onChange={(e) => handleSelect('allowMessages', e.target.value as PrivacySettings['allowMessages'])}
                             className="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         >
                             <option value="everyone">Everyone</option>
@@ -281,7 +281,7 @@ export default function PrivacySettings() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="font-medium text-gray-900">Show in Recommendations</p>
-                                <p className="text-sm text-gray-500">Appear in "People you may know"</p>
+                                <p className="text-sm text-gray-500">Appear in &quot;People you may know&quot;</p>
                             </div>
                             <ToggleSwitch
                                 enabled={settings.showInRecommendations}

@@ -3,6 +3,45 @@ const Bid = require('../models/Bid');
 const Product = require('../models/Product');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const emailService = require('../utils/emailService');
+const notificationService = require('../utils/notificationService');
+
+const toId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value._id) return value._id.toString();
+  if (typeof value.toString === 'function') return value.toString();
+  return null;
+};
+
+const serializeOrder = (order) => {
+  const productId = order.productId && order.productId._id ? order.productId._id : order.productId;
+
+  return {
+    id: toId(order._id),
+    userId: toId(order.buyerId),
+    buyerId: order.buyerId,
+    sellerId: order.sellerId,
+    productId: toId(productId),
+    product: order.productId && typeof order.productId === 'object' ? order.productId : undefined,
+    bidId: toId(order.bidId),
+    products: productId ? [{ productId: toId(productId), quantity: 1 }] : [],
+    totalAmount: order.finalPrice,
+    finalPrice: order.finalPrice,
+    platformFee: order.platformFee || 0,
+    totalPayable: order.finalPrice + (order.platformFee || 0),
+    status: order.status,
+    escrowStatus: order.escrowStatus,
+    createdAt: order.orderDate || order.createdAt,
+    updatedAt: order.updatedAt,
+    orderDate: order.orderDate || order.createdAt,
+    estimatedDeliveryDate: order.estimatedDeliveryDate,
+    actualDeliveryDate: order.actualDeliveryDate,
+    notes: order.notes,
+    disputeReason: order.disputeReason,
+    disputeDescription: order.disputeDescription
+  };
+};
 
 // Create order from an accepted bid
 const createOrder = async (req, res) => {
@@ -33,7 +72,11 @@ const createOrder = async (req, res) => {
         .populate('productId', 'title category')
         .populate('buyerId', 'firstName lastName email')
         .populate('sellerId', 'firstName lastName email');
-      return res.status(201).json(populatedExisting);
+      return res.status(201).json({
+        success: true,
+        message: 'Order already exists for this bid',
+        data: serializeOrder(populatedExisting)
+      });
     }
 
     // Fetch product and seller info
@@ -60,7 +103,11 @@ const createOrder = async (req, res) => {
       .populate('buyerId', 'firstName lastName email')
       .populate('sellerId', 'firstName lastName email');
 
-    res.status(201).json(populatedOrder);
+    res.status(201).json({
+      success: true,
+      message: 'Order created successfully',
+      data: serializeOrder(populatedOrder)
+    });
   } catch (error) {
     logger.error('Create order error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -70,14 +117,21 @@ const createOrder = async (req, res) => {
 // Get user's orders (buyer or seller)
 const getUserOrders = async (req, res) => {
   try {
-    const { status, page = 1, limit = 10 } = req.query;
+    const { status, scope, page = 1, limit = 10 } = req.query;
 
-    const filter = {
-      $or: [
-        { buyerId: req.user.id },
-        { sellerId: req.user.id }
-      ]
-    };
+    let filter;
+    if (scope === 'buyer') {
+      filter = { buyerId: req.user.id };
+    } else if (scope === 'seller') {
+      filter = { sellerId: req.user.id };
+    } else {
+      filter = {
+        $or: [
+          { buyerId: req.user.id },
+          { sellerId: req.user.id }
+        ]
+      };
+    }
 
     if (status) filter.status = status;
 
@@ -93,15 +147,7 @@ const getUserOrders = async (req, res) => {
     const total = await Order.countDocuments(filter);
 
     // Transform orders to match frontend Order interface
-    const transformedOrders = orders.map(order => ({
-      id: order._id,
-      userId: order.buyerId?._id,
-      products: order.productId ? [{ productId: order.productId._id, quantity: 1 }] : [],
-      totalAmount: order.finalPrice,
-      status: order.status,
-      createdAt: order.orderDate || order.createdAt,
-      updatedAt: order.updatedAt
-    }));
+    const transformedOrders = orders.map(serializeOrder);
 
     res.json({
       success: true,
@@ -136,7 +182,10 @@ const getOrderById = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    res.json(order);
+    res.json({
+      success: true,
+      data: serializeOrder(order)
+    });
   } catch (error) {
     logger.error('Get order by ID error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -181,10 +230,48 @@ const updateOrderStatus = async (req, res) => {
 
     const updatedOrder = await Order.findById(id)
       .populate('productId', 'title')
-      .populate('buyerId', 'firstName lastName')
+      .populate('buyerId', 'firstName lastName email')
       .populate('sellerId', 'firstName lastName');
 
-    res.json(updatedOrder);
+    res.json({
+      success: true,
+      message: 'Order status updated successfully',
+      data: serializeOrder(updatedOrder)
+    });
+
+    if (status === 'in_delivery' && updatedOrder?.buyerId) {
+      setImmediate(async () => {
+        try {
+          const productTitle = updatedOrder.productId?.title || 'your order';
+          const buyerName = `${updatedOrder.buyerId.firstName || ''} ${updatedOrder.buyerId.lastName || ''}`.trim() || 'Buyer';
+
+          await notificationService.createAndSend({
+            recipientId: updatedOrder.buyerId._id,
+            type: 'delivery_started',
+            title: 'Order Shipped',
+            message: `Your order for "${productTitle}" is now on the way.`,
+            data: {
+              relatedId: updatedOrder._id,
+              relatedType: 'Order',
+              productTitle
+            },
+            priority: 'high',
+            actionUrl: `/orders/${updatedOrder._id}`
+          });
+
+          if (updatedOrder.buyerId.email) {
+            await emailService.sendOrderShippedEmail(
+              updatedOrder.buyerId.email,
+              buyerName,
+              productTitle,
+              updatedOrder._id.toString()
+            );
+          }
+        } catch (shippingNotificationError) {
+          logger.error('Order shipped notification error:', shippingNotificationError);
+        }
+      });
+    }
   } catch (error) {
     logger.error('Update order status error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -222,8 +309,9 @@ const confirmDelivery = async (req, res) => {
       .populate('sellerId', 'firstName lastName');
 
     res.json({
+      success: true,
       message: 'Delivery confirmed. Payment will be released to seller within 24 hours.',
-      order: completedOrder
+      data: serializeOrder(completedOrder)
     });
   } catch (error) {
     logger.error('Confirm delivery error:', error);
@@ -267,7 +355,14 @@ const raiseDispute = async (req, res) => {
 
     await order.save();
 
-    res.json({ message: 'Dispute raised. Support will contact you.', order });
+    res.json({
+      success: true,
+      message: 'Dispute raised. Support will contact you.',
+      data: {
+        message: 'Dispute raised. Support will contact you.',
+        order: serializeOrder(order)
+      }
+    });
   } catch (error) {
     logger.error('Raise dispute error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -305,7 +400,14 @@ const cancelOrder = async (req, res) => {
       await Bid.findByIdAndUpdate(order.bidId, { status: 'withdrawn' });
     }
 
-    res.json({ message: 'Order cancelled', order });
+    res.json({
+      success: true,
+      message: 'Order cancelled',
+      data: {
+        message: 'Order cancelled',
+        order: serializeOrder(order)
+      }
+    });
   } catch (error) {
     logger.error('Cancel order error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -336,8 +438,13 @@ const getAllOrders = async (req, res) => {
     const total = await Order.countDocuments(filter);
 
     res.json({
-      orders,
-      pagination: { page: parseInt(page), limit: parseInt(limit), total }
+      success: true,
+      data: {
+        data: orders.map(serializeOrder),
+        total,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10)
+      }
     });
   } catch (error) {
     logger.error('Get all orders error:', error);

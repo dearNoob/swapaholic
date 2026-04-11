@@ -12,7 +12,7 @@ export default function FAQPage() {
                         <strong>What is Swapaholic?</strong> Swapaholic is an online marketplace for buying and selling goods through auctions.
                     </li>
                     <li>
-                        <strong>How do I create an account?</strong> Click "Sign Up" on the homepage and fill in the required details.
+                        <strong>How do I create an account?</strong> Click &quot;Sign Up&quot; on the homepage and fill in the required details.
                     </li>
                 </ul>
             </section>
@@ -34,7 +34,7 @@ export default function FAQPage() {
                         <strong>How is shipping calculated?</strong> Shipping costs are calculated based on weight, destination, and selected carrier.
                     </li>
                     <li>
-                        <strong>Can I track my order?</strong> Yes, you can track shipments from the "My Orders" page.
+                        <strong>Can I track my order?</strong> Yes, you can track shipments from the &quot;My Orders&quot; page.
                     </li>
                 </ul>
             </section>

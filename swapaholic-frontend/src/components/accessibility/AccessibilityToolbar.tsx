@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { FaUniversalAccess, FaTextHeight, FaEye, FaKeyboard, FaMinus, FaPlus, FaTimes } from 'react-icons/fa';
 
 interface AccessibilitySettings {
@@ -10,27 +10,76 @@ interface AccessibilitySettings {
     highContrast: boolean;
 }
 
+const DEFAULT_SETTINGS: AccessibilitySettings = {
+    fontSize: 100,
+    colorBlindMode: 'none',
+    reducedMotion: false,
+    highContrast: false,
+};
+
+const COLOR_BLIND_MODES: AccessibilitySettings['colorBlindMode'][] = [
+    'none',
+    'protanopia',
+    'deuteranopia',
+    'tritanopia',
+];
+
+const getInitialSettings = (): AccessibilitySettings => {
+    if (typeof window === 'undefined') {
+        return DEFAULT_SETTINGS;
+    }
+
+    let nextSettings = DEFAULT_SETTINGS;
+    const saved = window.localStorage.getItem('a11y-settings');
+
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved) as Partial<AccessibilitySettings>;
+            const parsedMode = parsed.colorBlindMode;
+
+            nextSettings = {
+                ...DEFAULT_SETTINGS,
+                ...parsed,
+                colorBlindMode: parsedMode && COLOR_BLIND_MODES.includes(parsedMode) ? parsedMode : 'none',
+            };
+        } catch {
+            nextSettings = DEFAULT_SETTINGS;
+        }
+    }
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        nextSettings = {
+            ...nextSettings,
+            reducedMotion: true,
+        };
+    }
+
+    return nextSettings;
+};
+
 export default function AccessibilityToolbar() {
     const [isOpen, setIsOpen] = useState(false);
-    const [settings, setSettings] = useState<AccessibilitySettings>({
-        fontSize: 100,
-        colorBlindMode: 'none',
-        reducedMotion: false,
-        highContrast: false
-    });
+    const [settings, setSettings] = useState<AccessibilitySettings>(getInitialSettings);
 
     useEffect(() => {
-        // Load saved settings
-        const saved = localStorage.getItem('a11y-settings');
-        if (saved) {
-            setSettings(JSON.parse(saved));
-        }
+        const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const handleChange = (event: MediaQueryListEvent) => {
+            if (!event.matches) {
+                return;
+            }
 
-        // Check system preference for reduced motion
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (prefersReducedMotion) {
-            setSettings(prev => ({ ...prev, reducedMotion: true }));
-        }
+            setSettings((prev) => (
+                prev.reducedMotion
+                    ? prev
+                    : { ...prev, reducedMotion: true }
+            ));
+        };
+
+        mediaQuery.addEventListener('change', handleChange);
+
+        return () => {
+            mediaQuery.removeEventListener('change', handleChange);
+        };
     }, []);
 
     useEffect(() => {
@@ -67,10 +116,8 @@ export default function AccessibilityToolbar() {
 
     const resetSettings = () => {
         setSettings({
-            fontSize: 100,
-            colorBlindMode: 'none',
-            reducedMotion: false,
-            highContrast: false
+            ...DEFAULT_SETTINGS,
+            reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
         });
     };
 
@@ -162,7 +209,14 @@ export default function AccessibilityToolbar() {
                             </div>
                             <select
                                 value={settings.colorBlindMode}
-                                onChange={(e) => setSettings(prev => ({ ...prev, colorBlindMode: e.target.value as any }))}
+                                onChange={(e) => {
+                                    const mode = e.target.value as AccessibilitySettings['colorBlindMode'];
+                                    if (!COLOR_BLIND_MODES.includes(mode)) {
+                                        return;
+                                    }
+
+                                    setSettings((prev) => ({ ...prev, colorBlindMode: mode }));
+                                }}
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                                 aria-label="Select color blind mode"
                             >

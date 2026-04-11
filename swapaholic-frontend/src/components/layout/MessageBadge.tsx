@@ -16,8 +16,8 @@ export default function MessageBadge() {
 
         const fetchUnreadCount = async () => {
             try {
-                const data = await messagesApi.getUnreadCount();
-                setUnreadCount(data.count || 0);
+                const count = await messagesApi.getUnreadCount();
+                setUnreadCount(count);
             } catch (err) {
                 console.error('Error fetching message count:', err);
             }

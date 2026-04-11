@@ -1,135 +1,213 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { paymentsApi as paymentApi } from '@/api/payments';
+import { toast } from 'react-toastify';
+import { paymentsApi } from '@/api/payments';
 import { ordersApi } from '@/api/orders';
 import PaymentMethodSelector from '@/components/payments/PaymentMethodSelector';
 import StripeCheckoutButton from '@/components/payments/StripeCheckoutButton';
-import PayPalButton from '@/components/payments/PayPalButton';
-import EscrowManagement from '@/components/payments/EscrowManagement';
-import RefundProcessing from '@/components/payments/RefundProcessing';
 import InvoiceDisplay from '@/components/payments/InvoiceDisplay';
+import { Order, Payment } from '@/types/api';
+
+type SelectedMethod = 'stripe' | 'paypal' | 'escrow' | 'bkash' | 'rocket' | 'nagad' | null;
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: string }).message === 'string') {
+        return (error as { message: string }).message;
+    }
+    return fallback;
+};
+
+const formatPaymentStatus = (status: Payment['status']) => {
+    switch (status) {
+        case 'pending':
+            return 'Pending payment';
+        case 'escrowed':
+            return 'Payment secured in escrow';
+        case 'released':
+            return 'Payment released';
+        case 'refunded':
+            return 'Payment refunded';
+        case 'failed':
+            return 'Payment failed';
+        default:
+            return status;
+    }
+};
 
 export default function PaymentPage() {
     const params = useParams();
-    const orderId = params.orderId as string;
-    const [orderDetails, setOrderDetails] = useState<any>(null);
-    const [selectedMethod, setSelectedMethod] = useState<'stripe' | 'paypal' | 'escrow' | 'bkash' | 'rocket' | 'nagad' | null>(null);
-    const [paymentSession, setPaymentSession] = useState<any>(null);
-    const [paymentStatus, setPaymentStatus] = useState<string>('');
+    const orderId = String(params.orderId ?? '');
+    const [orderDetails, setOrderDetails] = useState<Order | null>(null);
+    const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>(null);
+    const [paymentSession, setPaymentSession] = useState<Payment | null>(null);
+    const [isLoadingOrder, setIsLoadingOrder] = useState(true);
+    const [isLoadingPayment, setIsLoadingPayment] = useState(true);
 
-    useEffect(() => {
-        if (orderId) {
-            fetchOrderDetails();
+    const loadOrderDetails = useCallback(async () => {
+        if (!orderId) {
+            setIsLoadingOrder(false);
+            return;
+        }
+
+        try {
+            setIsLoadingOrder(true);
+            const order = await ordersApi.getOrderById(orderId);
+            setOrderDetails(order);
+        } catch (error) {
+            console.error('Error fetching order:', error);
+            toast.error(getErrorMessage(error, 'Failed to load order details'));
+        } finally {
+            setIsLoadingOrder(false);
         }
     }, [orderId]);
 
-    const fetchOrderDetails = async () => {
-        try {
-            const order = await ordersApi.getOrderById(orderId);
-            setOrderDetails({
-                id: order.id,
-                amount: order.totalAmount,
-                currency: 'BDT',
-                description: `Order #${order.id}`,
-            });
-        } catch (error) {
-            console.error('Error fetching order:', error);
+    const loadExistingPayment = useCallback(async () => {
+        if (!orderId) {
+            setIsLoadingPayment(false);
+            return;
         }
-    };
 
-    const handleMethodSelect = (method: typeof selectedMethod) => {
-        setSelectedMethod(method);
-    };
-
-    const handlePaymentRedirect = async (method: 'stripe' | 'paypal' | 'bkash' | 'rocket' | 'nagad') => {
-        if (!orderDetails) return;
         try {
-            const payment = await paymentApi.initiate({
+            setIsLoadingPayment(true);
+            const payment = await paymentsApi.getPayment(orderId);
+            setPaymentSession(payment);
+        } catch (error) {
+            const status = error && typeof error === 'object' && 'status' in error ? (error as { status?: number }).status : undefined;
+            if (status !== 404) {
+                console.error('Error fetching payment:', error);
+                toast.error(getErrorMessage(error, 'Failed to load payment details'));
+            }
+            setPaymentSession(null);
+        } finally {
+            setIsLoadingPayment(false);
+        }
+    }, [orderId]);
+
+    useEffect(() => {
+        void loadOrderDetails();
+        void loadExistingPayment();
+    }, [loadExistingPayment, loadOrderDetails]);
+
+    const handlePaymentRedirect = async (method: 'bkash' | 'rocket' | 'nagad') => {
+        if (!orderDetails) return;
+
+        try {
+            const payment = await paymentsApi.initiate({
                 orderId: orderDetails.id,
                 method
             });
+
             setPaymentSession(payment);
 
-            const session = payment as any;
-
-            // Check for Mock Gateway URL (or standard paymentUrl)
-            if (session.gatewayUrl) {
-                window.location.href = session.gatewayUrl;
+            if (payment.gatewayUrl) {
+                window.location.href = payment.gatewayUrl;
                 return;
             }
 
-            // Fallback for legacy implementations (if any)
-            if (session.paymentUrl) {
-                window.location.href = session.paymentUrl;
-            }
+            toast.error('Payment gateway URL was not returned for this method.');
         } catch (error) {
             console.error(`${method} payment error:`, error);
+            toast.error(getErrorMessage(error, `Failed to start ${method} payment`));
         }
     };
 
-    const startStripePayment = () => handlePaymentRedirect('stripe'); // Now redirected to Mock Gateway if 'card' or 'stripe' logic matches
-    const startPayPalPayment = () => handlePaymentRedirect('paypal'); // PayPal can also go to Mock Gateway if we want
-    const startBkashPayment = () => handlePaymentRedirect('bkash');
-    const startRocketPayment = () => handlePaymentRedirect('rocket');
-    const startNagadPayment = () => handlePaymentRedirect('nagad');
+    const handleStripeSuccess = async (payment?: Payment) => {
+        if (payment) {
+            setPaymentSession(payment);
+        }
+        await loadExistingPayment();
+        toast.success('Payment completed successfully.');
+    };
+
+    const isBusy = isLoadingOrder || isLoadingPayment;
+    const hasCompletedPayment = paymentSession?.status === 'escrowed' || paymentSession?.status === 'released';
 
     return (
         <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
             <h1 className="text-2xl font-bold mb-4">Payment for Order #{orderId}</h1>
-            {orderDetails ? (
+
+            {isBusy && <p>Loading payment details...</p>}
+
+            {!isBusy && !orderDetails && (
+                <p className="text-red-600">We couldn&apos;t load this order.</p>
+            )}
+
+            {orderDetails && (
                 <div className="space-y-4">
-                    <p>{orderDetails.description}</p>
-                    <p className="text-xl font-semibold">
-                        Amount: {orderDetails.amount} {orderDetails.currency}
-                    </p>
-                    <PaymentMethodSelector onSelect={handleMethodSelect} selected={selectedMethod} />
-                    {/* Update button logic if needed, but since we updated the function names/definitions above, the existing JSX calls to startBkashPayment etc should work fine. */}
-                    {selectedMethod === 'stripe' && (
-                        // We will allow the user to click "Pay with Card" which redirects to Gateway for "card"
-                        <button
-                            onClick={() => handlePaymentRedirect('card' as any)}
-                            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex justify-center items-center gap-2"
-                        >
-                            Pay with Secure Gateway
-                        </button>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                        <p className="text-sm text-gray-600">Order Summary</p>
+                        <p className="font-semibold text-gray-900">Order #{orderDetails.id}</p>
+                        <p className="text-xl font-semibold mt-2">Amount: {orderDetails.totalAmount} BDT</p>
+                        <p className="text-sm text-gray-500 mt-1">Status: {orderDetails.status}</p>
+                    </div>
+
+                    {paymentSession && (
+                        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+                            <p className="text-sm text-indigo-700">Current Payment</p>
+                            <p className="font-semibold text-indigo-950">{formatPaymentStatus(paymentSession.status)}</p>
+                            {paymentSession.transactionId && (
+                                <p className="text-sm text-indigo-800 mt-1">Transaction ID: {paymentSession.transactionId}</p>
+                            )}
+                        </div>
                     )}
-                    {selectedMethod === 'paypal' && (
-                        <PayPalButton onPay={startPayPalPayment} />
+
+                    {!hasCompletedPayment && (
+                        <>
+                            <PaymentMethodSelector onSelect={setSelectedMethod} selected={selectedMethod} />
+
+                            {selectedMethod === 'stripe' && (
+                                <StripeCheckoutButton
+                                    orderId={orderDetails.id}
+                                    amount={orderDetails.totalAmount}
+                                    onSuccess={handleStripeSuccess}
+                                />
+                            )}
+
+                            {selectedMethod === 'paypal' && (
+                                <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+                                    PayPal checkout is not wired up yet in this codebase. Please use card or a mobile wallet instead.
+                                </div>
+                            )}
+
+                            {selectedMethod === 'escrow' && (
+                                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                                    Escrow is applied automatically once your payment succeeds. You don&apos;t need a separate escrow action here.
+                                </div>
+                            )}
+
+                            {selectedMethod === 'bkash' && (
+                                <button
+                                    onClick={() => void handlePaymentRedirect('bkash')}
+                                    className="w-full px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition font-semibold"
+                                >
+                                    Pay with bKash
+                                </button>
+                            )}
+
+                            {selectedMethod === 'rocket' && (
+                                <button
+                                    onClick={() => void handlePaymentRedirect('rocket')}
+                                    className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
+                                >
+                                    Pay with Rocket
+                                </button>
+                            )}
+
+                            {selectedMethod === 'nagad' && (
+                                <button
+                                    onClick={() => void handlePaymentRedirect('nagad')}
+                                    className="w-full px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-semibold"
+                                >
+                                    Pay with Nagad
+                                </button>
+                            )}
+                        </>
                     )}
-                    {selectedMethod === 'escrow' && (
-                        <EscrowManagement orderId={orderDetails.id} amount={orderDetails.amount} />
-                    )}
-                    {selectedMethod === 'bkash' && (
-                        <button
-                            onClick={startBkashPayment}
-                            className="w-full px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition font-semibold"
-                        >
-                            Pay with bKash
-                        </button>
-                    )}
-                    {selectedMethod === 'rocket' && (
-                        <button
-                            onClick={startRocketPayment}
-                            className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
-                        >
-                            Pay with Rocket
-                        </button>
-                    )}
-                    {selectedMethod === 'nagad' && (
-                        <button
-                            onClick={startNagadPayment}
-                            className="w-full px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-semibold"
-                        >
-                            Pay with Nagad
-                        </button>
-                    )}
-                    <RefundProcessing paymentId={paymentSession?.id} />
-                    <InvoiceDisplay paymentId={paymentSession?.id} />
+
+                    {paymentSession && <InvoiceDisplay paymentId={paymentSession.id} />}
                 </div>
-            ) : (
-                <p>Loading order details...</p>
             )}
         </div>
     );

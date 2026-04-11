@@ -39,6 +39,11 @@ const getAlertConfig = (alert: Alert) => {
     return configs[alert.category] || { icon: FaInfoCircle, label: alert.category, valueKey: 'pending', valueLabel: '' };
 };
 
+const getAlertValue = (alert: Alert, valueKey: string): number => {
+    const value = alert[valueKey as keyof Alert];
+    return typeof value === 'number' ? value : 0;
+};
+
 const getSeverityStyles = (severity: string) => {
     switch (severity) {
         case 'warning':
@@ -81,10 +86,7 @@ export default function SystemAlerts({ health }: SystemAlertsProps) {
     }
 
     const overallStatus = health.health;
-    const activeAlerts = health.alerts.filter((a) => {
-        const value = (a as any)[getAlertConfig(a).valueKey];
-        return value > 0;
-    });
+    const activeAlerts = health.alerts.filter((alert) => getAlertValue(alert, getAlertConfig(alert).valueKey) > 0);
 
     return (
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
@@ -116,7 +118,7 @@ export default function SystemAlerts({ health }: SystemAlertsProps) {
                     activeAlerts.map((alert, index) => {
                         const config = getAlertConfig(alert);
                         const styles = getSeverityStyles(alert.severity);
-                        const value = (alert as any)[config.valueKey];
+                        const value = getAlertValue(alert, config.valueKey);
                         const Icon = config.icon;
 
                         return (

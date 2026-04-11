@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FaPlus } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import { useAppSelector } from '../../../store/hooks';
 import RevenueOverview from '../../../components/seller/RevenueOverview';
 import ActiveListings from '../../../components/seller/ActiveListings';
 import SalesChart from '../../../components/seller/SalesChart';
@@ -15,84 +14,202 @@ import EarningsSummary from '../../../components/seller/EarningsSummary';
 import RecentBids from '../../../components/seller/RecentBids';
 import { sellerApi } from '../../../api/seller';
 import { productsApi } from '../../../api/products';
+import { useAppSelector } from '../../../store/hooks';
 import { socketService } from '../../../utils/socket';
-import { emailApi } from '../../../api/email';
+import { handleApiError } from '../../../utils/errorHandler';
+
+type AnalyticsPeriod = '7d' | '30d' | '90d';
+
+interface SellerDashboardRevenue {
+    totalRevenue: number;
+    pendingPayments: number;
+    activeListings: number;
+    totalSales: number;
+    revenueTrend: number;
+    salesTrend: number;
+}
+
+interface SellerListing {
+    id: string;
+    title: string;
+    image: string;
+    images?: string[];
+    price: number;
+    category?: string;
+    condition?: string;
+    views: number;
+    bids: number;
+    status: 'active' | 'pending' | 'sold' | 'ended';
+    createdAt: string;
+}
+
+interface SellerSalesPoint {
+    date: string;
+    revenue: number;
+}
+
+type SellerDashboardOrderStatus = 'pending' | 'paid' | 'shipped' | 'delivered';
+
+interface SellerRecentOrder {
+    id: string;
+    productTitle: string;
+    buyerName: string;
+    amount: number;
+    status: SellerDashboardOrderStatus;
+    createdAt: string;
+}
+
+interface SellerRecentBid {
+    id: string;
+    product: {
+        id: string;
+        title: string;
+        image: string;
+    };
+    bidder: {
+        name: string;
+        image: string;
+        id: string;
+    };
+    amount: number;
+    time: string;
+    status: string;
+}
+
+interface SellerPerformanceMetrics {
+    averageRating: number;
+    totalViews: number;
+    totalBids: number;
+    conversionRate: number;
+    viewsTrend?: number;
+    bidsTrend?: number;
+    conversionTrend?: number;
+}
+
+interface SellerEarningsSummary {
+    todayEarnings: number;
+    weekEarnings: number;
+    monthEarnings: number;
+    yearEarnings: number;
+    todayTrend?: number;
+    weekTrend?: number;
+    monthTrend?: number;
+}
+
+interface SellerDashboardState {
+    revenue: SellerDashboardRevenue;
+    listings: SellerListing[];
+    salesData: SellerSalesPoint[];
+    recentOrders: SellerRecentOrder[];
+    recentBids: SellerRecentBid[];
+    performance: SellerPerformanceMetrics;
+    earnings: SellerEarningsSummary;
+}
+
+interface SocketEvent<TPayload> {
+    data: TPayload;
+    timestamp?: string;
+}
+
+interface NotificationSocketPayload<TPayload> {
+    id?: string;
+    title?: string;
+    message?: string;
+    type?: string;
+    data?: TPayload;
+    priority?: string;
+    actionUrl?: string;
+}
+
+interface BidReceivedPayload {
+    bidId?: string;
+    productId: string;
+    productTitle: string;
+    productImage?: string;
+    bidderName: string;
+    bidderImage?: string;
+    bidderId?: string;
+    bidAmount: number;
+}
+
+interface ProductViewPayload {
+    productId: string;
+    viewCount: number;
+}
+
+interface OrderCreatedPayload {
+    productTitle: string;
+}
+
+interface PaymentReleasedPayload {
+    amount: number;
+    platformFee?: number;
+}
+
+const unwrapRealtimePayload = <TPayload,>(
+    event: SocketEvent<TPayload | NotificationSocketPayload<TPayload>>
+): TPayload => {
+    const payload = event.data as TPayload | NotificationSocketPayload<TPayload>;
+
+    if (
+        payload &&
+        typeof payload === 'object' &&
+        'data' in payload &&
+        'type' in payload &&
+        payload.data &&
+        typeof payload.data === 'object'
+    ) {
+        return payload.data as TPayload;
+    }
+
+    return payload as TPayload;
+};
+
+const INITIAL_DASHBOARD_STATE: SellerDashboardState = {
+    revenue: {
+        totalRevenue: 0,
+        pendingPayments: 0,
+        activeListings: 0,
+        totalSales: 0,
+        revenueTrend: 0,
+        salesTrend: 0,
+    },
+    listings: [],
+    salesData: [],
+    recentOrders: [],
+    recentBids: [],
+    performance: {
+        averageRating: 0,
+        totalViews: 0,
+        totalBids: 0,
+        conversionRate: 0,
+    },
+    earnings: {
+        todayEarnings: 0,
+        weekEarnings: 0,
+        monthEarnings: 0,
+        yearEarnings: 0,
+    },
+};
 
 export default function SellerDashboardPage() {
     const { user } = useAppSelector((state) => state.auth);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isLiveUpdates, setIsLiveUpdates] = useState(false);
+    const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>('30d');
+    const [dashboardData, setDashboardData] = useState<SellerDashboardState>(INITIAL_DASHBOARD_STATE);
 
-    const [dashboardData, setDashboardData] = useState<{
-        revenue: {
-            totalRevenue: number;
-            pendingPayments: number;
-            activeListings: number;
-            totalSales: number;
-            revenueTrend: number;
-            salesTrend: number;
-        };
-        listings: any[];
-        salesData: any[];
-        recentOrders: any[];
-        recentBids: any[];
-        performance: {
-            averageRating: number;
-            totalViews: number;
-            totalBids: number;
-            conversionRate: number;
-            viewsTrend?: number;
-            bidsTrend?: number;
-            conversionTrend?: number;
-        };
-        earnings: {
-            todayEarnings: number;
-            weekEarnings: number;
-            monthEarnings: number;
-            yearEarnings: number;
-            todayTrend?: number;
-            weekTrend?: number;
-            monthTrend?: number;
-        };
-    }>({
-        revenue: {
-            totalRevenue: 0,
-            pendingPayments: 0,
-            activeListings: 0,
-            totalSales: 0,
-            revenueTrend: 0,
-            salesTrend: 0,
-        },
-        listings: [],
-        salesData: [],
-        recentOrders: [],
-        recentBids: [],
-        performance: {
-            averageRating: 0,
-            totalViews: 0,
-            totalBids: 0,
-            conversionRate: 0,
-        },
-        earnings: {
-            todayEarnings: 0,
-            weekEarnings: 0,
-            monthEarnings: 0,
-            yearEarnings: 0,
-        },
-    });
-
-    // Fetch dashboard data from API
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
                 setIsLoading(true);
                 setError(null);
 
-                // Fetch all data in parallel
                 const [dashboardStats, listings, analytics, recentOrders, recentBids, performance, earnings] = await Promise.all([
                     sellerApi.getDashboardData(),
                     sellerApi.getListings(),
-                    sellerApi.getSalesAnalytics('30d'),
+                    sellerApi.getSalesAnalytics(analyticsPeriod),
                     sellerApi.getRecentOrders(5),
                     sellerApi.getRecentBids(5),
                     sellerApi.getPerformanceMetrics(),
@@ -101,133 +218,172 @@ export default function SellerDashboardPage() {
 
                 setDashboardData({
                     revenue: dashboardStats.revenue,
-                    listings: listings.listings,
-                    salesData: analytics.salesData,
+                    listings: listings.listings || [],
+                    salesData: analytics.salesData || [],
                     recentOrders: recentOrders.orders || [],
                     recentBids: recentBids.bids || [],
-                    performance: performance,
-                    earnings: earnings,
+                    performance,
+                    earnings,
                 });
-            } catch (err: any) {
-                const errorMessage = err.response?.data?.message || 'Failed to load dashboard data';
+            } catch (fetchError) {
+                const errorMessage = handleApiError(fetchError) || 'Failed to load dashboard data';
                 setError(errorMessage);
                 toast.error(errorMessage);
-                console.error('Dashboard data fetch error:', err);
+                console.error('Dashboard data fetch error:', fetchError);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        fetchDashboardData();
-    }, []);
+        void fetchDashboardData();
+    }, [analyticsPeriod]);
 
-    // Setup Socket.IO for real-time updates
     useEffect(() => {
-        // Get actual user ID from auth state
         const userId = user?.id;
 
-        // Only connect if user is authenticated
         if (!userId) {
-            console.warn('No user ID available for Socket.IO connection');
+            setIsLiveUpdates(false);
             return;
         }
 
-        // Connect to Socket.IO with real user ID
-        socketService.connect();
+        const socket = socketService.connect();
+        setIsLiveUpdates(Boolean(socket));
 
-        // Listen for new bids
-        socketService.on('bid_received', (data: any) => {
-            console.log('New bid received:', data);
-            toast.info(`New bid of ৳${data.data.bidAmount} on "${data.data.productTitle}"`);
-
-            // Refresh dashboard stats and update recent bids
-            sellerApi.getDashboardData().then(stats => {
-                setDashboardData(prev => ({
+        const refreshRevenue = async () => {
+            try {
+                const stats = await sellerApi.getDashboardData();
+                setDashboardData((prev) => ({
                     ...prev,
                     revenue: stats.revenue,
-                    // Prepend new bid to recentBids
-                    recentBids: [
-                        {
-                            id: data.data.bidId || Date.now().toString(), // Fallback ID if not provided
-                            product: {
-                                id: data.data.productId,
-                                title: data.data.productTitle,
-                                image: data.data.productImage || '/products/placeholder.png'
-                            },
-                            bidder: {
-                                name: data.data.bidderName,
-                                image: data.data.bidderImage || '/default-avatar.png',
-                                id: data.data.bidderId
-                            },
-                            amount: data.data.bidAmount,
-                            time: new Date().toISOString(),
-                            status: 'active'
-                        },
-                        ...prev.recentBids
-                    ].slice(0, 5) // Keep only top 5
                 }));
-            });
-        });
+            } catch (refreshError) {
+                console.error('Failed to refresh revenue stats:', refreshError);
+            }
+        };
 
-        // Listen for product views
-        socketService.on('product:view', (data: any) => {
-            console.log('Product viewed:', data);
+        const refreshListings = async () => {
+            try {
+                const listings = await sellerApi.getListings();
+                setDashboardData((prev) => ({
+                    ...prev,
+                    listings: listings.listings || [],
+                }));
+            } catch (refreshError) {
+                console.error('Failed to refresh listings:', refreshError);
+            }
+        };
 
-            // Update the specific listing's view count
-            setDashboardData(prev => ({
+        const refreshRecentOrders = async () => {
+            try {
+                const recentOrders = await sellerApi.getRecentOrders(5);
+                setDashboardData((prev) => ({
+                    ...prev,
+                    recentOrders: recentOrders.orders || [],
+                }));
+            } catch (refreshError) {
+                console.error('Failed to refresh recent orders:', refreshError);
+            }
+        };
+
+        const handleBidReceived = (
+            event: SocketEvent<BidReceivedPayload | NotificationSocketPayload<BidReceivedPayload>>
+        ) => {
+            const payload = unwrapRealtimePayload(event);
+            toast.info(`New bid of BDT ${payload.bidAmount} on "${payload.productTitle}"`);
+
+            setDashboardData((prev) => ({
                 ...prev,
-                listings: prev.listings.map((listing: any) =>
-                    listing.id === data.data.productId
-                        ? { ...listing, views: data.data.viewCount }
+                recentBids: [
+                    {
+                        id: payload.bidId || `${payload.productId}-${Date.now()}`,
+                        product: {
+                            id: payload.productId,
+                            title: payload.productTitle,
+                            image: payload.productImage || '/products/placeholder.png',
+                        },
+                        bidder: {
+                            name: payload.bidderName,
+                            image: payload.bidderImage || '/default-avatar.png',
+                            id: payload.bidderId || '',
+                        },
+                        amount: payload.bidAmount,
+                        time: new Date().toISOString(),
+                        status: 'active',
+                    },
+                    ...prev.recentBids.filter((bid) => bid.id !== payload.bidId),
+                ].slice(0, 5),
+                listings: prev.listings.map((listing) =>
+                    listing.id === payload.productId
+                        ? { ...listing, bids: listing.bids + 1 }
                         : listing
                 ),
             }));
-        });
+        };
 
-        // Listen for product sold
-        socketService.on('product:sold', (data: any) => {
-            console.log('Product sold:', data);
-            toast.success(`Product sold: "${data.productTitle}"`);
+        const handleProductView = (event: SocketEvent<ProductViewPayload>) => {
+            const payload = unwrapRealtimePayload(event);
 
-            // Send auction won email to buyer
-            if (data.buyerId && data.productId) {
-                emailApi.auctionWon(data.productId, data.buyerId).catch(err => {
-                    console.error('Failed to send auction won email:', err);
-                });
-            }
+            setDashboardData((prev) => ({
+                ...prev,
+                listings: prev.listings.map((listing) =>
+                    listing.id === payload.productId
+                        ? { ...listing, views: payload.viewCount }
+                        : listing
+                ),
+            }));
+        };
 
-            // Refresh listings
-            sellerApi.getListings().then(result => {
-                setDashboardData(prev => ({
-                    ...prev,
-                    listings: result.listings,
-                }));
-            });
-        });
+        const handleOrderCreated = (
+            event: SocketEvent<OrderCreatedPayload | NotificationSocketPayload<OrderCreatedPayload>>
+        ) => {
+            const payload = unwrapRealtimePayload(event);
+            toast.success(`New order created for "${payload.productTitle}"`);
 
-        // Listen for payment received
-        socketService.on('payment_released', (data: any) => {
-            console.log('Payment released:', data);
-            toast.success(`Payment of $৳{data.data.amount} released!`);
+            void refreshListings();
+            void refreshRecentOrders();
+            void refreshRevenue();
+        };
 
-            // Refresh revenue stats
-            sellerApi.getDashboardData().then(stats => {
-                setDashboardData(prev => ({
-                    ...prev,
-                    revenue: stats.revenue,
-                }));
-            });
-        });
+        const handlePaymentReleased = (
+            event: SocketEvent<PaymentReleasedPayload | NotificationSocketPayload<PaymentReleasedPayload>>
+        ) => {
+            const payload = unwrapRealtimePayload(event);
+            toast.success(`Payment of BDT ${payload.amount} released.`);
+            void refreshRevenue();
+        };
 
-        // Cleanup on unmount
+        socketService.on('bid_received', handleBidReceived);
+        socketService.on('product:view', handleProductView);
+        socketService.on('order_created', handleOrderCreated);
+        socketService.on('payment_released', handlePaymentReleased);
+        socketService.on('seller_payout', handlePaymentReleased);
+
         return () => {
-            socketService.off('bid_received');
-            socketService.off('product:view');
-            socketService.off('product:sold');
-            socketService.off('payment_released');
+            setIsLiveUpdates(false);
+            socketService.off('bid_received', handleBidReceived);
+            socketService.off('product:view', handleProductView);
+            socketService.off('order_created', handleOrderCreated);
+            socketService.off('payment_released', handlePaymentReleased);
+            socketService.off('seller_payout', handlePaymentReleased);
             socketService.disconnect();
         };
     }, [user]);
+
+    const handleDeleteListing = async (id: string) => {
+        try {
+            await productsApi.deleteProduct(id);
+            toast.success('Listing deleted successfully');
+
+            const response = await sellerApi.getListings();
+            setDashboardData((prev) => ({
+                ...prev,
+                listings: response.listings || [],
+            }));
+        } catch (deleteError) {
+            console.error('Delete error:', deleteError);
+            toast.error(handleApiError(deleteError) || 'Failed to delete listing');
+        }
+    };
 
     if (isLoading) {
         return (
@@ -236,8 +392,8 @@ export default function SellerDashboardPage() {
                     <div className="animate-pulse space-y-6">
                         <div className="h-12 bg-gray-200 rounded w-1/3" />
                         <div className="grid grid-cols-4 gap-6">
-                            {[...Array(4)].map((_, i) => (
-                                <div key={i} className="h-32 bg-gray-200 rounded" />
+                            {[...Array(4)].map((_, index) => (
+                                <div key={index} className="h-32 bg-gray-200 rounded" />
                             ))}
                         </div>
                         <div className="h-64 bg-gray-200 rounded" />
@@ -265,33 +421,15 @@ export default function SellerDashboardPage() {
         );
     }
 
-    const handleDeleteListing = async (id: string) => {
-        try {
-            await productsApi.deleteProduct(id);
-            toast.success('Listing deleted successfully');
-
-            // Refresh listings
-            const response = await sellerApi.getListings();
-            setDashboardData(prev => ({
-                ...prev,
-                listings: response.listings
-            }));
-        } catch (error) {
-            console.error('Delete error:', error);
-            toast.error('Failed to delete listing');
-        }
-    };
-
     return (
         <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Welcome Header */}
                 <div className="mb-8">
                     <h1 className="text-4xl font-extrabold text-gray-900">
-                        Seller Dashboard 📊
+                        Seller Dashboard
                     </h1>
                     <p className="text-lg text-gray-600 mt-2">Manage your listings and track your sales performance</p>
-                    {socketService.isConnected() && (
+                    {isLiveUpdates && (
                         <span className="inline-flex items-center gap-2 mt-2 text-sm text-green-600">
                             <span className="w-2 h-2 bg-green-600 rounded-full animate-pulse" />
                             Live updates active
@@ -299,7 +437,6 @@ export default function SellerDashboardPage() {
                     )}
                 </div>
 
-                {/* Revenue Overview */}
                 <RevenueOverview
                     totalRevenue={dashboardData.revenue.totalRevenue}
                     pendingPayments={dashboardData.revenue.pendingPayments}
@@ -309,12 +446,10 @@ export default function SellerDashboardPage() {
                     salesTrend={dashboardData.revenue.salesTrend}
                 />
 
-                {/* Quick Actions */}
                 <div className="mb-8">
                     <QuickActions />
                 </div>
 
-                {/* Earnings Summary */}
                 <div className="mb-8">
                     <EarningsSummary
                         todayEarnings={dashboardData.earnings.todayEarnings}
@@ -327,7 +462,6 @@ export default function SellerDashboardPage() {
                     />
                 </div>
 
-                {/* Performance Metrics */}
                 <div className="mb-8">
                     <PerformanceMetrics
                         averageRating={dashboardData.performance.averageRating}
@@ -340,24 +474,21 @@ export default function SellerDashboardPage() {
                     />
                 </div>
 
-                {/* Two Column Layout for Chart, Bids and Orders */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                    {/* Sales Chart */}
                     <div className="col-span-1 lg:col-span-2">
-                        <SalesChart data={dashboardData.salesData} />
+                        <SalesChart
+                            data={dashboardData.salesData}
+                            currentPeriod={analyticsPeriod}
+                            onPeriodChange={setAnalyticsPeriod}
+                        />
                     </div>
 
-                    {/* Recent Bids */}
-                    <RecentBids bids={dashboardData.recentBids || []} />
-
-                    {/* Recent Orders */}
+                    <RecentBids bids={dashboardData.recentBids} />
                     <RecentOrders orders={dashboardData.recentOrders} />
                 </div>
 
-                {/* Active Listings */}
                 <ActiveListings listings={dashboardData.listings} onDelete={handleDeleteListing} />
 
-                {/* Floating Action Button - Create New Listing */}
                 <Link
                     href="/seller/create-listing"
                     className="fixed bottom-8 right-8 bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 hover:shadow-xl transition-all transform hover:scale-110 flex items-center gap-2 group"

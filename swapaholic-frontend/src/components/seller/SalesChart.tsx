@@ -1,6 +1,4 @@
 'use client';
-
-import { useState } from 'react';
 import { FaChartLine } from 'react-icons/fa';
 
 interface SalesChartProps {
@@ -8,11 +6,11 @@ interface SalesChartProps {
         date: string;
         revenue: number;
     }[];
+    currentPeriod: '7d' | '30d' | '90d';
+    onPeriodChange: (period: '7d' | '30d' | '90d') => void;
 }
 
-export default function SalesChart({ data }: SalesChartProps) {
-    const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d');
-
+export default function SalesChart({ data, currentPeriod, onPeriodChange }: SalesChartProps) {
     // Calculate max revenue for scaling
     const maxRevenue = Math.max(...data.map(d => d.revenue), 1);
     const yAxisSteps = 5;
@@ -26,8 +24,8 @@ export default function SalesChart({ data }: SalesChartProps) {
                     Sales Analytics
                 </h2>
                 <select
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value as '7d' | '30d' | '90d')}
+                    value={currentPeriod}
+                    onChange={(e) => onPeriodChange(e.target.value as '7d' | '30d' | '90d')}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                     <option value="7d">Last 7 Days</option>

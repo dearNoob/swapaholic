@@ -3,6 +3,7 @@ const Conversation = require('../models/Conversation');
 const BlockedUser = require('../models/BlockedUser');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const storageService = require('../services/storageService');
 
 // Get all conversations for the current user
 const getConversations = async (req, res) => {
@@ -140,10 +141,19 @@ const sendMessage = async (req, res) => {
         // Handle attachments (if using multer)
         const attachments = [];
         if (req.files && req.files.length > 0) {
-            for (const file of req.files) {
+            const uploadedUrls = await storageService.uploadFiles(req.files, {
+                folder: 'messages',
+                resourceType: 'auto'
+            });
+
+            for (const [index, file] of req.files.entries()) {
                 attachments.push({
-                    url: file.path,
-                    type: file.mimetype.startsWith('image/') ? 'image' : 'file',
+                    url: uploadedUrls[index],
+                    type: file.mimetype.startsWith('image/')
+                        ? 'image'
+                        : file.mimetype.startsWith('video/')
+                            ? 'video'
+                            : 'file',
                     name: file.originalname,
                     size: file.size
                 });

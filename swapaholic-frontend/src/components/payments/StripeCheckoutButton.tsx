@@ -9,9 +9,17 @@ import {
 } from '@stripe/react-stripe-js';
 import { toast } from 'react-toastify';
 import { paymentsApi } from '../../api/payments';
+import { Payment } from '../../types/api';
 
 // Initialize Stripe outside component to avoid recreation
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: string }).message === 'string') {
+        return (error as { message: string }).message;
+    }
+    return fallback;
+};
 
 interface CheckoutFormProps {
     onSuccess: (paymentId: string) => void;
@@ -50,10 +58,10 @@ const CheckoutForm = ({ onSuccess, amount }: CheckoutFormProps) => {
                 // For now, we'll assume the parent handles the success flow or we pass the intent ID.
                 onSuccess(paymentIntent.id);
             }
-        } catch (err: any) {
+        } catch (err) {
             console.error('Payment error:', err);
             setErrorMessage('An unexpected error occurred.');
-            toast.error('An unexpected error occurred.');
+            toast.error(getErrorMessage(err, 'An unexpected error occurred.'));
         } finally {
             setIsLoading(false);
         }
@@ -83,7 +91,7 @@ const CheckoutForm = ({ onSuccess, amount }: CheckoutFormProps) => {
 interface StripeCheckoutButtonProps {
     orderId: string;
     amount: number;
-    onSuccess: () => void;
+    onSuccess: (payment?: Payment) => void;
 }
 
 export default function StripeCheckoutButton({ orderId, amount, onSuccess }: StripeCheckoutButtonProps) {
@@ -95,11 +103,22 @@ export default function StripeCheckoutButton({ orderId, amount, onSuccess }: Str
         setIsLoading(true);
         try {
             const response = await paymentsApi.initiate({ orderId, method: 'stripe' });
-            setClientSecret(response.clientSecret || null);
             setPaymentId(response.id);
-        } catch (error: any) {
+
+            if (response.gatewayUrl) {
+                window.location.href = response.gatewayUrl;
+                return;
+            }
+
+            if (!response.clientSecret) {
+                toast.error('Stripe checkout is not available for this payment session.');
+                return;
+            }
+
+            setClientSecret(response.clientSecret);
+        } catch (error) {
             console.error('Initiate payment error:', error);
-            toast.error(error.response?.data?.message || 'Failed to initiate payment');
+            toast.error(getErrorMessage(error, 'Failed to initiate payment'));
         } finally {
             setIsLoading(false);
         }
@@ -109,11 +128,11 @@ export default function StripeCheckoutButton({ orderId, amount, onSuccess }: Str
         if (!paymentId) return;
 
         try {
-            await paymentsApi.process({
+            const payment = await paymentsApi.process({
                 paymentId,
-                details: { stripePaymentIntentId }
+                stripePaymentIntentId
             });
-            onSuccess();
+            onSuccess(payment);
         } catch (error) {
             console.error('Process payment error:', error);
             toast.error('Payment confirmed but failed to update order status. Please contact support.');

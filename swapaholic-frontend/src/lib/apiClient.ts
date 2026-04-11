@@ -1,10 +1,26 @@
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { API_BASE_URL, API_ORIGIN, resolvePublicAssetUrl } from './publicUrls';
 import { tokenManager } from '../utils/tokenManager';
-import { ApiError, TokenPair } from '../types/api';
+type RetriableRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean };
+type ApiErrorPayload = {
+    message?: string;
+    errors?: unknown;
+    code?: string;
+};
+
+const getErrorPayload = (error: AxiosError): ApiErrorPayload => {
+    const data = error.response?.data;
+
+    if (data && typeof data === 'object') {
+        return data as ApiErrorPayload;
+    }
+
+    return {};
+};
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api',
+    baseURL: API_BASE_URL,
     timeout: 60000,
     headers: {
         'Content-Type': 'application/json'
@@ -23,13 +39,8 @@ apiClient.interceptors.request.use(
             console.log('🔍 Analyze Request - Token length:', token?.length);
         }
 
-        // Ensure headers object exists
-        if (!config.headers) {
-            config.headers = {} as any;
-        }
-
         if (token) {
-            (config.headers as any).Authorization = `Bearer ${token}`;
+            config.headers.set('Authorization', `Bearer ${token}`);
         }
 
         return config;
@@ -40,8 +51,8 @@ apiClient.interceptors.request.use(
 // Track if refresh is in progress to avoid multiple refresh calls
 let isRefreshing = false;
 let failedQueue: Array<{
-    resolve: (value?: any) => void;
-    reject: (reason?: any) => void;
+    resolve: (value?: string | null) => void;
+    reject: (reason?: unknown) => void;
 }> = [];
 
 const processQueue = (error: AxiosError | null, token: string | null = null) => {
@@ -56,26 +67,22 @@ const processQueue = (error: AxiosError | null, token: string | null = null) => 
     failedQueue = [];
 };
 // Recursive function to automatically convert relative image paths from the DB into full API URLs
-function transformImageUrls(obj: any, baseUrl: string): any {
+function transformImageUrls(obj: unknown, baseUrl: string): unknown {
     if (!obj) return obj;
     if (typeof obj === 'string') {
-        if (obj.startsWith('/uploads/')) {
-            return `${baseUrl}${obj}`;
-        }
-        return obj;
+        return resolvePublicAssetUrl(obj);
     }
     if (Array.isArray(obj)) {
-        for (let i = 0; i < obj.length; i++) {
-            obj[i] = transformImageUrls(obj[i], baseUrl);
-        }
-        return obj;
+        return obj.map((item) => transformImageUrls(item, baseUrl));
     }
     if (typeof obj === 'object' && !(obj instanceof Date)) {
-        for (const key in obj) {
+        const transformedObject = obj as Record<string, unknown>;
+        for (const key in transformedObject) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                obj[key] = transformImageUrls(obj[key], baseUrl);
+                transformedObject[key] = transformImageUrls(transformedObject[key], baseUrl);
             }
         }
+        return transformedObject;
     }
     return obj;
 }
@@ -83,14 +90,14 @@ function transformImageUrls(obj: any, baseUrl: string): any {
 // Response interceptor - handle errors and token refresh
 apiClient.interceptors.response.use(
     (response) => {
-        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
-        response.data = transformImageUrls(response.data, baseUrl);
+        response.data = transformImageUrls(response.data, API_ORIGIN);
         return response;
     },
-    async (error) => {
-        const originalRequest = error.config;
+    async (error: AxiosError) => {
+        const errorPayload = getErrorPayload(error);
+        const originalRequest = error.config as RetriableRequestConfig | undefined;
         // If unauthorized, attempt token refresh unless request is for analyze endpoint
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
             // Skip redirect for analyze endpoint; let UI handle error
             if (originalRequest.url && originalRequest.url.includes('/products/analyze')) {
                 return Promise.reject(error);
@@ -111,7 +118,7 @@ apiClient.interceptors.response.use(
             try {
                 // Call refresh token endpoint. The HTTP-only cookie will be sent automatically.
                 const resp = await axios.post(
-                    `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/auth/refresh-token`,
+                    `${API_BASE_URL}/auth/refresh-token`,
                     {},
                     { withCredentials: true }
                 );
@@ -133,7 +140,7 @@ apiClient.interceptors.response.use(
                 isRefreshing = false;
                 return apiClient(originalRequest);
             } catch (refreshError) {
-                processQueue(refreshError as any, null);
+                processQueue(refreshError as AxiosError, null);
                 tokenManager.clearTokens();
                 if (typeof window !== 'undefined') {
                     window.location.href = '/login';
@@ -147,9 +154,9 @@ apiClient.interceptors.response.use(
             status: error.response?.status || (isTimeout ? 408 : 500),
             message: isTimeout 
                 ? 'The server is taking too long to respond. This usually happens if the backend is starting up. Please try again in 30 seconds.'
-                : (error.response?.data?.message || error.message || 'An unexpected error occurred'),
-            errors: error.response?.data?.errors,
-            code: error.response?.data?.code || (isTimeout ? 'TIMEOUT' : undefined),
+                : (errorPayload.message || error.message || 'An unexpected error occurred'),
+            errors: errorPayload.errors,
+            code: errorPayload.code || (isTimeout ? 'TIMEOUT' : undefined),
         };
         return Promise.reject(apiError);
     }

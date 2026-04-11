@@ -7,11 +7,6 @@ import { FaHome, FaChevronRight, FaShare, FaFlag, FaCheckCircle, FaClock } from 
 import { toast } from 'react-toastify';
 import { productsApi, Product } from '../../../api/products';
 import { bidsApi, Bid } from '../../../api/bids';
-
-interface BidPlacedEvent {
-    productId: string;
-    bid: Bid;
-}
 import { messagesApi } from '../../../api/messages';
 import { useAuth } from '../../../hooks/useAuth';
 import { socketService } from '../../../utils/socket';
@@ -20,54 +15,105 @@ import BiddingInterface from '../../../components/BiddingInterface';
 import BidHistory from '../../../components/BidHistory';
 import SellerInfo from '../../../components/SellerInfo';
 import { ReviewList } from '../../../components/reviews/ReviewList';
-import { ReviewForm } from '../../../components/reviews/ReviewForm';
+
+interface SellerSummary {
+    _id?: string;
+    firstName?: string;
+    lastName?: string;
+    profilePicture?: string;
+    ratingAverage?: number;
+    totalTransactions?: number;
+    createdAt?: string;
+}
+
+interface ProductPageProduct extends Omit<Product, 'sellerId'> {
+    basePrice?: number;
+    highestBidAmount?: number;
+    bidEndDate?: string;
+    sellerId: string | SellerSummary;
+}
+
+interface ProductBid extends Bid {
+    _id?: string;
+    bidAmount?: number;
+    buyerId?: {
+        firstName?: string;
+        lastName?: string;
+    };
+}
+
+interface BidPlacedEvent {
+    productId: string;
+    bid: ProductBid;
+}
+
+interface RecentlyViewedProduct {
+    id: string;
+    title: string;
+    image: string;
+    price: number;
+    currentBid: number;
+    auctionEndTime?: string;
+    condition: string;
+}
+
+const getSellerId = (seller: ProductPageProduct['sellerId']): string =>
+    typeof seller === 'string' ? seller : seller._id ?? '';
+
+const getSellerName = (product: ProductPageProduct): string => {
+    if (typeof product.sellerId === 'string') {
+        return product.sellerName || 'Seller Name';
+    }
+
+    const firstName = product.sellerId.firstName ?? '';
+    const lastName = product.sellerId.lastName ?? '';
+    return `${firstName} ${lastName}`.trim() || product.sellerName || 'Seller Name';
+};
+
+const getStartingPrice = (product: ProductPageProduct): number => product.price || product.basePrice || 0;
+const getCurrentBidValue = (product: ProductPageProduct): number => product.currentBid || product.highestBidAmount || getStartingPrice(product);
+const getAuctionEndTime = (product: ProductPageProduct): string | undefined => product.auctionEndTime || product.bidEndDate;
 
 export default function ProductDetailPage() {
     const params = useParams();
     const router = useRouter();
     const productId = params.id as string;
 
-    const [product, setProduct] = useState<Product | null>(null);
-    const [bids, setBids] = useState<Bid[]>([]);
+    const [product, setProduct] = useState<ProductPageProduct | null>(null);
+    const [bids, setBids] = useState<ProductBid[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const fetchProductData = useCallback(async () => {
         try {
             const [productData, bidData] = await Promise.all([
-                productsApi.getProductById(productId),
-                bidsApi.getProductBids(productId).catch(() => [] as Bid[])
+                productsApi.getProductById(productId) as Promise<ProductPageProduct>,
+                bidsApi.getProductBids(productId).catch(() => [] as ProductBid[])
             ]);
 
             setProduct(productData);
             setBids(bidData);
 
-            // Fetch similar products if category is available
-            if (productData.category) {
-                // const similarData = await productsApi.getSimilar(productData.category);
-                // setSimilarProducts(similarData);
-            }
-
-            // Save to recently viewed
             try {
                 const recentStr = localStorage.getItem('swapaholic_recently_viewed');
-                let recent: any[] = recentStr ? JSON.parse(recentStr) : [];
-                // Remove if already exists to move it to the front
-                recent = recent.filter((p: any) => p.id !== productData.id);
+                const parsedRecent = recentStr ? JSON.parse(recentStr) : [];
+                let recent: RecentlyViewedProduct[] = Array.isArray(parsedRecent) ? parsedRecent : [];
+
+                recent = recent.filter((recentProduct) => recentProduct.id !== productData.id);
                 recent.unshift({
                     id: productData.id,
                     title: productData.title,
                     image: productData.images?.[0] || '',
                     price: productData.price,
-                    currentBid: productData.currentBid || productData.price,
-                    auctionEndTime: productData.auctionEndTime,
+                    currentBid: getCurrentBidValue(productData),
+                    auctionEndTime: getAuctionEndTime(productData),
                     condition: productData.condition
                 });
-                // Keep only last 10
                 recent = recent.slice(0, 10);
+
                 localStorage.setItem('swapaholic_recently_viewed', JSON.stringify(recent));
-            } catch (e) {
-                console.error('Could not save to recently viewed', e);
+            } catch (storageError) {
+                console.error('Could not save to recently viewed', storageError);
             }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to load product');
@@ -77,28 +123,36 @@ export default function ProductDetailPage() {
     }, [productId]);
 
     useEffect(() => {
-        if (productId) {
-            fetchProductData();
-
-            // Socket listeners
-            socketService.on('bid_placed', (data: BidPlacedEvent) => {
-                if (data.productId === productId) {
-                    setBids(prev => [data.bid, ...prev]);
-                    setProduct((prev: Product | null) => {
-                        if (!prev) return null;
-                        return {
-                            ...prev,
-                            currentBid: data.bid.amount,
-                            bidCount: (prev.bidCount || 0) + 1
-                        };
-                    });
-                }
-            });
-
-            return () => {
-                socketService.off('bid_placed');
-            };
+        if (!productId) {
+            return;
         }
+
+        fetchProductData();
+
+        const handleBidPlaced = (data: BidPlacedEvent) => {
+            if (data.productId !== productId) {
+                return;
+            }
+
+            setBids((prev) => [data.bid, ...prev]);
+            setProduct((prev) => {
+                if (!prev) {
+                    return null;
+                }
+
+                return {
+                    ...prev,
+                    currentBid: data.bid.amount,
+                    bidCount: (prev.bidCount || 0) + 1
+                };
+            });
+        };
+
+        socketService.on('bid_placed', handleBidPlaced);
+
+        return () => {
+            socketService.off('bid_placed');
+        };
     }, [productId, fetchProductData]);
 
     const handleBidPlaced = () => {
@@ -118,7 +172,6 @@ export default function ProductDetailPage() {
         }
     };
 
-    // Add auth check
     const { user, isAuthenticated } = useAuth();
 
     const handleMessageSeller = async () => {
@@ -127,27 +180,28 @@ export default function ProductDetailPage() {
             return;
         }
 
-        if (!product || !product.sellerId) return;
+        if (!product || !product.sellerId) {
+            return;
+        }
 
-        const sellerId = (product.sellerId as any)?._id || product.sellerId;
+        const sellerId = getSellerId(product.sellerId);
 
         if (user?.id === sellerId) {
-            toast.warning("You cannot message yourself!");
+            toast.warning('You cannot message yourself!');
             return;
         }
 
         try {
-            // Create or get conversation
             const response = await messagesApi.startConversation(sellerId);
-            // Backend returns: { success, data: { conversationId } }
-            const conversationId = response?.data?.conversationId || response?.conversationId || response?._id;
+            const conversationId = response.conversationId;
+
             if (conversationId) {
                 router.push(`/messages?conversationId=${conversationId}`);
             } else {
                 router.push('/messages');
             }
-        } catch (error) {
-            console.error('Failed to start conversation:', error);
+        } catch (conversationError) {
+            console.error('Failed to start conversation:', conversationError);
             toast.error('Failed to start conversation. Please try again.');
         }
     };
@@ -206,7 +260,6 @@ export default function ProductDetailPage() {
     return (
         <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Breadcrumb */}
                 <nav className="flex items-center gap-2 text-sm mb-6">
                     <Link href="/" className="text-gray-600 hover:text-indigo-600 transition">
                         <FaHome />
@@ -223,19 +276,14 @@ export default function ProductDetailPage() {
                     <span className="text-gray-900 font-medium truncate">{product.title}</span>
                 </nav>
 
-                {/* Main Content */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-                    {/* Left Column - Images & Details */}
                     <div className="lg:col-span-2 space-y-8">
-                        {/* Image Carousel */}
                         <ImageCarousel
                             images={product.images || ['/products/placeholder.png']}
                             productTitle={product.title}
                         />
 
-                        {/* Product Info Card */}
                         <div className="bg-white rounded-lg shadow-lg p-6">
-                            {/* Title & Actions */}
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex-1">
                                     <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.title}</h1>
@@ -270,13 +318,11 @@ export default function ProductDetailPage() {
                                 </div>
                             </div>
 
-                            {/* Description */}
                             <div className="mb-6">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Description</h3>
                                 <p className="text-gray-700 whitespace-pre-wrap">{product.description}</p>
                             </div>
 
-                            {/* Specifications */}
                             <div className="grid grid-cols-2 gap-4 pt-6 border-t">
                                 <div>
                                     <p className="text-sm text-gray-600">Condition</p>
@@ -288,67 +334,59 @@ export default function ProductDetailPage() {
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-600">Starting Price</p>
-                                    <p className="text-lg font-semibold text-gray-900">৳{product.price || (product as any).basePrice || 0}</p>
+                                    <p className="text-lg font-semibold text-gray-900">৳{getStartingPrice(product)}</p>
                                 </div>
-                                {(product.auctionEndTime || (product as any).bidEndDate) && (
+                                {getAuctionEndTime(product) && (
                                     <div>
                                         <p className="text-sm text-gray-600">Auction Ends</p>
                                         <p className="text-lg font-semibold text-gray-900 flex items-center gap-1">
                                             <FaClock className="text-orange-500" />
-                                            {new Date((product.auctionEndTime || (product as any).bidEndDate)!).toLocaleDateString()}
+                                            {new Date(getAuctionEndTime(product)!).toLocaleDateString()}
                                         </p>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Bid History */}
-                        <BidHistory bids={(bids || []).map((bid: any) => ({
-                            id: bid.id || bid._id,
-                            bidderName: bid.username || (bid.buyerId ? `${bid.buyerId.firstName} ${bid.buyerId.lastName}`.trim() : 'Anonymous Buyer'),
+                        <BidHistory bids={(bids || []).map((bid) => ({
+                            id: bid.id || bid._id || `${bid.createdAt}-${bid.amount || bid.bidAmount || 0}`,
+                            bidderName: bid.username || (bid.buyerId ? `${bid.buyerId.firstName || ''} ${bid.buyerId.lastName || ''}`.trim() : 'Anonymous Buyer'),
                             amount: bid.amount || bid.bidAmount || 0,
                             timestamp: bid.createdAt,
-                            isCurrentUser: false // TODO: determine if current user
+                            isCurrentUser: false
                         }))} maxDisplay={5} />
                     </div>
 
-                    {/* Right Column - Bidding & Seller */}
                     <div className="space-y-6">
-                        {/* Bidding Interface */}
                         <BiddingInterface
                             productId={productId}
-                            currentBid={product.currentBid || (product as any).highestBidAmount || 0}
-                            startingPrice={product.price || (product as any).basePrice || 0}
+                            currentBid={getCurrentBidValue(product)}
+                            startingPrice={getStartingPrice(product)}
                             minimumIncrement={5}
-                            endTime={product.auctionEndTime || (product as any).bidEndDate}
+                            endTime={getAuctionEndTime(product)}
                             totalBids={bids.length}
                             productName={product.title}
-                            sellerId={(product.sellerId as any)?._id || (typeof product.sellerId === 'string' ? product.sellerId : '1')}
+                            sellerId={getSellerId(product.sellerId) || '1'}
                             onBidPlaced={handleBidPlaced}
                         />
 
-                        {/* Seller Info */}
                         <SellerInfo
                             seller={{
-                                id: (product.sellerId as any)?._id || product.sellerId || '1',
-                                name: `${(product.sellerId as any)?.firstName || ''} ${(product.sellerId as any)?.lastName || ''}`.trim() || product.sellerName || 'Seller Name',
-                                avatar: (product.sellerId as any)?.profilePicture || undefined,
-                                rating: (product.sellerId as any)?.ratingAverage || 0,
-                                totalSales: (product.sellerId as any)?.totalTransactions || 0,
-                                joinedDate: (product.sellerId as any)?.createdAt || '2023-01-01',
+                                id: getSellerId(product.sellerId) || '1',
+                                name: getSellerName(product),
+                                avatar: typeof product.sellerId === 'string' ? undefined : product.sellerId.profilePicture,
+                                rating: typeof product.sellerId === 'string' ? 0 : product.sellerId.ratingAverage || 0,
+                                totalSales: typeof product.sellerId === 'string' ? 0 : product.sellerId.totalTransactions || 0,
+                                joinedDate: typeof product.sellerId === 'string' ? '2023-01-01' : product.sellerId.createdAt || '2023-01-01',
                             }}
                             onContactSeller={handleMessageSeller}
                         />
                     </div>
                 </div>
 
-
-                {/* Reviews Section */}
                 <div className="mt-12">
                     <h2 className="text-2xl font-bold text-gray-900 mb-6">Customer Reviews</h2>
-
-                    {/* Review List */}
-                    <ReviewList sellerId={(product.sellerId as any)?._id || (typeof product.sellerId === 'string' ? product.sellerId : '')} />
+                    <ReviewList sellerId={getSellerId(product.sellerId)} />
                 </div>
             </div>
         </div>

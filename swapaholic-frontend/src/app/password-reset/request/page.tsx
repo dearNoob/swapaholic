@@ -5,7 +5,17 @@ import { useState } from 'react';
 import { authApi } from '@/api/auth';
 import { useRouter } from 'next/navigation';
 import { showSuccessToast, showErrorToast } from '@/utils/errorHandler';
-import { collectRoutesUsingEdgeRuntime } from 'next/dist/build/utils';
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error && typeof error === 'object' && 'response' in error) {
+        const response = error.response as { data?: { message?: string } };
+        if (response?.data?.message) {
+            return response.data.message;
+        }
+    }
+
+    return fallback;
+};
 
 export default function PasswordResetRequestPage() {
     const [email, setEmail] = useState('');
@@ -13,7 +23,6 @@ export default function PasswordResetRequestPage() {
     const [isSubmitted, setIsSubmitted] = useState(false);
     const router = useRouter();
     const [otp, setOtp] = useState('');
-    const [isOtpSubmitted, setIsOtpSubmitted] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -23,9 +32,8 @@ export default function PasswordResetRequestPage() {
             const response = await authApi.forgotPassword(email);
             setIsSubmitted(true);
             showSuccessToast(response.message || 'OTP sent to your email!');
-        } catch (error: any) {
-            // Use the error message from the backend if available
-            const errorMessage = error.response?.data?.message || 'Failed to send OTP. Please try again.';
+        } catch (error: unknown) {
+            const errorMessage = getErrorMessage(error, 'Failed to send OTP. Please try again.');
             showErrorToast(error, errorMessage);
         } finally {
             setIsLoading(false);
@@ -44,8 +52,8 @@ export default function PasswordResetRequestPage() {
             } else {
                 throw new Error('No reset token received');
             }
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.message || 'Invalid OTP. Please try again.';
+        } catch (error: unknown) {
+            const errorMessage = getErrorMessage(error, 'Invalid OTP. Please try again.');
             showErrorToast(error, errorMessage);
         } finally {
             setIsLoading(false);

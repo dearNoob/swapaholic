@@ -111,7 +111,13 @@ const getUserRatings = async (req, res) => {
     const user = await User.findById(req.params.id).select('ratingAverage totalTransactions');
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    res.json({ ratingAverage: user.ratingAverage, totalTransactions: user.totalTransactions });
+    res.json({
+      success: true,
+      data: {
+        ratingAverage: user.ratingAverage,
+        totalTransactions: user.totalTransactions
+      }
+    });
   } catch (error) {
     logger.error('Get user ratings error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -128,7 +134,14 @@ const deleteUserAccount = async (req, res) => {
     const user = await User.findByIdAndUpdate(req.params.id, { accountStatus: 'deleted' }, { new: true });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    res.json({ message: 'Account deleted', user });
+    res.json({
+      success: true,
+      message: 'Account deleted',
+      data: {
+        message: 'Account deleted',
+        user
+      }
+    });
   } catch (error) {
     logger.error('Delete user account error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -158,7 +171,13 @@ const followUser = async (req, res) => {
       $addToSet: { following: targetUserId }
     });
 
-    res.json({ message: 'User followed successfully' });
+    res.json({
+      success: true,
+      message: 'User followed successfully',
+      data: {
+        message: 'User followed successfully'
+      }
+    });
   } catch (error) {
     logger.error('Follow user error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -181,7 +200,13 @@ const unfollowUser = async (req, res) => {
       $pull: { following: targetUserId }
     });
 
-    res.json({ message: 'User unfollowed successfully' });
+    res.json({
+      success: true,
+      message: 'User unfollowed successfully',
+      data: {
+        message: 'User unfollowed successfully'
+      }
+    });
   } catch (error) {
     logger.error('Unfollow user error:', error);
     res.status(500).json({ message: 'Server error' });

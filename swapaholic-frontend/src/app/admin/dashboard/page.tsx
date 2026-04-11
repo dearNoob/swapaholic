@@ -17,17 +17,81 @@ import TopPerformers from '../../../components/admin/TopPerformers';
 import RecentActivity from '../../../components/admin/RecentActivity';
 import '../../../styles/admin-dashboard.css';
 
+interface AdminDashboardStats {
+    users: { total: number; sellers: number; buyers: number; admins: number };
+    products: { total: number; active: number; sold: number; expired: number };
+    orders: { total: number; pending: number; completed: number; disputed: number; completionRate: number | string };
+    disputes: { total: number; open: number; underReview: number; resolved: number };
+    payments: { total: number; escrowed: number; released: number; failed: number; totalRevenue: number; escrowedAmount?: number };
+    revenue: { total: number; thisMonth: number; commission: number };
+    bids: { total: number; active: number; accepted: number };
+    qc: { total: number; approved: number; rejected: number; pending: number; approvalRate: number | string };
+    support: { open: number; resolved: number; closed: number };
+    delivery: { total: number; delivered: number; failed: number; deliveryRate: number | string };
+}
+
+interface AdminAnalyticsData {
+    labels: string[];
+    revenue: number[];
+    users: number[];
+    orders: number[];
+    period: string;
+}
+
+interface AdminHealthAlert {
+    category: string;
+    severity: 'info' | 'warning' | 'critical';
+    pending?: number;
+    open?: number;
+    failed?: number;
+    escrowedOld?: number;
+}
+
+interface AdminSystemHealth {
+    health: 'good' | 'warning' | 'critical';
+    alerts: AdminHealthAlert[];
+}
+
+interface AdminPerformer {
+    sellerId?: string;
+    buyerId?: string;
+    name: string;
+    completedOrders: number;
+    totalRevenue?: number;
+    totalSpent?: number;
+    averageRating?: number;
+    reviewCount?: number;
+}
+
+interface AdminTopPerformersData {
+    topSellers: AdminPerformer[];
+    topBuyers: AdminPerformer[];
+    topRatedSellers: AdminPerformer[];
+}
+
+const EMPTY_STATS: AdminDashboardStats = {
+    users: { total: 0, sellers: 0, buyers: 0, admins: 0 },
+    products: { total: 0, active: 0, sold: 0, expired: 0 },
+    orders: { total: 0, pending: 0, completed: 0, disputed: 0, completionRate: 0 },
+    disputes: { total: 0, open: 0, underReview: 0, resolved: 0 },
+    payments: { total: 0, escrowed: 0, released: 0, failed: 0, totalRevenue: 0, escrowedAmount: 0 },
+    revenue: { total: 0, thisMonth: 0, commission: 0 },
+    bids: { total: 0, active: 0, accepted: 0 },
+    qc: { total: 0, approved: 0, rejected: 0, pending: 0, approvalRate: 0 },
+    support: { open: 0, resolved: 0, closed: 0 },
+    delivery: { total: 0, delivered: 0, failed: 0, deliveryRate: 0 },
+};
+
 export default function AdminDashboardPage() {
     const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
     const [isDataLoading, setIsDataLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
-    // Data states — all real from backend
-    const [stats, setStats] = useState<any>(null);
-    const [analytics, setAnalytics] = useState<any>(null);
-    const [systemHealth, setSystemHealth] = useState<any>(null);
-    const [topPerformers, setTopPerformersData] = useState<any>(null);
+    const [stats, setStats] = useState<AdminDashboardStats | null>(null);
+    const [analytics, setAnalytics] = useState<AdminAnalyticsData | null>(null);
+    const [systemHealth, setSystemHealth] = useState<AdminSystemHealth | null>(null);
+    const [topPerformers, setTopPerformersData] = useState<AdminTopPerformersData | null>(null);
     const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
 
     const isLoading = isAuthLoading || isDataLoading;
@@ -50,19 +114,7 @@ export default function AdminDashboardPage() {
                 setStats(statsData.value);
             } else {
                 console.error('Failed to fetch dashboard stats:', statsData.reason);
-                // Fallback mock data
-                setStats({
-                    users: { total: 0, sellers: 0, buyers: 0, admins: 0 },
-                    products: { total: 0, active: 0, sold: 0, expired: 0 },
-                    orders: { total: 0, pending: 0, completed: 0, disputed: 0, completionRate: '0' },
-                    payments: { total: 0, escrowed: 0, released: 0, failed: 0, totalRevenue: 0 },
-                    revenue: { total: 0, thisMonth: 0, commission: 0 },
-                    bids: { total: 0, active: 0, accepted: 0 },
-                    disputes: { total: 0, open: 0, underReview: 0, resolved: 0 },
-                    qc: { total: 0, approved: 0, rejected: 0, pending: 0, approvalRate: '0' },
-                    support: { open: 0, resolved: 0, closed: 0 },
-                    delivery: { total: 0, delivered: 0, failed: 0, deliveryRate: '0' },
-                });
+                setStats(EMPTY_STATS);
             }
 
             // Analytics
@@ -261,7 +313,7 @@ export default function AdminDashboardPage() {
                                 <FaCalendarAlt className="text-xs" />
                                 {currentDate}
                             </p>
-                            <span className="text-gray-300">·</span>
+                            <span className="text-gray-300">|</span>
                             <p className="text-gray-400 text-sm">
                                 Last refreshed: {lastRefreshed.toLocaleTimeString()}
                             </p>

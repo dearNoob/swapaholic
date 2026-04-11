@@ -27,7 +27,7 @@ export const sellerApi = {
 
     // Update order status
     updateOrderStatus: async (orderId: string, status: string, trackingNumber?: string) => {
-        const response = await api.put(`/seller/orders/${orderId}/status`, { status, trackingNumber });
+        const response = await api.put(`/orders/${orderId}`, { status, trackingNumber });
         return response.data;
     },
 

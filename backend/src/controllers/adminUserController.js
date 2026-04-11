@@ -157,15 +157,21 @@ const getUserDashboard = async (req, res) => {
         .sort({ orderDate: -1 })
         .limit(20);
 
-      // Get won auctions (accepted bids)
-      const wonAuctions = await Bid.find({ buyerId: userId, status: 'accepted' })
+      // Get won auctions, including those awaiting buyer confirmation
+      const wonAuctions = await Bid.find({
+        buyerId: userId,
+        status: { $in: ['accepted', 'pending_confirmation'] }
+      })
         .populate('productId', 'title basePrice')
         .sort({ updatedAt: -1 });
 
       // Calculate stats
       const totalBids = await Bid.countDocuments({ buyerId: userId });
       const activeBids = await Bid.countDocuments({ buyerId: userId, status: 'active' });
-      const wonBids = await Bid.countDocuments({ buyerId: userId, status: 'accepted' });
+      const wonBids = await Bid.countDocuments({
+        buyerId: userId,
+        status: { $in: ['accepted', 'pending_confirmation'] }
+      });
       const totalOrders = await Order.countDocuments({ buyerId: userId });
       const completedOrders = await Order.countDocuments({ buyerId: userId, status: 'completed' });
       const totalSpent = await Order.aggregate([

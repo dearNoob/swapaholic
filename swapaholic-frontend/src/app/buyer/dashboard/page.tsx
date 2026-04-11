@@ -8,29 +8,69 @@ import ActiveBidsCard from '../../../components/dashboard/ActiveBidsCard';
 import WonAuctionsCard from '../../../components/dashboard/WonAuctionsCard';
 import OrderHistoryCard from '../../../components/dashboard/OrderHistoryCard';
 import SavedProductsCard from '../../../components/dashboard/SavedProductsCard';
-import { bidsApi } from '../../../api/bids';
 import { ordersApi } from '../../../api/orders';
 import { wishlistApi } from '../../../api/wishlist';
-import { productsApi } from '../../../api/products';
+import { BuyerDashboardBid, BuyerDashboardSavedProduct, BuyerDashboardWonAuction, usersApi } from '../../../api/users';
+import { Order } from '../../../types/api';
 import { toast } from 'react-toastify';
 
 import { FaGavel, FaTrophy, FaShoppingBag, FaHeart, FaThLarge } from 'react-icons/fa';
+
+type DashboardTab = 'all' | 'bids' | 'won' | 'orders' | 'saved';
+type OrderCardStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+
+interface DashboardOrderCard {
+    id: string;
+    orderNumber: string;
+    productId: string;
+    productTitle: string;
+    productImage: string;
+    amount: number;
+    orderDate: string;
+    status: OrderCardStatus;
+}
+
+const DEFAULT_PRODUCT_IMAGE = '/placeholder.png';
+
+const getOrderStatusForCard = (status: Order['status']): OrderCardStatus => {
+    switch (status) {
+        case 'confirmed':
+        case 'qc_pending':
+        case 'qc_approved':
+        case 'disputed':
+            return 'processing';
+        case 'in_delivery':
+            return 'shipped';
+        case 'delivered':
+        case 'completed':
+            return 'delivered';
+        case 'cancelled':
+            return 'cancelled';
+        default:
+            return 'pending';
+    }
+};
 
 export default function BuyerDashboardPage() {
     const router = useRouter();
     const { user, isAuthenticated } = useAppSelector((state) => state.auth);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'all' | 'bids' | 'won' | 'orders' | 'saved'>('all');
+    const [activeTab, setActiveTab] = useState<DashboardTab>('all');
 
-    const [activeBids, setActiveBids] = useState<any[]>([]);
-    const [wonAuctions, setWonAuctions] = useState<any[]>([]);
-    const [orders, setOrders] = useState<any[]>([]);
-    const [savedProducts, setSavedProducts] = useState<any[]>([]);
+    const [activeBids, setActiveBids] = useState<BuyerDashboardBid[]>([]);
+    const [wonAuctions, setWonAuctions] = useState<BuyerDashboardWonAuction[]>([]);
+    const [orders, setOrders] = useState<DashboardOrderCard[]>([]);
+    const [savedProducts, setSavedProducts] = useState<BuyerDashboardSavedProduct[]>([]);
+    const [dashboardStats, setDashboardStats] = useState({
+        activeBids: 0,
+        wonAuctions: 0,
+        totalOrders: 0,
+        savedItems: 0,
+    });
 
     // Pagination State for Orders
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const [isOrdersLoading, setIsOrdersLoading] = useState(false);
 
     // Authentication check with localStorage fallback
     useEffect(() => {
@@ -62,10 +102,9 @@ export default function BuyerDashboardPage() {
         if (!isAuthenticated || (user && user.role === 'admin')) return;
 
         const fetchOrders = async () => {
-            setIsOrdersLoading(true);
             try {
                 const limit = 10;
-                const ordersResponse = await ordersApi.getOrders(currentPage, limit);
+                const ordersResponse = await ordersApi.getBuyerOrders(currentPage, limit);
 
                 // Handle response structure (checking if it returns { data, total } or just data)
                 // Based on api/orders.ts, it returns { data: Order[], total: number }
@@ -73,39 +112,31 @@ export default function BuyerDashboardPage() {
                 const total = ordersResponse.total || 0;
 
                 setTotalPages(Math.ceil(total / limit));
+                setDashboardStats((prev) => ({
+                    ...prev,
+                    totalOrders: total,
+                }));
 
-                // Enrich orders with product details
-                const enrichedOrders = await Promise.all(ordersData.map(async (order: any) => {
-                    let productTitle = 'Product';
-                    let productImage = '/placeholder.png';
-
-                    if (order.products && order.products.length > 0) {
-                        try {
-                            const product = await productsApi.getProductById(order.products[0].productId);
-                            productTitle = product.title;
-                            productImage = product.images?.[0] || '/placeholder.png';
-                        } catch (e) {
-                            console.error('Failed to fetch product for order', order.id);
-                        }
-                    }
+                const enrichedOrders = ordersData.map((order) => {
+                    const firstProduct = order.products[0];
+                    const productTitle = order.product?.title || 'Product';
+                    const productImage = order.product?.images?.[0] || DEFAULT_PRODUCT_IMAGE;
 
                     return {
                         id: order.id,
                         orderNumber: order.id.substring(0, 8).toUpperCase(),
-                        productId: order.products?.[0]?.productId || '',
-                        productTitle: productTitle,
-                        productImage: productImage,
+                        productId: firstProduct?.productId || order.productId || '',
+                        productTitle,
+                        productImage,
                         amount: order.totalAmount,
                         orderDate: order.createdAt,
-                        status: order.status === 'confirmed' ? 'processing' : order.status
+                        status: getOrderStatusForCard(order.status)
                     };
-                }));
+                });
                 setOrders(enrichedOrders);
             } catch (error) {
                 console.error('Error fetching orders:', error);
                 toast.error('Failed to load orders');
-            } finally {
-                setIsOrdersLoading(false);
             }
         };
 
@@ -119,81 +150,11 @@ export default function BuyerDashboardPage() {
         const fetchDashboardData = async () => {
             setIsLoading(true);
             try {
-                // 1. Fetch Bids (Active & Won)
-                const bidsResponse = await bidsApi.getMyBids(1, 50);
-
-                // Process Active Bids
-                // Include both 'active' (no bids yet) and 'bidden' (already has bids)
-                const active = bidsResponse.data
-                    .filter((bid: any) => bid.product && (bid.product.status === 'active' || bid.product.status === 'bidden'))
-                    .map((bid: any) => ({
-                        id: bid.id,
-                        productId: bid.product.id,
-                        productTitle: bid.product.title,
-                        productImage: bid.product.images?.[0] || '/placeholder.png',
-                        yourBid: bid.amount,
-                        currentBid: bid.product.currentBid || bid.product.price,
-                        endTime: (bid.product as any).endTime || new Date(Date.now() + 86400000).toISOString(),
-                        status: bid.isWinning ? 'winning' : 'outbid'
-                    }));
-                setActiveBids(active);
-
-                // Process Won Auctions
-                // Only include items where the user has actually won and the auction is closed (status 'sold')
-                const won = bidsResponse.data
-                    .filter((bid: any) => bid.isWinning && bid.product && bid.product.status === 'sold')
-                    .map((bid: any) => ({
-                        id: bid.id,
-                        productId: bid.product.id,
-                        productTitle: bid.product.title,
-                        productImage: bid.product.images?.[0] || '/placeholder.png',
-                        winningBid: bid.amount,
-                        wonDate: (bid.product as any).endTime || bid.createdAt,
-                        paymentStatus: 'pending',
-                        deliveryStatus: 'pending'
-                    }));
-
-                // We need orders to map orderId to won auctions, but orders are fetched separately now.
-                // We can fetch all orders (or a large batch) just for mapping, OR we can rely on the paginated orders if they cover it.
-                // Ideally, the backend should provide orderId in the bid/won response, but for now we might miss some links if the order isn't in the current page.
-                // To fix this properly without fetching all orders, we'll fetch a larger batch of recent orders for mapping purposes, or just accept the limitation for now.
-                // Let's fetch a batch for mapping to keep the "Track Order" functionality working reasonably well for recent items.
-                const recentOrdersResponse = await ordersApi.getOrders(1, 50);
-                const recentOrders = recentOrdersResponse.data || [];
-
-                // Create a map of productId -> orderId for quick lookup
-                const productOrderMap = new Map();
-                recentOrders.forEach((order: any) => {
-                    if (order.products && order.products.length > 0) {
-                        productOrderMap.set(order.products[0].productId, order.id);
-                    }
-                });
-
-                // Update Won Auctions with Order ID
-                const wonWithOrders = won.map((auction: any) => ({
-                    ...auction,
-                    orderId: productOrderMap.get(auction.productId)
-                }));
-                setWonAuctions(wonWithOrders);
-
-                // 2. Fetch Wishlist (gracefully handle if not implemented)
-                try {
-                    const wishlistResponse = await wishlistApi.getWishlist();
-                    const saved = (wishlistResponse || []).map((item: any) => ({
-                        id: item.id,
-                        productId: item.product?.id,
-                        title: item.product?.title,
-                        image: item.product?.images?.[0] || '/placeholder.png',
-                        currentPrice: item.product?.currentBid || item.product?.startingPrice,
-                        originalPrice: item.product?.startingPrice,
-                        priceAlert: false,
-                        endTime: item.product?.endTime
-                    }));
-                    setSavedProducts(saved);
-                } catch (wishlistError) {
-                    console.warn('Wishlist not available:', wishlistError);
-                    setSavedProducts([]);
-                }
+                const dashboard = await usersApi.getBuyerDashboard();
+                setDashboardStats(dashboard.stats);
+                setActiveBids(dashboard.activeBids);
+                setWonAuctions(dashboard.wonAuctions);
+                setSavedProducts(dashboard.savedProducts);
 
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
@@ -238,19 +199,12 @@ export default function BuyerDashboardPage() {
         );
     }
 
-    const stats = {
-        activeBids: activeBids.length,
-        wonAuctions: wonAuctions.length,
-        totalOrders: orders.length,
-        savedItems: savedProducts.length,
-    };
-
     const tabs = [
         { id: 'all' as const, label: 'Overview', icon: FaThLarge },
-        { id: 'bids' as const, label: 'Active Bids', icon: FaGavel, count: stats.activeBids },
-        { id: 'won' as const, label: 'Won Auctions', icon: FaTrophy, count: stats.wonAuctions },
-        { id: 'orders' as const, label: 'Orders', icon: FaShoppingBag, count: stats.totalOrders },
-        { id: 'saved' as const, label: 'Saved', icon: FaHeart, count: stats.savedItems },
+        { id: 'bids' as const, label: 'Active Bids', icon: FaGavel, count: dashboardStats.activeBids },
+        { id: 'won' as const, label: 'Won Auctions', icon: FaTrophy, count: dashboardStats.wonAuctions },
+        { id: 'orders' as const, label: 'Orders', icon: FaShoppingBag, count: dashboardStats.totalOrders },
+        { id: 'saved' as const, label: 'Saved', icon: FaHeart, count: dashboardStats.savedItems },
     ];
 
     return (
@@ -266,7 +220,7 @@ export default function BuyerDashboardPage() {
                                 Dashboard
                             </h1>
                             <p className="text-gray-500 mt-1">
-                                Welcome back, <span className="font-semibold text-indigo-600">{(user && user.firstName) ? user.firstName : 'User'}</span>! Here's your activity overview.
+                                Welcome back, <span className="font-semibold text-indigo-600">{(user && user.firstName) ? user.firstName : 'User'}</span>! Here&apos;s your activity overview.
                             </p>
                         </div>
                         <div className="flex items-center gap-3">
@@ -312,10 +266,10 @@ export default function BuyerDashboardPage() {
                 {activeTab === 'all' && (
                     <div className="animate-fade-in-up">
                         <DashboardStats
-                            activeBids={stats.activeBids}
-                            wonAuctions={stats.wonAuctions}
-                            totalOrders={stats.totalOrders}
-                            savedItems={stats.savedItems}
+                            activeBids={dashboardStats.activeBids}
+                            wonAuctions={dashboardStats.wonAuctions}
+                            totalOrders={dashboardStats.totalOrders}
+                            savedItems={dashboardStats.savedItems}
                         />
                     </div>
                 )}

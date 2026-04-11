@@ -1,24 +1,39 @@
 const multer = require('multer');
 
-// Configure storage
-const storage = multer.memoryStorage(); // Store files in memory for immediate processing
+const createUpload = ({
+    allowedMimeTypes,
+    allowedMimePrefixes,
+    errorMessage = 'Invalid file type',
+    maxFileSize = 10 * 1024 * 1024,
+    maxFiles = 5
+} = {}) => {
+    const storage = multer.memoryStorage();
 
-// File filter to only allow images
-const fileFilter = (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-        cb(null, true);
-    } else {
-        cb(new Error('Not an image! Please upload only images.'), false);
-    }
+    const fileFilter = (req, file, cb) => {
+        const matchesExplicitType = Array.isArray(allowedMimeTypes) && allowedMimeTypes.includes(file.mimetype);
+        const matchesPrefix = Array.isArray(allowedMimePrefixes) && allowedMimePrefixes.some((prefix) => file.mimetype.startsWith(prefix));
+
+        if (matchesExplicitType || matchesPrefix) {
+            cb(null, true);
+        } else {
+            cb(new Error(errorMessage), false);
+        }
+    };
+
+    return multer({
+        storage,
+        fileFilter,
+        limits: {
+            fileSize: maxFileSize,
+            files: maxFiles
+        }
+    });
 };
 
-const upload = multer({
-    storage: storage,
-    fileFilter: fileFilter,
-    limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB limit
-        files: 5 // Max 5 files
-    }
+const imageUpload = createUpload({
+    allowedMimePrefixes: ['image/'],
+    errorMessage: 'Not an image! Please upload only images.'
 });
 
-module.exports = upload;
+module.exports = imageUpload;
+module.exports.createUpload = createUpload;

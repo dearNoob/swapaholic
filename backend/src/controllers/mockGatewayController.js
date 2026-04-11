@@ -1,5 +1,6 @@
 const Payment = require('../models/Payment');
 const User = require('../models/User');
+const Order = require('../models/Order');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
 
@@ -8,14 +9,65 @@ const logger = require('../utils/logger');
 // But to make it look "real", let's create a session mapping.
 const paymentSessions = new Map();
 
+const toId = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    if (value._id) return value._id.toString();
+    if (typeof value.toString === 'function') return value.toString();
+    return null;
+};
+
+const serializePaymentSession = (payment, extras = {}) => ({
+    id: toId(payment._id),
+    orderId: toId(payment.orderId),
+    amount: payment.amount,
+    method: payment.paymentMethod,
+    paymentMethod: payment.paymentMethod,
+    status: payment.status,
+    sessionKey: extras.sessionKey || payment.transactionId,
+    gatewayUrl: extras.gatewayUrl,
+    createdAt: payment.createdAt,
+    updatedAt: payment.updatedAt
+});
+
+const buildStatusRedirectUrl = (payment, status) => {
+    const params = new URLSearchParams({
+        status,
+        orderId: toId(payment.orderId) || ''
+    });
+
+    if (toId(payment._id)) {
+        params.set('paymentId', toId(payment._id));
+    }
+
+    if (payment.transactionId) {
+        params.set('trxId', payment.transactionId);
+    }
+
+    return `/payment/status?${params.toString()}`;
+};
+
 /**
  * Initiate a payment session
  * @route POST /api/mock-payment/init
  */
 const initiatePayment = async (req, res) => {
     try {
-        const { orderId, amount, paymentMethod } = req.body;
+        const { orderId, amount, paymentMethod, method } = req.body;
         const userId = req.user.id;
+
+        if (!orderId) {
+            return res.status(400).json({ success: false, message: 'Order ID required' });
+        }
+
+        const order = await Order.findById(orderId);
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        if (order.buyerId.toString() !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Access denied' });
+        }
 
         // Create a pending payment record
         // Note: In a real flow, you might check if order exists, etc.
@@ -27,17 +79,29 @@ const initiatePayment = async (req, res) => {
         // Create Payment Record (Pending)
         // We might want to check if a payment already exists for this order?
         // For now, let's assume new attempt.
-        const payment = new Payment({
-            orderId,
-            buyerId: userId,
-            sellerId: req.body.sellerId, // Should be passed from frontend or derived from Order
-            amount,
-            currency: 'BDT', // Default
-            paymentMethod: paymentMethod || 'n/a', // Will be updated in gateway
-            status: 'pending',
-            transactionId: sessionKey, // Use session key as temp transaction ID
-            gatewaySessionKey: sessionKey
-        });
+        const requestedMethod = paymentMethod || method || 'card';
+        const paymentAmount = amount || order.finalPrice;
+
+        let payment = await Payment.findOne({ orderId, status: 'pending' });
+
+        if (!payment) {
+            payment = new Payment({
+                orderId,
+                buyerId: order.buyerId,
+                sellerId: order.sellerId,
+                amount: paymentAmount,
+                paymentMethod: requestedMethod,
+                status: 'pending',
+                transactionId: sessionKey
+            });
+        } else {
+            payment.buyerId = order.buyerId;
+            payment.sellerId = order.sellerId;
+            payment.amount = paymentAmount;
+            payment.paymentMethod = requestedMethod;
+            payment.transactionId = sessionKey;
+            payment.status = 'pending';
+        }
 
         await payment.save();
 
@@ -47,9 +111,8 @@ const initiatePayment = async (req, res) => {
 
         res.json({
             success: true,
-            status: 'initiated',
-            sessionKey,
-            gatewayUrl
+            message: 'Payment gateway session created',
+            data: serializePaymentSession(payment, { sessionKey, gatewayUrl })
         });
 
     } catch (error) {
@@ -108,14 +171,16 @@ const processMockPayment = async (req, res) => {
 
         if (action === 'fail') {
             payment.status = 'failed';
+            payment.updatedAt = new Date();
             await payment.save();
-            return res.json({ success: true, status: 'failed', redirectUrl: `/payment/status?status=failed` });
+            return res.json({ success: true, status: 'failed', redirectUrl: buildStatusRedirectUrl(payment, 'failed') });
         }
 
         if (action === 'cancel') {
             payment.status = 'failed'; // Or cancelled
+            payment.updatedAt = new Date();
             await payment.save();
-            return res.json({ success: true, status: 'cancelled', redirectUrl: `/payment/status?status=cancelled` });
+            return res.json({ success: true, status: 'cancelled', redirectUrl: buildStatusRedirectUrl(payment, 'cancelled') });
         }
 
         // SUCCESS CASE
@@ -126,6 +191,7 @@ const processMockPayment = async (req, res) => {
         payment.paymentMethod = method; // bkash, nagad, card
         payment.transactionId = trxId || bankTranId; // Use real TrxID if provided, else fake one
         payment.stripePaymentId = `MOCK-${sessionKey}`; // Fake Ref
+        payment.updatedAt = new Date();
 
         await payment.save();
 
@@ -136,7 +202,7 @@ const processMockPayment = async (req, res) => {
         res.json({
             success: true,
             status: 'success',
-            redirectUrl: `/payment/status?status=success&trxId=${payment.transactionId}`
+            redirectUrl: buildStatusRedirectUrl(payment, 'success')
         });
 
     } catch (error) {

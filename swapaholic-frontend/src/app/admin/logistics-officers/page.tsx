@@ -1,24 +1,59 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import {
-    FaTruck, FaCheckCircle, FaTimesCircle, FaClock,
-    FaSearch, FaFilter, FaSyncAlt, FaArrowLeft
-} from 'react-icons/fa';
-import { adminApi } from '../../../api/admin';
-import { toast } from 'react-toastify';
-import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'react-toastify';
+import { FaTruck, FaCheckCircle, FaTimesCircle, FaClock, FaSearch, FaFilter, FaSyncAlt, FaArrowLeft } from 'react-icons/fa';
+import { adminApi } from '../../../api/admin';
+import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
+
+interface LogisticsOfficer {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    accountStatus: string;
+    createdAt: string;
+}
+
+interface LogisticsOfficerStats {
+    total: number;
+    pending: number;
+    active: number;
+}
+
+interface LogisticsOfficersResponse {
+    officers?: LogisticsOfficer[];
+    stats?: LogisticsOfficerStats;
+}
+
+const EMPTY_STATS: LogisticsOfficerStats = {
+    total: 0,
+    pending: 0,
+    active: 0,
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return fallback;
+};
 
 export default function LogisticsOfficersPage() {
     const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
-    const [officers, setOfficers] = useState<any[]>([]);
-    const [stats, setStats] = useState<any>({ total: 0, pending: 0, active: 0 });
-    const [pagination, setPagination] = useState<any>(null);
+    const [officers, setOfficers] = useState<LogisticsOfficer[]>([]);
+    const [stats, setStats] = useState<LogisticsOfficerStats>(EMPTY_STATS);
     const [isLoading, setIsLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState<string>('');
+    const [statusFilter, setStatusFilter] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
-    const [rejectModal, setRejectModal] = useState<{ show: boolean; userId: string; name: string }>({ show: false, userId: '', name: '' });
+    const [rejectModal, setRejectModal] = useState<{ show: boolean; userId: string; name: string }>({
+        show: false,
+        userId: '',
+        name: '',
+    });
     const [rejectReason, setRejectReason] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -28,24 +63,24 @@ export default function LogisticsOfficersPage() {
             const data = await adminApi.getLogisticsOfficers({
                 status: statusFilter || undefined,
                 search: searchQuery || undefined,
-                limit: 20
-            });
+                limit: 20,
+            }) as LogisticsOfficersResponse;
+
             setOfficers(data.officers || []);
-            setStats(data.stats || { total: 0, pending: 0, active: 0 });
-            setPagination(data.pagination);
-        } catch (error) {
+            setStats(data.stats || EMPTY_STATS);
+        } catch (error: unknown) {
             console.error('Fetch officers error:', error);
             toast.error('Failed to load logistics officers');
         } finally {
             setIsLoading(false);
         }
-    }, [statusFilter, searchQuery]);
+    }, [searchQuery, statusFilter]);
 
     useEffect(() => {
         if (isAdmin) {
             fetchOfficers();
         }
-    }, [isAdmin, fetchOfficers]);
+    }, [fetchOfficers, isAdmin]);
 
     const handleApprove = async (userId: string) => {
         setIsProcessing(true);
@@ -53,8 +88,8 @@ export default function LogisticsOfficersPage() {
             await adminApi.approveLogisticsOfficer(userId);
             toast.success('Logistics officer approved successfully!');
             fetchOfficers();
-        } catch (error: any) {
-            toast.error(error.message || 'Failed to approve officer');
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, 'Failed to approve officer'));
         } finally {
             setIsProcessing(false);
         }
@@ -65,6 +100,7 @@ export default function LogisticsOfficersPage() {
             toast.error('Please provide a rejection reason');
             return;
         }
+
         setIsProcessing(true);
         try {
             await adminApi.rejectLogisticsOfficer(rejectModal.userId, rejectReason);
@@ -72,8 +108,8 @@ export default function LogisticsOfficersPage() {
             setRejectModal({ show: false, userId: '', name: '' });
             setRejectReason('');
             fetchOfficers();
-        } catch (error: any) {
-            toast.error(error.message || 'Failed to reject officer');
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, 'Failed to reject officer'));
         } finally {
             setIsProcessing(false);
         }
@@ -86,6 +122,7 @@ export default function LogisticsOfficersPage() {
             banned: 'bg-red-100 text-red-700 border-red-200',
             suspended: 'bg-orange-100 text-orange-700 border-orange-200',
         };
+
         return styles[status] || 'bg-gray-100 text-gray-700 border-gray-200';
     };
 
@@ -100,8 +137,6 @@ export default function LogisticsOfficersPage() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-indigo-50/30">
             <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-
-                {/* Header */}
                 <div className="mb-8">
                     <Link href="/admin/dashboard" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-600 transition-colors mb-4">
                         <FaArrowLeft className="text-xs" /> Back to Dashboard
@@ -125,7 +160,6 @@ export default function LogisticsOfficersPage() {
                     </div>
                 </div>
 
-                {/* Stats */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                     <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                         <div className="flex items-center justify-between">
@@ -162,7 +196,6 @@ export default function LogisticsOfficersPage() {
                     </div>
                 </div>
 
-                {/* Filters */}
                 <div className="flex flex-col sm:flex-row gap-3 mb-6">
                     <div className="relative flex-1">
                         <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
@@ -170,7 +203,7 @@ export default function LogisticsOfficersPage() {
                             type="text"
                             placeholder="Search by name or email..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(event) => setSearchQuery(event.target.value)}
                             className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                         />
                     </div>
@@ -178,7 +211,7 @@ export default function LogisticsOfficersPage() {
                         <FaFilter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
                         <select
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
+                            onChange={(event) => setStatusFilter(event.target.value)}
                             className="pl-10 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none cursor-pointer min-w-[180px]"
                         >
                             <option value="">All Statuses</option>
@@ -190,7 +223,6 @@ export default function LogisticsOfficersPage() {
                     </div>
                 </div>
 
-                {/* Officers Table */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     {isLoading ? (
                         <div className="p-12 text-center">
@@ -216,7 +248,7 @@ export default function LogisticsOfficersPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {officers.map((officer: any) => (
+                                    {officers.map((officer) => (
                                         <tr key={officer._id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                             <td className="py-3 px-4">
                                                 <div className="flex items-center gap-3">
@@ -262,7 +294,7 @@ export default function LogisticsOfficersPage() {
                                                         </>
                                                     )}
                                                     {officer.accountStatus === 'active' && (
-                                                        <span className="text-xs text-emerald-600 font-medium">✓ Approved</span>
+                                                        <span className="text-xs text-emerald-600 font-medium">Approved</span>
                                                     )}
                                                     {officer.accountStatus === 'banned' && (
                                                         <span className="text-xs text-red-600 font-medium">Rejected</span>
@@ -271,7 +303,7 @@ export default function LogisticsOfficersPage() {
                                                         href={`/admin/logistics-officers/${officer._id}`}
                                                         className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-100 transition-all"
                                                     >
-                                                        View Details →
+                                                        View Details
                                                     </Link>
                                                 </div>
                                             </td>
@@ -283,7 +315,6 @@ export default function LogisticsOfficersPage() {
                     )}
                 </div>
 
-                {/* Reject Modal */}
                 {rejectModal.show && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -293,14 +324,17 @@ export default function LogisticsOfficersPage() {
                             </p>
                             <textarea
                                 value={rejectReason}
-                                onChange={(e) => setRejectReason(e.target.value)}
+                                onChange={(event) => setRejectReason(event.target.value)}
                                 placeholder="Provide reason for rejection..."
                                 rows={3}
                                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500 mb-4 resize-none"
                             />
                             <div className="flex justify-end gap-3">
                                 <button
-                                    onClick={() => { setRejectModal({ show: false, userId: '', name: '' }); setRejectReason(''); }}
+                                    onClick={() => {
+                                        setRejectModal({ show: false, userId: '', name: '' });
+                                        setRejectReason('');
+                                    }}
                                     className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
                                 >
                                     Cancel

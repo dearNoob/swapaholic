@@ -6,12 +6,31 @@ const logger = require('../utils/logger');
 // TLS validation errors locally, fix the host trust or use a properly
 // configured Node environment rather than disabling validation.
 
+const resolveMongoUri = () => {
+  if (process.env.NODE_ENV === 'test') {
+    return process.env.MONGODB_URI_TEST || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/swapaholic_test';
+  }
+
+  return process.env.MONGODB_URI || 'mongodb://localhost:27017/swapaholic_db';
+};
+
 const connectDB = async (retries = 3) => {
   try {
-    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/swapaholic_db';
+    const mongoUri = resolveMongoUri();
+
+    if (mongoose.connection.readyState === 1) {
+      logger.info('MongoDB already connected');
+      return mongoose.connection;
+    }
+
+    if (mongoose.connection.readyState === 2) {
+      logger.info('MongoDB connection is already in progress');
+      await mongoose.connection.asPromise();
+      return mongoose.connection;
+    }
     
     logger.info('Attempting MongoDB connection...');
-    logger.info(`Connecting to: ${mongoUri.split('@')[0]}@cluster...`);
+    logger.info('Connecting to MongoDB using configured connection settings');
     
     const options = {
       // Mongoose v7+ uses good defaults; include explicit timeouts and pool options.
@@ -58,6 +77,10 @@ const connectDB = async (retries = 3) => {
 
 const disconnectDB = async () => {
   try {
+    if (mongoose.connection.readyState === 0) {
+      return;
+    }
+
     await mongoose.disconnect();
     logger.info('MongoDB disconnected');
   } catch (error) {

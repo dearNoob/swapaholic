@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { FaLock, FaShieldAlt, FaCreditCard, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
-import Image from 'next/image';
+import { FaLock, FaShieldAlt, FaCreditCard } from 'react-icons/fa';
+import { resolveApiPath } from '../../../../lib/publicUrls';
 
 // We can define types here or import
 interface GatewaySession {
@@ -14,7 +13,6 @@ interface GatewaySession {
 }
 
 export default function PaymentGatewayPage({ params }: { params: { sessionId: string } }) {
-    const router = useRouter();
     const { sessionId } = params;
 
     const [loading, setLoading] = useState(true);
@@ -32,7 +30,7 @@ export default function PaymentGatewayPage({ params }: { params: { sessionId: st
     useEffect(() => {
         const fetchSession = async () => {
             try {
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/payments/mock/session/${sessionId}`);
+                const res = await fetch(resolveApiPath(`/payments/mock/session/${sessionId}`));
                 const data = await res.json();
 
                 if (data.success) {
@@ -40,7 +38,7 @@ export default function PaymentGatewayPage({ params }: { params: { sessionId: st
                 } else {
                     setError(data.message || 'Invalid Session');
                 }
-            } catch (err) {
+            } catch {
                 setError('Connection Error');
             } finally {
                 setLoading(false);
@@ -56,7 +54,7 @@ export default function PaymentGatewayPage({ params }: { params: { sessionId: st
             // Simulate network delay for "realism"
             await new Promise(r => setTimeout(r, 2000));
 
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/payments/mock/process`, {
+            const res = await fetch(resolveApiPath('/payments/mock/process'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -77,7 +75,7 @@ export default function PaymentGatewayPage({ params }: { params: { sessionId: st
                 setProcessing(false);
             }
 
-        } catch (err) {
+        } catch {
             setError('Payment Processing Error');
             setProcessing(false);
         }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { FaPaperPlane, FaPaperclip, FaEllipsisV, FaBan, FaFlag, FaBox } from 'react-icons/fa';
 import { toast } from 'react-toastify';
@@ -8,34 +8,15 @@ import { messagesApi } from '../../api/messages';
 import { TypingIndicator, ReadReceipt, MessageReactions, useTypingIndicator } from '../messaging/MessageEnhancements';
 import { socketService } from '../../utils/socket';
 import { useAppSelector } from '../../store/hooks';
-
-interface Message {
-    id: string;
-    senderId: string;
-    senderName: string;
-    content: string;
-    timestamp: string;
-    attachments?: string[];
-    isRead?: boolean;
-    reactions?: { [emoji: string]: string[] };
-}
-
-interface Conversation {
-    id: string;
-    recipientName: string;
-    recipientAvatar: string;
-    recipientId: string;
-    orderId?: string;
-    messages?: Message[];
-}
+import { ChatConversation, ConversationMessage } from '../../types/messages';
 
 interface ChatWindowProps {
-    conversation: Conversation;
+    conversation: ChatConversation;
     onSendMessage: (content: string, attachments?: File[]) => void;
 }
 
 export default function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<ConversationMessage[]>([]);
     const [messageInput, setMessageInput] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [showMenu, setShowMenu] = useState(false);
@@ -53,7 +34,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
         }
 
         // Listen for new messages
-        socketService.on(`message:${conversation.id}`, (newMessage: Message) => {
+        socketService.on(`message:${conversation.id}`, (newMessage: ConversationMessage) => {
             setMessages((prev) => [...prev, newMessage]);
             // Mark as read if window is focused
             if (document.hasFocus()) {
@@ -63,7 +44,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
         });
 
         // Listen for reactions
-        socketService.on(`reaction:${conversation.id}`, (data: { messageId: string, reactions: any }) => {
+        socketService.on(`reaction:${conversation.id}`, (data: { messageId: string; reactions: Record<string, string[]> }) => {
             setMessages((prev) => prev.map(msg =>
                 msg.id === data.messageId ? { ...msg, reactions: data.reactions } : msg
             ));
@@ -84,19 +65,13 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
     }, [conversation.id, currentUserId]);
 
     useEffect(() => {
-        fetchMessages();
-    }, [conversation.id]);
-
-    useEffect(() => {
         scrollToBottom();
     }, [messages]);
 
-    const fetchMessages = async () => {
+    const fetchMessages = useCallback(async () => {
         try {
             setIsLoading(true);
-            const response = await messagesApi.getMessages(conversation.id);
-            // Handle backend returning { success: true, data: { messages: [] } }
-            const messageList = response.data?.messages || response.messages || [];
+            const messageList = await messagesApi.getMessages(conversation.id);
             setMessages(messageList);
         } catch (err) {
             console.error('Error fetching messages:', err);
@@ -111,24 +86,30 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [conversation.id, conversation.recipientId, conversation.recipientName, currentUserId]);
+
+    useEffect(() => {
+        void fetchMessages();
+    }, [fetchMessages]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    const formatReactions = (reactions: any) => {
+    const formatReactions = (reactions: ConversationMessage['reactions']) => {
         if (!reactions) return {};
         // If it's the raw MongoDB Array format
         if (Array.isArray(reactions)) {
             const grouped: { [emoji: string]: string[] } = {};
-            reactions.forEach((r: any) => {
-                const uId = (typeof r.user === 'object' && r.user !== null) ? r.user._id || r.user.id : r.user;
-                if (!uId || !r.emoji) return;
+            reactions.forEach((reaction) => {
+                const uId = (typeof reaction.user === 'object' && reaction.user !== null)
+                    ? reaction.user._id || reaction.user.id
+                    : reaction.user;
+                if (!uId || !reaction.emoji) return;
 
-                if (!grouped[r.emoji]) grouped[r.emoji] = [];
-                if (!grouped[r.emoji].includes(uId.toString())) {
-                    grouped[r.emoji].push(uId.toString());
+                if (!grouped[reaction.emoji]) grouped[reaction.emoji] = [];
+                if (!grouped[reaction.emoji].includes(uId.toString())) {
+                    grouped[reaction.emoji].push(uId.toString());
                 }
             });
             return grouped;
@@ -146,7 +127,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                 // Call parent handler which calls API
                 await onSendMessage(content);
                 // The socket will receive the real message and append it cleanly without duplicates!
-            } catch (error) {
+            } catch {
                 toast.error('Failed to send message');
                 setMessageInput(content); // Restore input on failure
             }
@@ -155,10 +136,10 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
 
     const handleReaction = async (messageId: string, emoji: string) => {
         try {
-            await messagesApi.reactToMessage(messageId, emoji);
-            // Optimistic update
-            setMessages(prev => prev.map(msg => {
-                if ((msg.id || (msg as any)._id) === messageId) {
+                await messagesApi.reactToMessage(messageId, emoji);
+                // Optimistic update
+                setMessages(prev => prev.map(msg => {
+                if ((msg.id || msg._id) === messageId) {
                     const formatted = formatReactions(msg.reactions);
                     const currentEmojiTaps = formatted[emoji] || [];
                     const hasReacted = currentEmojiTaps.includes(currentUserId);
@@ -176,7 +157,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                 }
                 return msg;
             }));
-        } catch (error) {
+        } catch {
             toast.error('Failed to add reaction');
         }
     };
@@ -194,7 +175,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                 await messagesApi.blockUser(conversation.recipientId);
                 toast.success('User blocked');
                 setShowMenu(false);
-            } catch (err) {
+            } catch {
                 toast.error('Failed to block user');
             }
         }
@@ -207,7 +188,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                 await messagesApi.reportUser(conversation.recipientId, reason);
                 toast.success('User reported');
                 setShowMenu(false);
-            } catch (err) {
+            } catch {
                 toast.error('Failed to report user');
             }
         }
@@ -288,9 +269,11 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                 ) : (
                     <>
                         {messages.map((message, index) => {
-                            const actualId = message.id || (message as any)._id || `temp-${index}`;
-                            const actualSenderId = (message as any).sender?._id || (message as any).sender || message.senderId;
-                            const msgTime = message.timestamp || (message as any).createdAt || new Date().toISOString();
+                            const actualId = message.id || message._id || `temp-${index}`;
+                            const actualSenderId = typeof message.sender === 'object'
+                                ? message.sender?._id || message.sender?.id
+                                : message.sender || message.senderId;
+                            const msgTime = message.timestamp || message.createdAt || new Date().toISOString();
                             const isOwnMessage = actualSenderId === currentUserId;
                             return (
                                 <div
@@ -311,7 +294,15 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                                                 {formatTime(msgTime)}
                                             </p>
                                             {isOwnMessage && (
-                                                <ReadReceipt message={message} currentUserId={currentUserId} />
+                                                <ReadReceipt
+                                                    message={{
+                                                        id: actualId,
+                                                        content: message.content,
+                                                        senderId: actualSenderId || '',
+                                                        isRead: message.isRead
+                                                    }}
+                                                    currentUserId={currentUserId}
+                                                />
                                             )}
                                         </div>
                                         <MessageReactions

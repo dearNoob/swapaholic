@@ -190,7 +190,7 @@ export const MyBids = () => {
                 <div className="text-center py-16">
                     <FaHeart className="mx-auto h-16 w-16 text-gray-400 mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Bids</h3>
-                    <p className="text-gray-500 mb-6">You haven't placed any bids yet.</p>
+                    <p className="text-gray-500 mb-6">You haven&apos;t placed any bids yet.</p>
                     <Link href="/products">
                         <Button>Browse Products</Button>
                     </Link>
@@ -256,7 +256,7 @@ export const MyBids = () => {
                 <div className="text-center py-16">
                     <FaTrophy className="mx-auto h-16 w-16 text-gray-400 mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No Won Auctions</h3>
-                    <p className="text-gray-500 mb-6">You haven't won any auctions yet.</p>
+                    <p className="text-gray-500 mb-6">You haven&apos;t won any auctions yet.</p>
                     <Link href="/products">
                         <Button>Start Bidding</Button>
                     </Link>

@@ -15,6 +15,8 @@ interface FeatureFlag {
     targetUsers?: string[];
 }
 
+type GtagTracker = (command: string, action: string, params?: Record<string, string>) => void;
+
 class ABTesting {
     private static instance: ABTesting;
     private experiments: Map<string, Experiment> = new Map();
@@ -119,8 +121,10 @@ class ABTesting {
     }
 
     private trackExperimentAssignment(experimentId: string, variant: string) {
-        if (typeof window !== 'undefined' && (window as any).gtag) {
-            (window as any).gtag('event', 'experiment_impression', {
+        if (typeof window !== 'undefined') {
+            const analyticsWindow = window as Window & { gtag?: GtagTracker };
+
+            analyticsWindow.gtag?.('event', 'experiment_impression', {
                 experiment_id: experimentId,
                 variant_id: variant
             });

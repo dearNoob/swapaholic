@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../../api/admin';
 import { toast } from 'react-toastify';
 import { 
@@ -9,10 +9,10 @@ import {
     FaRobot, 
     FaBoxOpen, 
     FaExclamationTriangle,
-    FaSearchPlus,
-    FaRegLightbulb
+    FaSearchPlus
 } from 'react-icons/fa';
 import { Button } from '../../components/ui/Button';
+import { resolvePublicAssetUrl } from '../../lib/publicUrls';
 
 interface Product {
     _id: string;
@@ -40,7 +40,7 @@ export const AdminVerificationPanel = () => {
     const [rejectReason, setRejectReason] = useState('');
     const [activeImageIndex, setActiveImageIndex] = useState(0);
 
-    const fetchPending = async () => {
+    const fetchPending = useCallback(async () => {
         try {
             setLoading(true);
             const response = await adminApi.getPendingProducts({ limit: 50 });
@@ -55,8 +55,8 @@ export const AdminVerificationPanel = () => {
             setPendingProducts(list);
             
             // Auto-select first item if exists and nothing is selected
-            if (list.length > 0 && !selectedProduct) {
-                setSelectedProduct(list[0]);
+            if (list.length > 0) {
+                setSelectedProduct(current => current ?? list[0]);
             }
         } catch (err) {
             console.error('Failed to fetch pending products', err);
@@ -64,11 +64,11 @@ export const AdminVerificationPanel = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchPending();
-    }, []);
+    }, [fetchPending]);
 
     const handleSelectProduct = (product: Product) => {
         setSelectedProduct(product);
@@ -184,7 +184,7 @@ export const AdminVerificationPanel = () => {
                             <div className="flex gap-3">
                                 <div className="w-12 h-12 rounded bg-gray-100 shrink-0 overflow-hidden">
                                     {product.images?.[0] ? (
-                                        <img src={`http://localhost:5000${product.images[0]}`} alt={product.title} className="w-full h-full object-cover" />
+                                        <img src={resolvePublicAssetUrl(product.images[0])} alt={product.title} className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center text-gray-400">
                                             <FaBoxOpen />
@@ -222,7 +222,7 @@ export const AdminVerificationPanel = () => {
                             <div className="w-full md:w-3/5 bg-gray-900 relative group">
                                 {selectedProduct.images?.[activeImageIndex] ? (
                                     <img 
-                                        src={`http://localhost:5000${selectedProduct.images[activeImageIndex]}`} 
+                                        src={resolvePublicAssetUrl(selectedProduct.images[activeImageIndex])} 
                                         alt={selectedProduct.title} 
                                         className="w-full h-full object-contain"
                                     />
@@ -242,7 +242,7 @@ export const AdminVerificationPanel = () => {
                                                 onClick={() => setActiveImageIndex(idx)}
                                                 className={`w-12 h-12 rounded border-2 overflow-hidden transition ${activeImageIndex === idx ? 'border-primary' : 'border-transparent opacity-50 hover:opacity-100'}`}
                                             >
-                                                <img src={`http://localhost:5000${img}`} className="w-full h-full object-cover" />
+                                                <img src={resolvePublicAssetUrl(img)} alt="" className="w-full h-full object-cover" />
                                             </button>
                                         ))}
                                     </div>

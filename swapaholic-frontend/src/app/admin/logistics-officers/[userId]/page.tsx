@@ -1,33 +1,82 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-    FaTruck, FaClipboardCheck, FaCheckCircle, FaTimesCircle,
-    FaArrowLeft, FaUser, FaEnvelope, FaPhone, FaCalendarAlt,
-    FaSpinner, FaBox
-} from 'react-icons/fa';
+import { FaTruck, FaClipboardCheck, FaCheckCircle, FaTimesCircle, FaArrowLeft, FaEnvelope, FaPhone, FaCalendarAlt, FaSpinner } from 'react-icons/fa';
+import { toast } from 'react-toastify';
 import { adminApi } from '../../../../api/admin';
 import { useRequireAdminAuth } from '../../../../hooks/useRequireAdminAuth';
-import { toast } from 'react-toastify';
+
+interface OfficerProfile {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    createdAt: string;
+    accountStatus: string;
+    bio?: string;
+}
+
+interface OfficerStats {
+    qc: {
+        total: number;
+        approved: number;
+        rejected: number;
+    };
+    delivery: {
+        total: number;
+    };
+}
+
+interface HistoryOrderRef {
+    _id?: string;
+}
+
+interface QcHistoryEntry {
+    _id: string;
+    status: string;
+    qualityValidation?: number;
+    rejectionReason?: string;
+    reviewedAt?: string;
+    orderId?: HistoryOrderRef;
+}
+
+interface DeliveryHistoryEntry {
+    _id: string;
+    status: string;
+    pickupTime?: string;
+    deliveryTime?: string;
+    orderId?: HistoryOrderRef;
+}
+
+interface LogisticsOfficerDetailData {
+    officer: OfficerProfile;
+    stats: OfficerStats;
+    qcHistory: QcHistoryEntry[];
+    deliveryHistory: DeliveryHistoryEntry[];
+}
 
 export default function LogisticsOfficerDetailPage() {
     const { isLoading: isAuthLoading } = useRequireAdminAuth();
     const { userId } = useParams<{ userId: string }>();
     const router = useRouter();
 
-    const [data, setData] = useState<any>(null);
+    const [data, setData] = useState<LogisticsOfficerDetailData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'qc' | 'delivery'>('qc');
 
     useEffect(() => {
-        if (!userId) return;
+        if (!userId) {
+            return;
+        }
+
         (async () => {
             try {
                 setIsLoading(true);
-                const res = await adminApi.getLogisticsOfficerDetail(userId as string);
-                setData(res);
-            } catch (err: any) {
+                const response = await adminApi.getLogisticsOfficerDetail(userId);
+                setData(response as LogisticsOfficerDetailData);
+            } catch (error) {
+                console.error('Failed to load officer details:', error);
                 toast.error('Failed to load officer details');
             } finally {
                 setIsLoading(false);
@@ -65,6 +114,7 @@ export default function LogisticsOfficerDetailPage() {
             in_review: 'bg-blue-100 text-blue-700',
             pending: 'bg-amber-100 text-amber-700',
         };
+
         return map[status] || 'bg-gray-100 text-gray-600';
     };
 
@@ -76,14 +126,13 @@ export default function LogisticsOfficerDetailPage() {
             picked_up: 'bg-blue-100 text-blue-700',
             assigned: 'bg-cyan-100 text-cyan-700',
         };
+
         return map[status] || 'bg-gray-100 text-gray-600';
     };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-                {/* Back Button */}
                 <button
                     onClick={() => router.back()}
                     className="flex items-center gap-2 text-gray-500 hover:text-gray-800 mb-6 transition-colors"
@@ -91,7 +140,6 @@ export default function LogisticsOfficerDetailPage() {
                     <FaArrowLeft /> Back to Officers List
                 </button>
 
-                {/* Officer Profile Card */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
                     <div className="flex flex-col md:flex-row md:items-center gap-6">
                         <div className="w-20 h-20 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
@@ -113,9 +161,11 @@ export default function LogisticsOfficerDetailPage() {
                         </div>
                         <div>
                             <span className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-                                officer.accountStatus === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                                officer.accountStatus === 'pending_approval' ? 'bg-amber-100 text-amber-700' :
-                                'bg-red-100 text-red-700'
+                                officer.accountStatus === 'active'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : officer.accountStatus === 'pending_approval'
+                                        ? 'bg-amber-100 text-amber-700'
+                                        : 'bg-red-100 text-red-700'
                             }`}>
                                 {officer.accountStatus?.replace('_', ' ')}
                             </span>
@@ -123,14 +173,13 @@ export default function LogisticsOfficerDetailPage() {
                     </div>
                 </div>
 
-                {/* Stats Row */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     {[
                         { label: 'QC Total', value: stats.qc.total, icon: FaClipboardCheck, color: 'text-teal-600', bg: 'bg-teal-50' },
                         { label: 'QC Approved', value: stats.qc.approved, icon: FaCheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                         { label: 'QC Rejected', value: stats.qc.rejected, icon: FaTimesCircle, color: 'text-red-600', bg: 'bg-red-50' },
                         { label: 'Deliveries', value: stats.delivery.total, icon: FaTruck, color: 'text-blue-600', bg: 'bg-blue-50' },
-                    ].map(card => (
+                    ].map((card) => (
                         <div key={card.label} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
                             <div className={`w-10 h-10 ${card.bg} rounded-xl flex items-center justify-center mb-3`}>
                                 <card.icon className={`${card.color} text-lg`} />
@@ -141,7 +190,6 @@ export default function LogisticsOfficerDetailPage() {
                     ))}
                 </div>
 
-                {/* Tabs */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                     <div className="flex border-b border-gray-200">
                         <button
@@ -158,7 +206,6 @@ export default function LogisticsOfficerDetailPage() {
                         </button>
                     </div>
 
-                    {/* QC History */}
                     {activeTab === 'qc' && (
                         <div className="overflow-x-auto">
                             {!qcHistory?.length ? (
@@ -178,7 +225,7 @@ export default function LogisticsOfficerDetailPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {qcHistory.map((qc: any) => (
+                                        {qcHistory.map((qc) => (
                                             <tr key={qc._id} className="hover:bg-gray-50 transition-colors">
                                                 <td className="py-3 px-4 text-sm text-gray-700">
                                                     #{String(qc.orderId?._id || qc._id).slice(-6)}
@@ -189,13 +236,13 @@ export default function LogisticsOfficerDetailPage() {
                                                     </span>
                                                 </td>
                                                 <td className="py-3 px-4 text-sm text-gray-600">
-                                                    {qc.qualityValidation ? `${qc.qualityValidation}%` : '—'}
+                                                    {qc.qualityValidation ? `${qc.qualityValidation}%` : '-'}
                                                 </td>
                                                 <td className="py-3 px-4 text-sm text-gray-500 max-w-xs truncate">
-                                                    {qc.rejectionReason || '—'}
+                                                    {qc.rejectionReason || '-'}
                                                 </td>
                                                 <td className="py-3 px-4 text-sm text-gray-500">
-                                                    {qc.reviewedAt ? new Date(qc.reviewedAt).toLocaleDateString() : '—'}
+                                                    {qc.reviewedAt ? new Date(qc.reviewedAt).toLocaleDateString() : '-'}
                                                 </td>
                                             </tr>
                                         ))}
@@ -205,7 +252,6 @@ export default function LogisticsOfficerDetailPage() {
                         </div>
                     )}
 
-                    {/* Delivery History */}
                     {activeTab === 'delivery' && (
                         <div className="overflow-x-auto">
                             {!deliveryHistory?.length ? (
@@ -224,21 +270,21 @@ export default function LogisticsOfficerDetailPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {deliveryHistory.map((d: any) => (
-                                            <tr key={d._id} className="hover:bg-gray-50 transition-colors">
+                                        {deliveryHistory.map((delivery) => (
+                                            <tr key={delivery._id} className="hover:bg-gray-50 transition-colors">
                                                 <td className="py-3 px-4 text-sm text-gray-700">
-                                                    #{String(d.orderId?._id || d._id).slice(-6)}
+                                                    #{String(delivery.orderId?._id || delivery._id).slice(-6)}
                                                 </td>
                                                 <td className="py-3 px-4">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDeliveryStatusColor(d.status)}`}>
-                                                        {d.status?.replace('_', ' ')}
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDeliveryStatusColor(delivery.status)}`}>
+                                                        {delivery.status?.replace('_', ' ')}
                                                     </span>
                                                 </td>
                                                 <td className="py-3 px-4 text-sm text-gray-500">
-                                                    {d.pickupTime ? new Date(d.pickupTime).toLocaleDateString() : '—'}
+                                                    {delivery.pickupTime ? new Date(delivery.pickupTime).toLocaleDateString() : '-'}
                                                 </td>
                                                 <td className="py-3 px-4 text-sm text-gray-500">
-                                                    {d.deliveryTime ? new Date(d.deliveryTime).toLocaleDateString() : '—'}
+                                                    {delivery.deliveryTime ? new Date(delivery.deliveryTime).toLocaleDateString() : '-'}
                                                 </td>
                                             </tr>
                                         ))}

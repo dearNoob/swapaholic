@@ -5,22 +5,25 @@ import {
   FaGavel, FaShieldAlt, FaTruck, FaStar, FaUsers, 
   FaCheckCircle, FaArrowRight, FaSearch, FaCamera, FaClock 
 } from 'react-icons/fa';
-import { productsApi } from '../api/products';
+import { productsApi, type Product } from '../api/products';
 import AuthRedirect from '../components/auth/AuthRedirect';
 import RecentlyViewed from '../components/RecentlyViewed';
 import HeroActions from '../components/home/HeroActions';
 
-// Server Components can be async
-export default async function HomePage() {
-  let featuredProducts: any[] = [];
-  
+export const dynamic = 'force-dynamic';
+
+async function getFeaturedProductsForHome(): Promise<Product[]> {
   try {
-    // Fetch featured/trending products on the server
-    featuredProducts = await productsApi.getFeaturedProducts(6);
+    return await productsApi.getFeaturedProducts(6);
   } catch (error) {
     console.error('Error fetching featured products on server:', error);
-    // Keep it empty, UI handles empty state
+    return [];
   }
+}
+
+// Server Components can be async
+export default async function HomePage() {
+  const featuredProducts = await getFeaturedProductsForHome();
 
   const categories = [
     { name: 'Electronics', icon: '💻' },
@@ -150,7 +153,11 @@ export default async function HomePage() {
 
           {featuredProducts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredProducts.map((product) => (
+            {featuredProducts.map((product) => {
+              const auctionEndTime = product.auctionEndTime ?? new Date().toISOString();
+              const currentBid = product.currentBid ?? 0;
+
+              return (
               <Link key={product.id} href={`/products/${product.id}`} className="block group">
                 <div className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden border border-slate-100 dark:border-slate-700 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">
                     <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-900 p-6 flex items-center justify-center">
@@ -170,7 +177,7 @@ export default async function HomePage() {
                       )}
                     <div className="absolute top-4 right-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md text-slate-900 dark:text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
-                      {getTimeRemaining(product.auctionEndTime)}
+                      {getTimeRemaining(auctionEndTime)}
                     </div>
                   </div>
                   <div className="p-6 flex flex-col flex-grow">
@@ -178,7 +185,7 @@ export default async function HomePage() {
                     <div className="mt-auto flex justify-between items-end pt-4 border-t border-slate-100 dark:border-slate-700">
                       <div>
                         <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Current Bid</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">৳{product.currentBid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-white">৳{currentBid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                       </div>
 
                       <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors text-slate-400">
@@ -188,7 +195,8 @@ export default async function HomePage() {
                   </div>
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
           ) : (
             <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
@@ -272,7 +280,7 @@ export default async function HomePage() {
                 Designed for <span className="text-purple-400">You</span>.
               </h2>
               <p className="text-lg text-slate-400 font-light mb-8 max-w-lg leading-relaxed">
-                We've engineered every aspect of Swapaholic to provide a secure, transparent, and joyful experience. Your peace of mind is our core feature.
+                We&apos;ve engineered every aspect of Swapaholic to provide a secure, transparent, and joyful experience. Your peace of mind is our core feature.
               </p>
 
               <div className="space-y-8">

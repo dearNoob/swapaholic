@@ -24,12 +24,21 @@ class NotificationService {
    * Handle user connection
    */
   handleConnection(socket) {
-    const userId = socket.handshake.auth.userId || socket.handshake.query.userId;
+    const authenticatedUser =
+      socket.data?.user?.id ||
+      socket.data?.user?._id ||
+      socket.data?.user?.userId;
+    const userId = authenticatedUser ? String(authenticatedUser) : null;
 
     if (!userId) {
-      logger.warn('Connection attempt without userId');
+      logger.warn(`Connection attempt without authenticated user for socket ${socket.id}`);
       socket.disconnect();
       return;
+    }
+
+    const claimedUserId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
+    if (claimedUserId && String(claimedUserId) !== userId) {
+      logger.warn(`Socket ${socket.id} claimed userId ${claimedUserId}, authenticated as ${userId}`);
     }
 
     // Store user connection
@@ -187,18 +196,24 @@ class NotificationService {
   /**
    * Notification helper: Bid received
    */
-  async notifyBidReceived(bidId, productId, productTitle, bidAmount, buyerId, sellerId) {
+  async notifyBidReceived(bidId, productId, productTitle, bidAmount, buyerId, sellerId, bidderName, bidderImage, productImage) {
     await this.createAndSend({
       recipientId: sellerId,
       type: 'bid_received',
       title: 'New Bid Received',
-      message: `New bid of $${bidAmount} on "${productTitle}"`,
+      message: `New bid of BDT ${bidAmount} on "${productTitle}"`,
       data: {
         relatedId: bidId,
         relatedType: 'Bid',
+        bidId,
+        productId,
         productTitle,
         bidAmount,
-        userId: buyerId
+        userId: buyerId,
+        bidderId: buyerId,
+        bidderName,
+        bidderImage,
+        productImage
       },
       priority: 'high',
       actionUrl: `/products/${productId}/bids`

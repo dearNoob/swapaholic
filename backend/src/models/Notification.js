@@ -24,6 +24,7 @@ const notificationSchema = new mongoose.Schema(
         'payment_received',   // Payment received (for buyer)
         'delivery_started',   // Delivery started
         'delivery_completed', // Delivery completed
+        'order_completed',    // Order completed after successful delivery
         'review_received',    // Received a review
         'review_posted',      // You posted a review
         'dispute_opened',     // Dispute opened on your order
@@ -33,9 +34,12 @@ const notificationSchema = new mongoose.Schema(
         'qc_failed',          // QC verification failed
         'ticket_resolved',    // Support ticket resolved
         'ticket_updated',     // Support ticket updated
+        'account_approved',   // Account approved by admin
+        'account_rejected',   // Account rejected by admin
         'seller_suspended',   // Seller account suspended
         'seller_banned',      // Seller account banned
         'product_listed',     // Product listed (for seller)
+        'new_product_match',  // New listing matches saved interests
         'product_sold',       // Product sold (for seller)
         'support_notice',     // General support/admin notice
         'auction_won',        // Buyer won auction

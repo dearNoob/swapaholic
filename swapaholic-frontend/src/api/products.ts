@@ -43,6 +43,14 @@ export interface UpdateProductData extends Partial<CreateProductData> {
     status?: 'active' | 'sold' | 'expired' | 'draft';
 }
 
+export interface RegenerateDescriptionData {
+    title?: string;
+    description?: string;
+    category?: string;
+    condition?: string;
+    [key: string]: unknown;
+}
+
 export interface ProductFilters extends FilterParams, PaginationParams {
     status?: 'active' | 'sold' | 'all';
     sellerId?: string;
@@ -188,7 +196,7 @@ export const productsApi = {
     /**
      * Regenerate product description
      */
-    async regenerateDescription(data: any): Promise<{ generatedDescription: string; score: number }> {
+    async regenerateDescription(data: RegenerateDescriptionData): Promise<{ generatedDescription: string; score: number }> {
         const response = await apiClient.post<{ generatedDescription: string; score: number }>('/products/regenerate-description', data);
         return response.data;
     },

@@ -28,11 +28,26 @@ router.get('/methods', authMiddleware, paymentController.getPaymentMethods);
 // @access  Private
 router.post('/methods', authMiddleware, paymentController.addPaymentMethod);
 
+// @route   DELETE /api/payments/methods/:id
+// @desc    Remove a saved payment method
+// @access  Private
+router.delete('/methods/:id', authMiddleware, paymentController.removePaymentMethod);
+
+// @route   PUT /api/payments/methods/:id/default
+// @desc    Set a saved payment method as default
+// @access  Private
+router.put('/methods/:id/default', authMiddleware, paymentController.setDefaultPaymentMethod);
+
 // --- Mock Gateway Routes ---
 const mockGatewayController = require('../controllers/mockGatewayController');
 router.post('/mock/init', authMiddleware, mockGatewayController.initiatePayment);
 router.get('/mock/session/:sessionKey', mockGatewayController.getSessionDetails);
 router.post('/mock/process', mockGatewayController.processMockPayment);
+
+// @route   GET /api/payments/:orderId
+// @desc    Get payment details
+// @access  Private
+router.get('/:orderId/invoice', authMiddleware, paymentController.generateInvoice);
 
 // @route   GET /api/payments/:orderId
 // @desc    Get payment details

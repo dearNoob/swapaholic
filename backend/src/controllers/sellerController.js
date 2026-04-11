@@ -2,8 +2,25 @@ const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 const Bid = require('../models/Bid');
+const Payment = require('../models/Payment');
 const Review = require('../models/Review');
 const logger = require('../utils/logger');
+
+const SELLER_ACTIVE_PRODUCT_STATUSES = ['active', 'bidden'];
+
+const mapListingStatus = (status) => {
+    if (status === 'sold') return 'sold';
+    if (status === 'auction_ended') return 'ended';
+    if (['qc_pending', 'qc_rejected'].includes(status)) return 'pending';
+    return 'active';
+};
+
+const mapSellerDashboardOrderStatus = (status) => {
+    if (['qc_pending', 'qc_approved', 'confirmed'].includes(status)) return 'paid';
+    if (status === 'in_delivery') return 'shipped';
+    if (['delivered', 'completed'].includes(status)) return 'delivered';
+    return 'pending';
+};
 
 /**
  * Seller Dashboard Controller
@@ -25,7 +42,7 @@ exports.getDashboardStats = async (req, res) => {
         const productIds = products.map(p => p._id);
 
         // Get active listings count
-        const activeListings = products.filter(p => p.status === 'active').length;
+        const activeListings = products.filter(p => SELLER_ACTIVE_PRODUCT_STATUSES.includes(p.status)).length;
 
         // Get total sales (completed orders)
         const completedOrders = await Order.find({
@@ -34,15 +51,25 @@ exports.getDashboardStats = async (req, res) => {
         });
 
         const totalSales = completedOrders.length;
-        const totalRevenue = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+        const totalRevenue = completedOrders.reduce((sum, order) => sum + (order.finalPrice || 0), 0);
 
-        // Get pending payments (orders that are delivered but payment not released)
-        const pendingOrders = await Order.find({
-            sellerId,
-            status: { $in: ['paid', 'in_transit', 'delivered'] }
-        });
+        // Get pending payments from escrowed or pending payment records
+        const pendingPaymentResult = await Payment.aggregate([
+            {
+                $match: {
+                    sellerId: sellerObjectId,
+                    status: { $in: ['pending', 'escrowed'] }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
 
-        const pendingPayments = pendingOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+        const pendingPayments = pendingPaymentResult[0]?.total || 0;
 
         // Calculate trends (last 30 days vs previous 30 days)
         const thirtyDaysAgo = new Date();
@@ -62,7 +89,7 @@ exports.getDashboardStats = async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    total: { $sum: '$totalAmount' }
+                    total: { $sum: '$finalPrice' }
                 }
             }
         ]);
@@ -78,7 +105,7 @@ exports.getDashboardStats = async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    total: { $sum: '$totalAmount' }
+                    total: { $sum: '$finalPrice' }
                 }
             }
         ]);
@@ -144,10 +171,13 @@ exports.getSellerListings = async (req, res) => {
                     id: product._id,
                     title: product.title,
                     image: product.images?.[0] || '/products/placeholder.png',
+                    images: product.images || [],
                     price: product.basePrice || 0,
+                    category: product.category,
+                    condition: product.condition,
                     views: product.viewCount || 0,
                     bids: bidCount,
-                    status: product.status,
+                    status: mapListingStatus(product.status),
                     createdAt: product.createdAt
                 };
             })
@@ -193,7 +223,7 @@ exports.getSalesAnalytics = async (req, res) => {
                     _id: {
                         $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
                     },
-                    revenue: { $sum: '$totalAmount' }
+                    revenue: { $sum: '$finalPrice' }
                 }
             },
             {
@@ -250,7 +280,7 @@ exports.getSellerOrders = async (req, res) => {
             .skip(skip)
             .limit(limit)
             .populate('buyerId', 'firstName lastName profileImage')
-            .populate('productId', 'title images price');
+            .populate('productId', 'title images basePrice');
 
         const total = await Order.countDocuments(query);
 
@@ -260,14 +290,14 @@ exports.getSellerOrders = async (req, res) => {
             product: {
                 title: order.productId?.title || 'Unknown Product',
                 image: order.productId?.images?.[0] || '/products/placeholder.png',
-                price: order.productId?.price || 0
+                price: order.productId?.basePrice || 0
             },
             buyer: {
                 name: `${order.buyerId?.firstName || 'Unknown'} ${order.buyerId?.lastName || ''}`,
                 image: order.buyerId?.profileImage || '/default-avatar.png',
                 id: order.buyerId?._id
             },
-            amount: order.totalAmount,
+            amount: order.finalPrice,
             status: order.status,
             date: order.createdAt,
             shippingAddress: order.shippingAddress
@@ -306,6 +336,11 @@ exports.getRecentOrders = async (req, res) => {
 
         const formattedOrders = orders.map(order => ({
             id: order._id,
+            productTitle: order.productId?.title || 'Unknown Product',
+            buyerName: `${order.buyerId?.firstName || 'Unknown'} ${order.buyerId?.lastName || ''}`.trim(),
+            amount: order.finalPrice,
+            status: mapSellerDashboardOrderStatus(order.status),
+            createdAt: order.createdAt,
             product: {
                 title: order.productId?.title || 'Unknown Product',
                 image: order.productId?.images?.[0] || '/products/placeholder.png'
@@ -314,8 +349,7 @@ exports.getRecentOrders = async (req, res) => {
                 name: `${order.buyerId?.firstName || 'Unknown'} ${order.buyerId?.lastName || ''}`,
                 image: order.buyerId?.profileImage || '/default-avatar.png'
             },
-            amount: order.totalAmount,
-            status: order.status,
+            rawStatus: order.status,
             date: order.createdAt
         }));
 
@@ -395,6 +429,7 @@ exports.getRecentBids = async (req, res) => {
 exports.getPerformanceMetrics = async (req, res) => {
     try {
         const sellerId = req.user.id;
+        const sellerObjectId = new mongoose.Types.ObjectId(sellerId);
 
         // Calculate average rating
         const reviews = await Review.find({ revieweeId: sellerId, reviewType: 'buyer_to_seller' });
@@ -412,14 +447,56 @@ exports.getPerformanceMetrics = async (req, res) => {
             : 0;
 
         // Get total views and bids
-        const products = await Product.find({ sellerId, isDeleted: false });
+        const products = await Product.find({ sellerId, status: { $ne: 'removed' } });
         const totalViews = products.reduce((sum, p) => sum + (p.viewCount || 0), 0);
 
         const productIds = products.map(p => p._id);
         const totalBids = await Bid.countDocuments({ productId: { $in: productIds } });
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        // Mock response time (in hours)
-        const responseTime = 2.5;
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+        const recentBids = await Bid.countDocuments({
+            productId: { $in: productIds },
+            createdAt: { $gte: thirtyDaysAgo }
+        });
+        const previousBids = await Bid.countDocuments({
+            productId: { $in: productIds },
+            createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo }
+        });
+
+        const recentOrders = await Order.countDocuments({
+            sellerId: sellerObjectId,
+            status: 'completed',
+            createdAt: { $gte: thirtyDaysAgo }
+        });
+        const previousOrders = await Order.countDocuments({
+            sellerId: sellerObjectId,
+            status: 'completed',
+            createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo }
+        });
+
+        const recentProducts = await Product.find({
+            sellerId,
+            createdAt: { $gte: thirtyDaysAgo }
+        }).select('viewCount');
+        const previousProducts = await Product.find({
+            sellerId,
+            createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo }
+        }).select('viewCount');
+
+        const recentViews = recentProducts.reduce((sum, product) => sum + (product.viewCount || 0), 0);
+        const previousViews = previousProducts.reduce((sum, product) => sum + (product.viewCount || 0), 0);
+
+        const recentConversion = recentBids > 0 ? (recentOrders / recentBids) * 100 : 0;
+        const previousConversion = previousBids > 0 ? (previousOrders / previousBids) * 100 : 0;
+
+        const calculateTrend = (current, previous) => {
+            if (!previous) return current > 0 ? 100 : 0;
+            return ((current - previous) / previous) * 100;
+        };
 
         res.json({
             averageRating: parseFloat(averageRating),
@@ -427,8 +504,9 @@ exports.getPerformanceMetrics = async (req, res) => {
             totalBids,
             conversionRate: parseFloat(conversionRate),
             totalReviews,
-            responseTime,
-            sellerLevel: 'Gold'
+            viewsTrend: parseFloat(calculateTrend(recentViews, previousViews).toFixed(1)),
+            bidsTrend: parseFloat(calculateTrend(recentBids, previousBids).toFixed(1)),
+            conversionTrend: parseFloat(calculateTrend(recentConversion, previousConversion).toFixed(1))
         });
     } catch (error) {
         logger.error('Error fetching performance metrics:', error);
@@ -470,7 +548,7 @@ exports.getEarningsSummary = async (req, res) => {
                 {
                     $group: {
                         _id: null,
-                        total: { $sum: '$totalAmount' }
+                        total: { $sum: '$finalPrice' }
                     }
                 }
             ]);
@@ -555,7 +633,7 @@ exports.getComprehensiveAnalytics = async (req, res) => {
         orders.forEach(order => {
             const dateStr = order.createdAt.toISOString().split('T')[0];
             if (dailyMap[dateStr] !== undefined) {
-                dailyMap[dateStr] += order.totalAmount;
+                dailyMap[dateStr] += order.finalPrice;
             }
         });
 
@@ -576,7 +654,7 @@ exports.getComprehensiveAnalytics = async (req, res) => {
             {
                 $group: {
                     _id: { $week: '$createdAt' },
-                    amount: { $sum: '$totalAmount' },
+                    amount: { $sum: '$finalPrice' },
                     year: { $first: { $year: '$createdAt' } }
                 }
             },
@@ -599,7 +677,7 @@ exports.getComprehensiveAnalytics = async (req, res) => {
             {
                 $group: {
                     _id: { $month: '$createdAt' },
-                    amount: { $sum: '$totalAmount' },
+                    amount: { $sum: '$finalPrice' },
                     year: { $first: { $year: '$createdAt' } }
                 }
             },
@@ -627,7 +705,7 @@ exports.getComprehensiveAnalytics = async (req, res) => {
                 $group: {
                     _id: '$productId',
                     sales: { $sum: 1 },
-                    revenue: { $sum: '$totalAmount' }
+                    revenue: { $sum: '$finalPrice' }
                 }
             },
             { $sort: { sales: -1 } },

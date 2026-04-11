@@ -100,7 +100,7 @@ export default function AutoBid({
                                     Maximum bid: <span className="font-bold">09f3{activeMaxBid.toFixed(2)}</span>
                                 </p>
                                 <p className="text-xs text-green-600 mt-1">
-                                    We'll automatically bid up to your maximum when outbid
+                                    We&apos;ll automatically bid up to your maximum when outbid
                                 </p>
                             </div>
                         </div>
@@ -156,8 +156,8 @@ export default function AutoBid({
                                 <div className="text-sm text-blue-900">
                                     <p className="font-semibold mb-1">How Auto-Bid Works</p>
                                     <ul className="space-y-1 text-blue-800">
-                                        <li>• We'll automatically place bids on your behalf</li>
-                                        <li>• You'll only bid the minimum needed to stay ahead</li>
+                                        <li>• We&apos;ll automatically place bids on your behalf</li>
+                                        <li>• You&apos;ll only bid the minimum needed to stay ahead</li>
                                         <li>• Your maximum bid stays hidden from other bidders</li>
                                         <li>• You can cancel anytime before auction ends</li>
                                     </ul>

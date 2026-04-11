@@ -19,8 +19,8 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ productId }) => {
             try {
                 const data = await productsApi.getProductById(productId);
                 dispatch(setCurrentProduct(data));
-            } catch (err: any) {
-                dispatch(setError(err.message || 'Failed to fetch product details'));
+            } catch (err) {
+                dispatch(setError(err instanceof Error ? err.message : 'Failed to fetch product details'));
             } finally {
                 dispatch(setLoading(false));
             }
@@ -110,7 +110,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ productId }) => {
                             </div>
                             {currentProduct.mlSummary && (
                                 <p className="mt-2 text-sm text-gray-500 italic">
-                                    "{currentProduct.mlSummary}"
+                                    &quot;{currentProduct.mlSummary}&quot;
                                 </p>
                             )}
                         </div>

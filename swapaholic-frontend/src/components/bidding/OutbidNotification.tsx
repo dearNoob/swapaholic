@@ -47,7 +47,7 @@ export function OutbidNotificationAlert({ notification, onDismiss, onQuickRebid 
                             <FaGavel className="text-xl" />
                         </div>
                         <div>
-                            <h4 className="font-bold">You've Been Outbid!</h4>
+                            <h4 className="font-bold">You&apos;ve Been Outbid!</h4>
                             <p className="text-xs opacity-90">Act fast to stay in the lead</p>
                         </div>
                     </div>

@@ -1,7 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store/store';
-
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5001';
+import { SOCKET_URL } from '../lib/publicUrls';
 
 class SocketService {
     private socket: Socket | null = null;
@@ -16,17 +15,15 @@ class SocketService {
 
         const state = store.getState();
         const token = state.auth.accessToken;
-        const userId = state.auth.user?.id;
 
-        if (!token || !userId) {
-            console.warn('Cannot connect to socket: No token or user ID');
+        if (!token) {
+            console.warn('Cannot connect to socket: No access token');
             return null;
         }
 
         this.socket = io(SOCKET_URL, {
             auth: {
-                token,
-                userId
+                token
             },
             transports: ['polling', 'websocket'],
             reconnectionAttempts: this.maxReconnectAttempts,
@@ -67,7 +64,7 @@ class SocketService {
         }
     }
 
-    on(event: string, callback: (...args: any[]) => void) {
+    on<TArgs extends unknown[]>(event: string, callback: (...args: TArgs) => void) {
         if (!this.socket) {
             console.warn('Socket not connected. Call connect() first');
             return;
@@ -75,7 +72,7 @@ class SocketService {
         this.socket.on(event, callback);
     }
 
-    off(event: string, callback?: (...args: any[]) => void) {
+    off<TArgs extends unknown[]>(event: string, callback?: (...args: TArgs) => void) {
         if (!this.socket) return;
         if (callback) {
             this.socket.off(event, callback);
@@ -84,7 +81,7 @@ class SocketService {
         }
     }
 
-    emit(event: string, data: any) {
+    emit(event: string, data: unknown) {
         if (!this.socket) {
             console.warn('Socket not connected. Cannot emit event');
             return;

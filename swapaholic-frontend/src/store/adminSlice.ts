@@ -1,4 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { User } from '../types/api';
+import { Product } from '../api/products';
+
+type AdminDispute = Record<string, unknown>;
 
 interface AdminStats {
     totalUsers: number;
@@ -10,9 +14,9 @@ interface AdminStats {
 
 interface AdminState {
     stats: AdminStats | null;
-    pendingUsers: any[]; // Replace with proper User type if needed
-    pendingListings: any[]; // Replace with proper Product type if needed
-    disputes: any[];
+    pendingUsers: User[];
+    pendingListings: Product[];
+    disputes: AdminDispute[];
     isLoading: boolean;
     error: string | null;
 }
@@ -33,13 +37,13 @@ const adminSlice = createSlice({
         setStats: (state, action: PayloadAction<AdminStats>) => {
             state.stats = action.payload;
         },
-        setPendingUsers: (state, action: PayloadAction<any[]>) => {
+        setPendingUsers: (state, action: PayloadAction<User[]>) => {
             state.pendingUsers = action.payload;
         },
-        setPendingListings: (state, action: PayloadAction<any[]>) => {
+        setPendingListings: (state, action: PayloadAction<Product[]>) => {
             state.pendingListings = action.payload;
         },
-        setDisputes: (state, action: PayloadAction<any[]>) => {
+        setDisputes: (state, action: PayloadAction<AdminDispute[]>) => {
             state.disputes = action.payload;
         },
         setLoading: (state, action: PayloadAction<boolean>) => {

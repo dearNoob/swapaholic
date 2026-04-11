@@ -78,6 +78,15 @@ router.post('/change-password', authMiddleware, authController.changePassword);
 router.post('/2fa/generate', authMiddleware, authController.generate2FA);
 router.post('/2fa/verify', authMiddleware, authController.verify2FA);
 router.post('/2fa/disable', authMiddleware, authController.disable2FA);
+router.post('/2fa/validate', (req, res, next) => {
+  const requestBody = req.body || {};
+  req.body = {
+    ...requestBody,
+    otp: requestBody.otp || requestBody.token,
+    purpose: 'LOGIN_2FA'
+  };
+  next();
+}, authController.verifyOTP);
 
 // Update profile (protected route)
 router.put('/profile', authMiddleware, authController.updateProfile);

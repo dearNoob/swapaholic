@@ -1,9 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { toast } from 'react-toastify';
 import { paymentsApi, PendingPayout } from '../../../api/payments';
 import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
+import { resolvePublicAssetUrl } from '../../../lib/publicUrls';
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+    }
+
+    return fallback;
+};
 
 export default function AdminPayoutsPage() {
     const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
@@ -17,8 +27,8 @@ export default function AdminPayoutsPage() {
             setLoading(true);
             const data = await paymentsApi.getPendingPayouts();
             setPayouts(data);
-        } catch (err: any) {
-            toast.error(err?.response?.data?.message || 'Failed to load pending payouts');
+        } catch (error) {
+            toast.error(getErrorMessage(error, 'Failed to load pending payouts'));
         } finally {
             setLoading(false);
         }
@@ -36,8 +46,8 @@ export default function AdminPayoutsPage() {
             const result = await paymentsApi.adminReleasePayout(orderId);
             toast.success(result.message);
             setPayouts(prev => prev.filter(p => p.orderId !== orderId));
-        } catch (err: any) {
-            toast.error(err?.response?.data?.message || 'Failed to release payment');
+        } catch (error) {
+            toast.error(getErrorMessage(error, 'Failed to release payment'));
         } finally {
             setReleasing(null);
         }
@@ -199,12 +209,11 @@ export default function AdminPayoutsPage() {
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     {payout.product?.images?.[0] && (
-                                                        <img
-                                                            src={payout.product.images[0].startsWith('http')
-                                                                ? payout.product.images[0]
-                                                                : `${process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '')}/${payout.product.images[0]}`
-                                                            }
+                                                        <Image
+                                                            src={resolvePublicAssetUrl(payout.product.images[0])}
                                                             alt=""
+                                                            width={40}
+                                                            height={40}
                                                             className="w-10 h-10 rounded-lg object-cover border border-gray-200"
                                                         />
                                                     )}

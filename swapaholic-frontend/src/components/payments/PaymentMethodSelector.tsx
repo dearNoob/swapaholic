@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import StripeCheckoutButton from '../payments/StripeCheckoutButton';
 
 type Method = 'stripe' | 'paypal' | 'escrow' | 'bkash' | 'rocket' | 'nagad' | null;
 
@@ -83,11 +82,6 @@ export default function PaymentMethodSelector({ selected, onSelect }: Props) {
                     <div className="text-xs text-gray-500">Post Office Mobile</div>
                 </button>
             </div>
-            {selected === 'stripe' && (
-                <div className="mt-4">
-                    <StripeCheckoutButton orderId="order123" amount={0} onSuccess={() => { }} />
-                </div>
-            )}
         </div>
     );
 }

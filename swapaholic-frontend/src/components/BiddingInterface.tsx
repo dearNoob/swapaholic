@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { FaGavel, FaClock } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { bidsApi } from '../api/bids';
-import { emailApi } from '../api/email';
 import { useAppSelector } from '../store/hooks';
 import BidConfirmationModal from './bidding/BidConfirmationModal';
 
@@ -99,19 +98,10 @@ export default function BiddingInterface({
     const handleConfirmBid = async () => {
         setIsSubmitting(true);
         try {
-            const result = await bidsApi.placeBid({ productId, amount: bidAmount });
+            await bidsApi.placeBid({ productId, amount: bidAmount });
             toast.success('Bid placed successfully!');
             setBidAmount(bidAmount + minimumIncrement);
             setShowConfirmModal(false);
-
-            // Send email notification
-            if (user?.id && result?.id) {
-                try {
-                    await emailApi.bidPlaced(result.id, user.id);
-                } catch (emailError) {
-                    console.error('Failed to send bid email notification:', emailError);
-                }
-            }
 
             if (onBidPlaced) {
                 onBidPlaced();

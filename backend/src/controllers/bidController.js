@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Bid = require('../models/Bid');
 const Product = require('../models/Product');
 const User = require('../models/User');
@@ -8,6 +9,59 @@ const AutoBid = require('../models/AutoBid');
 const emailService = require('../utils/emailService');
 
 const PLATFORM_FEE = 30;
+const CONFIRMATION_HOURS = 3;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+const toId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value._id) return value._id.toString();
+  if (typeof value.toString === 'function') return value.toString();
+  return null;
+};
+
+const serializeBid = (bid) => {
+  const buyer = bid.buyerId && bid.buyerId._id ? bid.buyerId : null;
+  const product = bid.productId && bid.productId._id ? bid.productId : null;
+  const username = buyer
+    ? `${buyer.firstName || ''} ${buyer.lastName || ''}`.trim() || buyer.email
+    : undefined;
+
+  return {
+    id: toId(bid._id),
+    productId: toId(product || bid.productId),
+    userId: toId(buyer || bid.buyerId),
+    buyerId: buyer || bid.buyerId,
+    username,
+    amount: bid.bidAmount,
+    bidAmount: bid.bidAmount,
+    isAutoBid: false,
+    status: bid.status,
+    createdAt: bid.createdAt,
+    updatedAt: bid.updatedAt,
+    product: product || undefined
+  };
+};
+
+const buildConfirmationDeadline = (startTime) => (
+  new Date(startTime.getTime() + CONFIRMATION_HOURS * 60 * 60 * 1000)
+);
+
+const syncLiveAuctionProductState = async (productId) => {
+  const product = await Product.findById(productId).select('status');
+  if (!product || !['active', 'bidden'].includes(product.status)) {
+    return;
+  }
+
+  const highestActiveBid = await Bid.findOne({ productId, status: 'active' })
+    .sort({ bidAmount: -1, createdAt: 1 });
+
+  product.highestBidAmount = highestActiveBid ? highestActiveBid.bidAmount : undefined;
+  product.highestBidderId = highestActiveBid ? highestActiveBid.buyerId : undefined;
+  product.status = highestActiveBid ? 'bidden' : 'active';
+  product.updatedAt = new Date();
+  await product.save();
+};
 
 // Place a bid on a product
 const placeBid = async (req, res) => {
@@ -75,9 +129,45 @@ const placeBid = async (req, res) => {
 
     const populatedBid = await Bid.findById(bid._id)
       .populate('productId', 'title basePrice')
-      .populate('buyerId', 'firstName lastName email');
+      .populate('buyerId', 'firstName lastName email profilePicture');
 
-    res.status(201).json(populatedBid);
+    res.status(201).json({
+      success: true,
+      message: 'Bid placed successfully',
+      data: serializeBid(populatedBid)
+    });
+
+    setImmediate(async () => {
+      try {
+        const seller = await User.findById(product.sellerId).select('firstName lastName email');
+        const bidderName = `${populatedBid.buyerId?.firstName || ''} ${populatedBid.buyerId?.lastName || ''}`.trim() || 'A buyer';
+        const productTitle = populatedBid.productId?.title || product.title;
+
+        await notificationService.notifyBidReceived(
+          bid._id,
+          product._id,
+          productTitle,
+          bidAmount,
+          req.user.id,
+          product.sellerId,
+          bidderName,
+          populatedBid.buyerId?.profilePicture,
+          product.images?.[0]
+        );
+
+        if (seller?.email) {
+          await emailService.sendBidPlacedEmail(
+            seller.email,
+            seller.firstName || 'Seller',
+            productTitle,
+            bidAmount,
+            bidderName
+          );
+        }
+      } catch (postBidError) {
+        logger.error('Post-bid notification error:', postBidError);
+      }
+    });
   } catch (error) {
     logger.error('Place bid error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -101,8 +191,8 @@ const getBidsForProduct = async (req, res) => {
       .sort({ bidAmount: -1, createdAt: -1 });
 
     res.json({
-      status: 'success',
-      data: bids
+      success: true,
+      data: bids.map(serializeBid)
     });
   } catch (error) {
     logger.error('Get bids for product error:', error);
@@ -126,7 +216,10 @@ const getUserBids = async (req, res) => {
       .populate('productId', 'title basePrice status')
       .sort({ createdAt: -1 });
 
-    res.json(bids);
+    res.json({
+      success: true,
+      data: bids.map(serializeBid)
+    });
   } catch (error) {
     logger.error('Get user bids error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -148,7 +241,7 @@ const getMyBids = async (req, res) => {
     const bids = await Bid.find({ buyerId: userId })
       .populate({
         path: 'productId',
-        select: 'title basePrice status images currentBid highestBidAmount sellerId'
+        select: 'title basePrice status images currentBid highestBidAmount highestBidderId sellerId bidEndDate'
       })
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -172,9 +265,10 @@ const getMyBids = async (req, res) => {
           basePrice: product.basePrice,
           status: product.status,
           images: product.images || [],
-          currentBid: highestBid
+          currentBid: highestBid,
+          endTime: product.bidEndDate
         } : null,
-        isWinning: product?.highestBidderId?.toString() === userId || bid.status === 'accepted',
+        isWinning: product?.highestBidderId?.toString() === userId || ['accepted', 'pending_confirmation'].includes(bid.status),
         isOutbid: product?.highestBidderId?.toString() !== userId && bid.status === 'active'
       };
     });
@@ -245,14 +339,18 @@ const updateBid = async (req, res) => {
       .populate('productId', 'title basePrice')
       .populate('buyerId', 'firstName lastName email');
 
-    res.json(updatedBid);
+    res.json({
+      success: true,
+      message: 'Bid updated successfully',
+      data: serializeBid(updatedBid)
+    });
   } catch (error) {
     logger.error('Update bid error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Accept highest bid (seller only, closes auction)
+// Accept highest bid (seller only, starts buyer confirmation window)
 const acceptBid = async (req, res) => {
   try {
     const { bidId } = req.params;
@@ -268,77 +366,99 @@ const acceptBid = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    if (!['active', 'bidden'].includes(product.status)) {
+      return res.status(400).json({ message: `Cannot accept bids while product is ${product.status}` });
+    }
+
     // Can only accept active bids
     if (bid.status !== 'active') {
       return res.status(400).json({ message: `Cannot accept a ${bid.status} bid` });
     }
 
-    // Accept this bid
-    bid.status = 'accepted';
-    bid.updatedAt = new Date();
-    await bid.save();
-
-    // Get all other active bids to reject them
-    const otherActiveBids = await Bid.find(
-      { productId: bid.productId, _id: { $ne: bidId }, status: 'active' },
-      'buyerId'
-    );
-
-    // Reject all other bids for this product
-    await Bid.updateMany(
-      { productId: bid.productId, _id: { $ne: bidId }, status: 'active' },
-      { status: 'rejected' }
-    );
-
-    // Update product status to sold
-    await Product.findByIdAndUpdate(bid.productId, {
-      status: 'sold',
-      highestBidAmount: bid.bidAmount,
-      highestBidderId: bid.buyerId
-    });
-
-    // Create an order for the accepted bid
-    const order = new Order({
+    const highestActiveBid = await Bid.findOne({
       productId: bid.productId,
-      buyerId: bid.buyerId,
-      sellerId: product.sellerId,
-      bidId: bid._id,
-      finalPrice: bid.bidAmount,
-      status: 'pending'
-    });
-    await order.save();
+      status: 'active'
+    }).sort({ bidAmount: -1, createdAt: 1 });
 
-    // Send notification to accepted bidder
-    try {
-      await notificationService.notifyBidAccepted(
-        bid._id,
-        product.title,
-        bid.bidAmount,
-        bid.buyerId
-      );
-    } catch (notifError) {
-      logger.error('Error sending bid accepted notification:', notifError);
+    if (!highestActiveBid || highestActiveBid._id.toString() !== bidId) {
+      return res.status(400).json({ message: 'Only the highest active bid can be accepted' });
     }
 
-    // Send rejection notifications to other bidders
-    for (const otherBid of otherActiveBids) {
-      try {
-        await notificationService.notifyBidRejected(
-          otherBid._id,
-          product.title,
-          otherBid.bidAmount,
-          otherBid.buyerId
-        );
-      } catch (notifError) {
-        logger.error('Error sending bid rejected notification:', notifError);
-      }
+    const existingOrder = await Order.findOne({
+      bidId: bid._id,
+      status: { $ne: 'cancelled' }
+    });
+    if (existingOrder) {
+      return res.status(400).json({ message: 'An order already exists for this bid' });
+    }
+
+    const existingPendingConfirmation = await Bid.findOne({
+      productId: bid.productId,
+      status: 'pending_confirmation',
+      _id: { $ne: bid._id }
+    });
+    if (existingPendingConfirmation) {
+      return res.status(400).json({ message: 'This auction already has a buyer awaiting confirmation' });
+    }
+
+    const buyer = await User.findById(bid.buyerId);
+    if (!buyer) {
+      return res.status(404).json({ message: 'Winning bidder not found' });
+    }
+
+    const now = new Date();
+    bid.status = 'pending_confirmation';
+    bid.auctionWonAt = now;
+    bid.confirmationEmailSentAt = now;
+    bid.confirmationDeadline = buildConfirmationDeadline(now);
+    bid.updatedAt = now;
+    await bid.save();
+
+    product.status = 'auction_ended';
+    product.auctionEndedAt = now;
+    product.bidEndDate = now;
+    product.highestBidAmount = bid.bidAmount;
+    product.highestBidderId = bid.buyerId;
+    product.updatedAt = now;
+    await product.save();
+
+    try {
+      await emailService.sendAuctionWonEmail(
+        buyer.email,
+        buyer.firstName,
+        product.title,
+        bid.bidAmount,
+        `${FRONTEND_URL}/my-bids/won`
+      );
+    } catch (emailError) {
+      logger.error('Error sending manual auction win email:', emailError);
+    }
+
+    try {
+      await notificationService.notifyAuctionWon(
+        bid._id,
+        product._id,
+        product.title,
+        bid.bidAmount,
+        buyer._id
+      );
+    } catch (notifError) {
+      logger.error('Error sending manual auction won notification:', notifError);
     }
 
     const acceptedBid = await Bid.findById(bidId)
       .populate('productId', 'title basePrice')
       .populate('buyerId', 'firstName lastName email');
 
-    res.json({ message: 'Bid accepted. Product sold.', bid: acceptedBid, order });
+    res.json({
+      success: true,
+      message: 'Highest bid accepted. The buyer has 3 hours to confirm the purchase.',
+      data: {
+        bid: serializeBid(acceptedBid),
+        confirmationDeadline: bid.confirmationDeadline,
+        productStatus: product.status
+      }
+    });
   } catch (error) {
     logger.error('Accept bid error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -369,6 +489,7 @@ const rejectBid = async (req, res) => {
     bid.status = 'rejected';
     bid.updatedAt = new Date();
     await bid.save();
+    await syncLiveAuctionProductState(bid.productId);
 
     // Send rejection notification
     try {
@@ -410,6 +531,7 @@ const withdrawBid = async (req, res) => {
     bid.status = 'withdrawn';
     bid.updatedAt = new Date();
     await bid.save();
+    await syncLiveAuctionProductState(bid.productId);
 
     res.json({ message: 'Bid withdrawn', bid });
   } catch (error) {
@@ -451,7 +573,14 @@ const setAutoBid = async (req, res) => {
     // After setting, trigger it immediately to see if we can win right now
     await triggerAutoBidding(productId, null);
 
-    res.json({ success: true, message: 'Auto-bid set successfully', data: autoBid });
+    res.json({
+      success: true,
+      message: 'Auto-bid set successfully',
+      data: {
+        message: 'Auto-bid set successfully',
+        autoBid
+      }
+    });
   } catch (error) {
     logger.error('Set auto-bid error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -469,7 +598,13 @@ const cancelAutoBid = async (req, res) => {
       { isActive: false }
     );
 
-    res.json({ success: true, message: 'Auto-bid cancelled' });
+    res.json({
+      success: true,
+      message: 'Auto-bid cancelled',
+      data: {
+        message: 'Auto-bid cancelled'
+      }
+    });
   } catch (error) {
     logger.error('Cancel auto-bid error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -689,22 +824,23 @@ const confirmAuctionWin = async (req, res) => {
       logger.error('Error sending confirmation notifications:', notifError);
     }
 
-    // Get buyer info for response
-    const buyer = await User.findById(bid.buyerId);
-
     res.json({
+      success: true,
       message: 'Purchase confirmed! Please proceed to payment.',
-      bid: {
-        id: bid._id,
-        status: bid.status,
-        bidAmount: bid.bidAmount
-      },
-      order: {
-        id: order._id,
-        finalPrice: order.finalPrice,
-        platformFee: PLATFORM_FEE,
-        totalPayable: order.finalPrice + PLATFORM_FEE,
-        status: order.status
+      data: {
+        message: 'Purchase confirmed! Please proceed to payment.',
+        bid: {
+          id: bid._id,
+          status: bid.status,
+          bidAmount: bid.bidAmount
+        },
+        order: {
+          id: order._id,
+          finalPrice: order.finalPrice,
+          platformFee: PLATFORM_FEE,
+          totalPayable: order.finalPrice + PLATFORM_FEE,
+          status: order.status
+        }
       }
     });
   } catch (error) {

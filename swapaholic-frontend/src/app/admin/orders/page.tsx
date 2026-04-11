@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import {
-    FaShoppingCart, FaSearch, FaBoxOpen, FaTruck, FaCheckDouble,
+    FaSearch, FaBoxOpen, FaTruck, FaCheckDouble,
     FaTimesCircle, FaExclamationTriangle, FaArrowLeft, FaSyncAlt,
     FaRegCreditCard, FaLock, FaMoneyBillWave, FaUndo, FaChevronLeft,
-    FaChevronRight, FaRegEye, FaRegCalendarAlt, FaClock, FaGavel
+    FaChevronRight, FaRegCalendarAlt, FaClock, FaGavel
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { adminApi } from '../../../api/admin';
@@ -76,7 +76,7 @@ export default function OrderOversightPage() {
             });
             setOrders(data.orders || []);
             setPagination(data.pagination || { page: 1, limit: 15, total: 0, pages: 0 });
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error fetching orders:', err);
             toast.error('Failed to load orders');
         } finally {
@@ -88,7 +88,7 @@ export default function OrderOversightPage() {
         if (isAdmin) {
             fetchOrders(1);
         }
-    }, [isAdmin, statusFilter]);
+    }, [isAdmin, fetchOrders]);
 
     // Debounced search logic (frontend filter for now to avoid heavy backend changes)
     const filteredOrders = useMemo(() => {

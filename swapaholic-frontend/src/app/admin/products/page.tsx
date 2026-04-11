@@ -8,8 +8,19 @@ import { toast } from 'react-toastify';
 import { adminApi } from '../../../api/admin';
 import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
 
+interface ModerationProduct {
+    id: string;
+    title: string;
+    image: string;
+    seller: string;
+    category: string;
+    startingBid: number;
+    description: string;
+    createdAt: string;
+}
+
 export default function ProductModerationPage() {
-    const [products, setProducts] = useState<any[]>([]);
+    const [products, setProducts] = useState<ModerationProduct[]>([]);
     // Protect route with admin auth
     const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
     const [isDataLoading, setIsDataLoading] = useState(true);
@@ -51,7 +62,7 @@ export default function ProductModerationPage() {
             await adminApi.approveProduct(productId);
             toast.success('Product approved successfully');
             fetchPendingProducts();
-        } catch (err) {
+        } catch {
             toast.error('Failed to approve product');
         }
     };
@@ -63,7 +74,7 @@ export default function ProductModerationPage() {
                 await adminApi.rejectProduct(productId, reason);
                 toast.success('Product rejected');
                 fetchPendingProducts();
-            } catch (err) {
+            } catch {
                 toast.error('Failed to reject product');
             }
         }

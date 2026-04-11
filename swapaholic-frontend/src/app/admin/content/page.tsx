@@ -1,27 +1,34 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'react-toastify';
-import { adminApi } from '../../../api/admin';
-import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
+import { useCallback, useEffect, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import type { Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
-import { 
-    FaBold, FaItalic, FaUnderline, FaHeading, 
-    FaListUl, FaListOl, FaQuoteLeft, FaUndo, FaRedo, FaEraser,
-    FaInfoCircle
-} from 'react-icons/fa';
+import { toast } from 'react-toastify';
+import { FaBold, FaItalic, FaUnderline, FaListUl, FaListOl, FaQuoteLeft, FaUndo, FaRedo, FaEraser, FaInfoCircle } from 'react-icons/fa';
+import { adminApi } from '../../../api/admin';
+import { useRequireAdminAuth } from '../../../hooks/useRequireAdminAuth';
+
+type ContentTab = 'terms' | 'privacy' | 'about';
 
 interface ContentSection {
-    type: string;
+    type: ContentTab;
     title: string;
     body: string;
     lastUpdated?: string;
 }
 
-const MenuBar = ({ editor }: { editor: any }) => {
-    if (!editor) return null;
+const CONTENT_TABS: Array<{ id: ContentTab; label: string }> = [
+    { id: 'terms', label: 'Terms of Service' },
+    { id: 'privacy', label: 'Privacy Policy' },
+    { id: 'about', label: 'About Us' },
+];
+
+function MenuBar({ editor }: { editor: Editor | null }) {
+    if (!editor) {
+        return null;
+    }
 
     return (
         <div className="flex flex-wrap gap-2 p-2 border-b border-gray-200 bg-gray-50 rounded-t-md">
@@ -128,25 +135,22 @@ const MenuBar = ({ editor }: { editor: any }) => {
             </button>
         </div>
     );
-};
+}
 
 export default function ContentManagementPage() {
-    const [activeTab, setActiveTab] = useState<'terms' | 'privacy' | 'about'>('terms');
+    const [activeTab, setActiveTab] = useState<ContentTab>('terms');
     const [content, setContent] = useState<ContentSection | null>(null);
-    const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
     const [isDataLoading, setIsDataLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState({ title: '', body: '' });
+    const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
 
     const editor = useEditor({
-        extensions: [
-            StarterKit,
-            Underline,
-        ],
+        extensions: [StarterKit, Underline],
         content: '',
         immediatelyRender: false,
-        onUpdate: ({ editor }) => {
-            setFormData(prev => ({ ...prev, body: editor.getHTML() }));
+        onUpdate: ({ editor: currentEditor }) => {
+            setFormData((prev) => ({ ...prev, body: currentEditor.getHTML() }));
         },
         editorProps: {
             attributes: {
@@ -155,17 +159,17 @@ export default function ContentManagementPage() {
         },
     });
 
-    const fetchContent = useCallback(async (type: string) => {
+    const fetchContent = useCallback(async (type: ContentTab) => {
         try {
             setIsDataLoading(true);
-            const data = await adminApi.getContent(type);
+            const data = await adminApi.getContent(type) as ContentSection;
             setContent(data);
             setFormData({ title: data.title || '', body: data.body || '' });
             if (editor) {
                 editor.commands.setContent(data.body || '');
             }
-        } catch (err) {
-            console.error('Error fetching content:', err);
+        } catch (error) {
+            console.error('Error fetching content:', error);
             toast.error('Failed to load content');
         } finally {
             setIsDataLoading(false);
@@ -176,22 +180,21 @@ export default function ContentManagementPage() {
         if (isAdmin && editor) {
             fetchContent(activeTab);
         }
-    }, [activeTab, isAdmin, editor, fetchContent]);
+    }, [activeTab, editor, fetchContent, isAdmin]);
 
-    const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        // Get the absolute latest content from the editor instance
+    const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+
         const currentBody = editor ? editor.getHTML() : formData.body;
         const submitData = { ...formData, body: currentBody };
 
         try {
             setIsSaving(true);
-            const updated = await adminApi.updateContent(activeTab, submitData);
+            const updated = await adminApi.updateContent(activeTab, submitData) as ContentSection;
             setContent(updated);
             toast.success('Content updated successfully');
-        } catch (err) {
-            console.error('Error saving content:', err);
+        } catch (error) {
+            console.error('Error saving content:', error);
             toast.error('Failed to save content');
         } finally {
             setIsSaving(false);
@@ -200,34 +203,35 @@ export default function ContentManagementPage() {
 
     const isLoading = isAuthLoading || isDataLoading;
 
-    const tabs = [
-        { id: 'terms', label: 'Terms of Service' },
-        { id: 'privacy', label: 'Privacy Policy' },
-        { id: 'about', label: 'About Us' }
-    ];
-
-    if (!isAdmin && !isAuthLoading) return null;
+    if (!isAdmin && !isAuthLoading) {
+        return null;
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">Content Management 📝</h1>
-                    <p className="mt-2 text-gray-600">Manage static pages and policies with Rich Text support</p>
+                    <h1 className="text-3xl font-bold text-gray-900">Content Management</h1>
+                    <p className="mt-2 text-gray-600">Manage static pages and policies with rich text support.</p>
+                    {content?.lastUpdated && (
+                        <p className="mt-2 text-sm text-gray-500">
+                            Last updated: {new Date(content.lastUpdated).toLocaleString()}
+                        </p>
+                    )}
                 </div>
 
                 <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                    {/* Tabs */}
                     <div className="border-b border-gray-200 bg-gray-50/50">
                         <nav className="flex -mb-px px-4 gap-4">
-                            {tabs.map((tab) => (
+                            {CONTENT_TABS.map((tab) => (
                                 <button
                                     key={tab.id}
-                                    onClick={() => setActiveTab(tab.id as any)}
-                                    className={`py-4 px-4 text-center border-b-2 font-semibold text-sm transition-all duration-200 ${activeTab === tab.id
-                                        ? 'border-indigo-600 text-indigo-700 bg-white'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`py-4 px-4 text-center border-b-2 font-semibold text-sm transition-all duration-200 ${
+                                        activeTab === tab.id
+                                            ? 'border-indigo-600 text-indigo-700 bg-white'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    }`}
                                 >
                                     {tab.label}
                                 </button>
@@ -238,7 +242,7 @@ export default function ContentManagementPage() {
                     <div className="p-8">
                         {isLoading ? (
                             <div className="flex flex-col items-center justify-center py-20">
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4" />
                                 <p className="text-gray-500 font-medium">Loading content editor...</p>
                             </div>
                         ) : (
@@ -251,7 +255,7 @@ export default function ContentManagementPage() {
                                         type="text"
                                         id="title"
                                         value={formData.title}
-                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                        onChange={(event) => setFormData({ ...formData, title: event.target.value })}
                                         className="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-3 px-4 focus:outline-none text-black focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                                         placeholder="Enter descriptive title..."
                                         required
@@ -264,14 +268,11 @@ export default function ContentManagementPage() {
                                     </label>
                                     <div className="mt-1 border border-gray-300 rounded-lg shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all">
                                         <MenuBar editor={editor} />
-                                        <EditorContent 
-                                            editor={editor} 
-                                            className="bg-white"
-                                        />
+                                        <EditorContent editor={editor} className="bg-white" />
                                     </div>
                                     <p className="mt-3 text-sm text-gray-500 flex items-center gap-2">
                                         <FaInfoCircle className="text-indigo-500" />
-                                        Use the toolbar for Bold, Italic, Underline, and Headings. Formatting is saved automatically to the content field.
+                                        Use the toolbar for bold, italic, underline, lists, quotes, and headings. Changes save when you submit this form.
                                     </p>
                                 </div>
 
@@ -283,18 +284,18 @@ export default function ContentManagementPage() {
                                     >
                                         {isSaving ? (
                                             <>
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
                                                 Saving Changes...
                                             </>
                                         ) : 'Save Changes'}
                                     </button>
                                 </div>
                             </form>
-                        ) }
+                        )}
                     </div>
                 </div>
             </div>
-            
+
             <style jsx global>{`
                 .ProseMirror {
                     min-height: 400px;

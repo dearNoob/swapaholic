@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { FaClock, FaCamera } from 'react-icons/fa';
 
 interface Product {
     id: string;
+    _id?: string;
     title: string;
     image?: string;
     currentBid?: number;
@@ -14,18 +15,24 @@ interface Product {
 }
 
 export default function RecentlyViewed() {
-    const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
-
-    useEffect(() => {
-        const storedRecent = localStorage.getItem('swapaholic_recently_viewed');
-        if (storedRecent) {
-            try {
-                setRecentlyViewed(JSON.parse(storedRecent));
-            } catch (e) {
-                console.error('Failed to parse recently viewed items', e);
-            }
+    const [recentlyViewed] = useState<Product[]>(() => {
+        if (typeof window === 'undefined') {
+            return [];
         }
-    }, []);
+
+        const storedRecent = localStorage.getItem('swapaholic_recently_viewed');
+        if (!storedRecent) {
+            return [];
+        }
+
+        try {
+            const parsed = JSON.parse(storedRecent);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            console.error('Failed to parse recently viewed items', error);
+            return [];
+        }
+    });
 
     const getTimeRemaining = (endTime: string) => {
         const now = new Date().getTime();
@@ -55,9 +62,12 @@ export default function RecentlyViewed() {
 
                 <div className="flex overflow-x-auto gap-6 pb-4 scrollbar-hide snap-x">
                     {recentlyViewed.map((product, index) => (
+                        (() => {
+                            const productId = product.id || product._id || `recent-${index}`;
+                            return (
                         <Link 
-                            key={product.id || (product as any)._id || index} 
-                            href={`/products/${product.id || (product as any)._id}`} 
+                            key={productId} 
+                            href={`/products/${productId}`} 
                             className="min-w-[280px] w-[280px] snap-start group bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden"
                         >
                             <div className="relative aspect-square bg-slate-100 dark:bg-slate-800 p-4 flex items-center justify-center overflow-hidden">
@@ -86,6 +96,8 @@ export default function RecentlyViewed() {
                                 </div>
                             </div>
                         </Link>
+                            );
+                        })()
                     ))}
                 </div>
             </div>

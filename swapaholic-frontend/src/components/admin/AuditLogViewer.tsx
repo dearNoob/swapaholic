@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FaHistory, FaSearch, FaFilter, FaUserShield, FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
+import { useState } from 'react';
+import { FaHistory, FaSearch, FaUserShield, FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
 
 interface AuditLog {
     id: string;
@@ -18,6 +18,9 @@ interface AuditLogViewerProps {
     logs?: AuditLog[];
     onExport?: (format: 'csv' | 'json') => void;
 }
+
+const AUDIT_ACTIONS: AuditLog['action'][] = ['create', 'update', 'delete', 'login', 'permission_change', 'ban', 'other'];
+const DATE_FILTERS: Array<'today' | 'week' | 'month' | 'all'> = ['today', 'week', 'month', 'all'];
 
 export default function AuditLogViewer({ logs = [], onExport }: AuditLogViewerProps) {
     const [searchTerm, setSearchTerm] = useState('');
@@ -129,7 +132,12 @@ export default function AuditLogViewer({ logs = [], onExport }: AuditLogViewerPr
 
                     <select
                         value={filterAction}
-                        onChange={(e) => setFilterAction(e.target.value as any)}
+                        onChange={(e) => {
+                            const nextAction = e.target.value as AuditLog['action'] | 'all';
+                            if (nextAction === 'all' || AUDIT_ACTIONS.includes(nextAction)) {
+                                setFilterAction(nextAction);
+                            }
+                        }}
                         className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
                         <option value="all">All Actions</option>
@@ -143,7 +151,12 @@ export default function AuditLogViewer({ logs = [], onExport }: AuditLogViewerPr
 
                     <select
                         value={dateFilter}
-                        onChange={(e) => setDateFilter(e.target.value as any)}
+                        onChange={(e) => {
+                            const nextFilter = e.target.value as 'today' | 'week' | 'month' | 'all';
+                            if (DATE_FILTERS.includes(nextFilter)) {
+                                setDateFilter(nextFilter);
+                            }
+                        }}
                         className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
                         <option value="all">All Time</option>

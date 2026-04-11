@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FaTrophy, FaStar, FaMedal, FaArrowRight } from 'react-icons/fa';
+import { FaTrophy, FaStar, FaMedal } from 'react-icons/fa';
 
 interface Performer {
     sellerId?: string;
@@ -10,7 +10,7 @@ interface Performer {
     completedOrders: number;
     totalRevenue?: number;
     totalSpent?: number;
-    averageRating?: string;
+    averageRating?: string | number;
     reviewCount?: number;
 }
 
@@ -43,7 +43,7 @@ export default function TopPerformers({ performers }: TopPerformersProps) {
         );
     }
 
-    const tabs = [
+    const tabs: Array<{ key: 'sellers' | 'buyers' | 'rated'; label: string }> = [
         { key: 'sellers', label: 'Top Sellers' },
         { key: 'buyers', label: 'Top Buyers' },
         { key: 'rated', label: 'Highest Rated' },
@@ -74,7 +74,7 @@ export default function TopPerformers({ performers }: TopPerformersProps) {
                 {tabs.map((tab) => (
                     <button
                         key={tab.key}
-                        onClick={() => setActiveTab(tab.key as any)}
+                        onClick={() => setActiveTab(tab.key)}
                         className={`flex-1 px-3 py-2 text-xs font-semibold rounded-md transition-all ${
                             activeTab === tab.key
                                 ? 'bg-white text-gray-900 shadow-sm'
@@ -127,7 +127,7 @@ export default function TopPerformers({ performers }: TopPerformersProps) {
                                     </div>
                                 ) : (
                                     <span className="font-bold text-emerald-600 text-sm">
-                                        ৳{(performer.totalRevenue || performer.totalSpent || 0).toLocaleString()}
+                                        BDT {(performer.totalRevenue || performer.totalSpent || 0).toLocaleString()}
                                     </span>
                                 )}
                             </div>

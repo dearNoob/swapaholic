@@ -11,9 +11,9 @@ import { useAppDispatch } from '../../store/hooks';
 import { setCredentials, setLoading, setError, setActiveMode } from '../../store/authSlice';
 import { authApi } from '../../api/auth';
 import { User } from '../../types/api';
-import { tokenManager } from '../../utils/tokenManager';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { resolveApiPath } from '../../lib/publicUrls';
 import Link from 'next/link';
 
 const schema = yup.object({
@@ -29,6 +29,24 @@ interface LoginResponse {
     require2FA?: boolean;
     tempToken?: string;
 }
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error && typeof error === 'object') {
+        if ('message' in error && typeof error.message === 'string') {
+            return error.message;
+        }
+
+        if ('status' in error && error.status === 404) {
+            return 'Account not found. Please sign up first.';
+        }
+
+        if ('status' in error && error.status === 401) {
+            return 'Wrong password or email. Please try again.';
+        }
+    }
+
+    return fallback;
+};
 
 export const Login = () => {
     const dispatch = useAppDispatch();
@@ -85,23 +103,8 @@ export const Login = () => {
 
                 handleLoginSuccess(response);
             }
-        } catch (error: any) {
-            let message = 'Login failed. Please try again.';
-            
-            // Handle error response from apiClient
-            if (error?.message) {
-                message = error.message;
-            }
-            
-            // Specific overrides for standard status codes if message is too generic
-            if (error?.status === 401) {
-                if (message.toLowerCase().includes('credential') || message.toLowerCase().includes('password')) {
-                    message = 'Wrong password or email. Please try again.';
-                }
-            } else if (error?.status === 404) {
-                message = 'Account not found. Please sign up first.';
-            }
-
+        } catch (error) {
+            const message = getErrorMessage(error, 'Login failed. Please try again.');
             dispatch(setError(message));
             toast.error(message);
             setIsLoadingState(false);
@@ -282,10 +285,10 @@ export const Login = () => {
                     </div>
 
                     <div className="mt-6 grid grid-cols-2 gap-3">
-                        <Button variant="outline" fullWidth onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/google`}>
+                        <Button variant="outline" fullWidth onClick={() => window.location.href = resolveApiPath('/auth/google')}>
                             Google
                         </Button>
-                        <Button variant="outline" fullWidth onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/facebook`}>
+                        <Button variant="outline" fullWidth onClick={() => window.location.href = resolveApiPath('/auth/facebook')}>
                             Facebook
                         </Button>
                     </div>

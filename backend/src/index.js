@@ -5,6 +5,9 @@ const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const http = require('http');
 const socketIO = require('socket.io');
+const jwt = require('jsonwebtoken');
+const path = require('path');
+const backendPackage = require('../package.json');
 require('dotenv').config();
 const { validateEnvironment } = require('./config/validateEnv');
 const logger = require('./utils/logger');
@@ -22,6 +25,9 @@ const productRoutes = require('./routes/productRoutes');
 const bidRoutes = require('./routes/bidRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const addressRoutes = require('./routes/addressRoutes');
+const shippingRoutes = require('./routes/shippingRoutes');
+const wishlistRoutes = require('./routes/wishlistRoutes');
 const deliveryRoutes = require('./routes/deliveryRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const supportRoutes = require('./routes/supportRoutes');
@@ -46,10 +52,55 @@ const app = express();
 // Trust proxy for Render/reverse proxy environments
 app.set('trust proxy', 1);
 
+const normalizeOrigin = (origin) => {
+  if (!origin) return null;
+
+  try {
+    return new URL(origin).origin;
+  } catch (error) {
+    return String(origin).trim().replace(/\/$/, '');
+  }
+};
+
+const buildAllowedOrigins = () => {
+  const configuredOrigins = [
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://localhost:3000'
+  ];
+
+  return new Set(
+    configuredOrigins
+      .map(normalizeOrigin)
+      .filter(Boolean)
+  );
+};
+
+const allowedOrigins = buildAllowedOrigins();
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) {
+    return true;
+  }
+
+  return allowedOrigins.has(normalizeOrigin(origin));
+};
 
 // CORS configuration - moved to top to ensure headers are set correctly
 const corsOptions = {
-  origin: true, // Reflects the request origin
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      return callback(null, true);
+    }
+
+    logger.warn(`Blocked CORS request from origin: ${origin}`);
+    return callback(new Error('Origin not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -111,7 +162,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve uploaded files statically
-const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // Input sanitization
@@ -119,7 +169,15 @@ app.use(sanitizeInput);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'API is running', timestamp: new Date() });
+  res.json({
+    status: 'API is running',
+    service: 'swapaholic-backend',
+    environment: process.env.NODE_ENV || 'development',
+    version: backendPackage.version,
+    storageProvider: process.env.FILE_STORAGE_PROVIDER || 'local',
+    uptimeSeconds: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Register API routes
@@ -129,6 +187,9 @@ app.use('/api/products', productRoutes);
 app.use('/api/bids', bidRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/addresses', addressRoutes);
+app.use('/api/shipping', shippingRoutes);
+app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/support', supportRoutes);
@@ -156,7 +217,7 @@ app.use((req, res) => {
 // Global error handling
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 
 // Start server only when this file is executed directly
 if (require.main === module) {
@@ -165,17 +226,37 @@ if (require.main === module) {
       const server = http.createServer(app);
       const io = socketIO(server, {
         cors: {
-          origin: [
-            process.env.FRONTEND_URL || 'http://localhost:3000',
-            'http://localhost:3000',
-            'http://127.0.0.1:3000',
-            'http://192.168.0.104:3000',
-            'http://192.168.56.1:3000'
-          ],
+          origin: (origin, callback) => {
+            if (isAllowedOrigin(origin)) {
+              return callback(null, true);
+            }
+
+            logger.warn(`Blocked Socket.IO connection from origin: ${origin}`);
+            return callback(new Error('Origin not allowed'));
+          },
           methods: ['GET', 'POST'],
           credentials: true,
         },
       });
+
+      io.use((socket, next) => {
+        const rawToken = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
+        const token = rawToken ? String(rawToken).replace(/^Bearer\s+/i, '') : null;
+
+        if (!token) {
+          return next(new Error('Authentication required'));
+        }
+
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          socket.data.user = decoded;
+          return next();
+        } catch (error) {
+          logger.warn(`Rejected Socket.IO connection for socket ${socket.id}: invalid token`);
+          return next(new Error('Invalid token'));
+        }
+      });
+
       notificationService.init(io);
       io.on('connection', (socket) => {
         logger.info(`New socket connection: ${socket.id}`);

@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
-import { FaShieldAlt, FaCheck, FaUser, FaEnvelope, FaPhone, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaShieldAlt, FaUser, FaEnvelope, FaPhone, FaMapMarkerAlt } from 'react-icons/fa';
 import { useAppSelector, useAppDispatch } from '../../../store/hooks';
 import { updateUser } from '../../../store/authSlice';
 import { authApi } from '../../../api/auth';
@@ -30,21 +30,22 @@ const passwordSchema = yup.object({
         .required('Confirm password is required'),
 }).required();
 
-interface ProfileFormData {
-    firstName: string;
-    lastName: string;
-    phone: string;
-    address: string;
-}
+type ProfileFormData = yup.InferType<typeof profileSchema>;
+type PasswordFormData = yup.InferType<typeof passwordSchema>;
 
-interface PasswordFormData {
-    currentPassword: string;
-    newPassword: string;
-    confirmPassword: string;
-}
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error && typeof error === 'object' && 'response' in error) {
+        const response = error.response as { data?: { message?: string } };
+        if (response?.data?.message) {
+            return response.data.message;
+        }
+    }
+
+    return fallback;
+};
 
 export default function AdminProfilePage() {
-    const { isLoading: isAuthLoading, isAdmin } = useRequireAdminAuth();
+    const { isLoading: isAuthLoading } = useRequireAdminAuth();
     const dispatch = useAppDispatch();
     const { user } = useAppSelector((state) => state.auth);
 
@@ -60,7 +61,7 @@ export default function AdminProfilePage() {
         formState: { errors: profileErrors },
         reset: resetProfile
     } = useForm<ProfileFormData>({
-        resolver: yupResolver(profileSchema) as any,
+        resolver: yupResolver(profileSchema),
         defaultValues: {
             firstName: user?.firstName || '',
             lastName: user?.lastName || '',
@@ -96,8 +97,8 @@ export default function AdminProfilePage() {
             dispatch(updateUser(response.user));
             toast.success('Profile updated successfully!');
             setIsEditingProfile(false);
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Failed to update profile');
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, 'Failed to update profile'));
         } finally {
             setProfileLoading(false);
         }
@@ -113,8 +114,8 @@ export default function AdminProfilePage() {
             toast.success('Password changed successfully!');
             setIsChangingPassword(false);
             resetPassword();
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Failed to change password');
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, 'Failed to change password'));
         } finally {
             setPasswordLoading(false);
         }
@@ -210,7 +211,7 @@ export default function AdminProfilePage() {
                         </div>
 
                         {isEditingProfile ? (
-                            <form onSubmit={handleProfileSubmit(onProfileSubmit as any)} className="p-6">
+                            <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="p-6">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>

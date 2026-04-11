@@ -1,6 +1,7 @@
 const request = require('supertest');
-const app = require('../src/index');
+const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const app = require('../src/index');
 const User = require('../src/models/User');
 const Product = require('../src/models/Product');
 const Bid = require('../src/models/Bid');
@@ -10,204 +11,238 @@ const { connectDB, disconnectDB } = require('../src/config/mongodb');
 
 jest.setTimeout(30000);
 
+const uniqueSuffix = () => `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+
+const getId = (value) => {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (value.id) return value.id.toString();
+  if (value._id) return value._id.toString();
+  return value.toString();
+};
+
 describe('Support Ticket Controller', () => {
-  let sellerToken, buyerToken, adminToken, seller, buyer, admin, product, bid, order;
+  let sellerToken;
+  let buyerToken;
+  let adminToken;
+  let seller;
+  let buyer;
+  let admin;
+  let sharedOrderId;
+  const createdUserIds = [];
+
+  const registerUser = async ({ role, label }) => {
+    const suffix = uniqueSuffix();
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({
+        firstName: label,
+        lastName: 'Tester',
+        phone: `+1555${suffix.slice(-7)}`,
+        email: `${label.toLowerCase()}_${suffix}@test.com`,
+        password: 'Test1234',
+        role
+      })
+      .expect(201);
+
+    const user = response.body.data.user;
+    const normalizedUser = {
+      ...user,
+      id: getId(user)
+    };
+
+    createdUserIds.push(normalizedUser.id);
+
+    return {
+      token: response.body.data.accessToken,
+      user: normalizedUser
+    };
+  };
+
+  const createAdminAccount = async () => {
+    const suffix = uniqueSuffix();
+    const adminUser = await User.create({
+      firstName: 'Support',
+      lastName: 'Admin',
+      phone: `+1666${suffix.slice(-7)}`,
+      email: `support_admin_${suffix}@test.com`,
+      password: 'Test1234',
+      role: 'admin'
+    });
+
+    createdUserIds.push(adminUser._id.toString());
+
+    return {
+      user: {
+        id: adminUser._id.toString(),
+        email: adminUser.email,
+        role: adminUser.role
+      },
+      token: jwt.sign(
+        {
+          id: adminUser._id.toString(),
+          role: 'admin',
+          email: adminUser.email
+        },
+        process.env.JWT_SECRET
+      )
+    };
+  };
+
+  const createAuctionOrder = async ({
+    titlePrefix = 'Support Test Product',
+    description = 'Product for support testing',
+    basePrice = 100,
+    bidAmount = 120
+  } = {}) => {
+    const productResponse = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({
+        title: `${titlePrefix} ${uniqueSuffix()}`,
+        description,
+        category: 'electronics',
+        basePrice,
+        condition: 'good'
+      })
+      .expect(201);
+
+    const product = productResponse.body;
+
+    const bidResponse = await request(app)
+      .post('/api/bids')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({
+        productId: product._id,
+        bidAmount
+      })
+      .expect(201);
+
+    const bidId = bidResponse.body.data.id;
+
+    await request(app)
+      .post(`/api/bids/${bidId}/accept`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .expect(200);
+
+    const confirmResponse = await request(app)
+      .post(`/api/bids/${bidId}/confirm-win`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(200);
+
+    return confirmResponse.body.data.order.id;
+  };
+
+  const createSupportTicket = ({
+    token = buyerToken,
+    orderId = sharedOrderId,
+    subject = 'Product not as described',
+    description = 'The product condition does not match the listing and there are visible issues throughout.',
+    category = 'product_quality'
+  } = {}) => (
+    request(app)
+      .post('/api/support')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        orderId,
+        subject,
+        description,
+        category
+      })
+  );
 
   beforeAll(async () => {
     await connectDB();
 
-    // Create seller
-    const sellerRes = await request(app)
-      .post('/api/auth/register')
-      .send({
-        firstName: 'Support',
-        lastName: 'Seller',
-        phone: `+1555${Math.random().toString().slice(2, 8)}`,
-        email: `seller_support_${Math.random()}@test.com`,
-        password: 'Test1234',
-        role: 'user'
-      });
-    sellerToken = sellerRes.body.token;
-    seller = sellerRes.body.user;
+    const sellerAccount = await registerUser({ role: 'seller', label: 'SupportSeller' });
+    sellerToken = sellerAccount.token;
+    seller = sellerAccount.user;
 
-    // Create buyer
-    const buyerRes = await request(app)
-      .post('/api/auth/register')
-      .send({
-        firstName: 'Support',
-        lastName: 'Buyer',
-        phone: `+1555${Math.random().toString().slice(2, 8)}`,
-        email: `buyer_support_${Math.random()}@test.com`,
-        password: 'Test1234',
-        role: 'user'
-      });
-    buyerToken = buyerRes.body.token;
-    buyer = buyerRes.body.user;
+    const buyerAccount = await registerUser({ role: 'buyer', label: 'SupportBuyer' });
+    buyerToken = buyerAccount.token;
+    buyer = buyerAccount.user;
 
-    // Create admin
-    const adminRes = await request(app)
-      .post('/api/auth/register')
-      .send({
-        firstName: 'Support',
-        lastName: 'Admin',
-        phone: `+1555${Math.random().toString().slice(2, 8)}`,
-        email: `admin_support_${Math.random()}@test.com`,
-        password: 'Test1234',
-        role: 'admin'
-      });
-    adminToken = adminRes.body.token;
-    admin = adminRes.body.user;
+    const adminAccount = await createAdminAccount();
+    adminToken = adminAccount.token;
+    admin = adminAccount.user;
 
-    // Create product
-    const productRes = await request(app)
-      .post('/api/products')
-      .set('Authorization', `Bearer ${sellerToken}`)
-      .send({
-        title: 'Support Test Product',
-        description: 'Product for support testing',
-        category: 'electronics',
-        basePrice: 100,
-        condition: 'good'
-      });
-    product = productRes.body;
-
-    // Create bid
-    const bidRes = await request(app)
-      .post('/api/bids')
-      .set('Authorization', `Bearer ${buyerToken}`)
-      .send({ productId: product._id, bidAmount: 120 });
-    bid = bidRes.body;
-
-    // Accept bid
-    await request(app)
-      .post(`/api/bids/${bid._id}/accept`)
-      .set('Authorization', `Bearer ${sellerToken}`);
-
-    // Create order
-    const orderRes = await request(app)
-      .post('/api/orders')
-      .set('Authorization', `Bearer ${buyerToken}`)
-      .send({ bidId: bid._id });
-    order = orderRes.body;
+    sharedOrderId = await createAuctionOrder();
   });
 
   afterAll(async () => {
-    await User.deleteMany({ email: /^seller_support_|^buyer_support_|^admin_support_/ }).catch(() => {});
-    await Product.deleteMany({ title: /Support Test/ }).catch(() => {});
-    await SupportTicket.deleteMany({ userId: seller.id }).catch(() => {});
+    await SupportTicket.deleteMany({}).catch(() => {});
+    await Order.deleteMany({}).catch(() => {});
+    await Bid.deleteMany({}).catch(() => {});
+    await Product.deleteMany({}).catch(() => {});
+    await User.deleteMany({ _id: { $in: createdUserIds.filter(Boolean) } }).catch(() => {});
     await disconnectDB();
   });
 
   describe('Ticket Creation', () => {
-    test('POST /api/support -> Create support ticket', async () => {
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Product not as described',
-          description: 'The product condition does not match the listing. It has visible scratches and the packaging was damaged.',
-          category: 'product_quality'
-        });
+    test('POST /api/support -> creates a support ticket', async () => {
+      const response = await createSupportTicket().expect(201);
 
-      expect(res.status).toBe(201);
-      expect(res.body).toHaveProperty('_id');
-      expect(res.body.subject).toBe('Product not as described');
-      expect(res.body.status).toBe('open');
-      expect(res.body.category).toBe('product_quality');
-      expect(res.body.messages.length).toBeGreaterThan(0);
+      expect(response.body).toHaveProperty('_id');
+      expect(response.body.subject).toBe('Product not as described');
+      expect(response.body.status).toBe('open');
+      expect(response.body.category).toBe('product_quality');
+      expect(response.body.messages.length).toBeGreaterThan(0);
     });
 
-    test('POST /api/support -> Reject with short subject', async () => {
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Help',
-          description: 'This is a long enough description for testing purposes',
-          category: 'product_quality'
-        });
+    test('POST /api/support -> rejects short subjects', async () => {
+      const response = await createSupportTicket({
+        subject: 'Help',
+        description: 'This is a long enough description for testing purposes.',
+        category: 'product_quality'
+      }).expect(400);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('at least 5 characters');
+      expect(response.body.message).toContain('at least 5 characters');
     });
 
-    test('POST /api/support -> Reject with short description', async () => {
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Issue with order',
-          description: 'Short desc',
-          category: 'product_quality'
-        });
+    test('POST /api/support -> rejects short descriptions', async () => {
+      const response = await createSupportTicket({
+        subject: 'Issue with order',
+        description: 'Short desc',
+        category: 'product_quality'
+      }).expect(400);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('at least 20 characters');
+      expect(response.body.message).toContain('at least 20 characters');
     });
 
-    test('POST /api/support -> Reject with invalid category', async () => {
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Issue with order',
-          description: 'This is a valid description with enough characters for testing',
-          category: 'invalid_category'
-        });
+    test('POST /api/support -> rejects invalid categories', async () => {
+      const response = await createSupportTicket({
+        subject: 'Issue with order',
+        description: 'This is a valid description with enough characters for testing.',
+        category: 'invalid_category'
+      }).expect(400);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('must be one of');
+      expect(response.body.message).toContain('must be one of');
     });
 
-    test('POST /api/support -> Reject if not order participant', async () => {
-      // Create another user
-      const otherRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Other',
-          lastName: 'User',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `other_support_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const otherToken = otherRes.body.token;
+    test('POST /api/support -> rejects non-participants', async () => {
+      const otherAccount = await registerUser({ role: 'buyer', label: 'SupportOtherCreate' });
 
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${otherToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Trying to interfere',
-          description: 'This should not be allowed for non-participants in the order',
-          category: 'product_quality'
-        });
+      const response = await createSupportTicket({
+        token: otherAccount.token,
+        subject: 'Trying to interfere',
+        description: 'This should not be allowed for non-participants in the order.',
+        category: 'product_quality'
+      }).expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('order participants');
-
-      // Cleanup
-      await User.deleteOne({ email: new RegExp('other_support') }).catch(() => {});
+      expect(response.body.message).toContain('order participants');
     });
 
-    test('POST /api/support -> Reject with non-existent order', async () => {
-      const fakeOrderId = new mongoose.Types.ObjectId();
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: fakeOrderId,
-          subject: 'Valid subject text',
-          description: 'This is a valid description with enough characters for testing',
-          category: 'product_quality'
-        });
+    test('POST /api/support -> rejects non-existent orders', async () => {
+      const fakeOrderId = new mongoose.Types.ObjectId().toString();
 
-      expect(res.status).toBe(404);
-      expect(res.body.message).toContain('Order not found');
+      const response = await createSupportTicket({
+        orderId: fakeOrderId,
+        subject: 'Valid subject text',
+        description: 'This is a valid description with enough characters for testing.',
+        category: 'product_quality'
+      }).expect(404);
+
+      expect(response.body.message).toContain('Order not found');
     });
   });
 
@@ -215,84 +250,66 @@ describe('Support Ticket Controller', () => {
     let ticketId;
 
     beforeAll(async () => {
-      // Create a ticket for retrieval tests
-      const res = await request(app)
-        .post('/api/support')
+      const response = await createSupportTicket({
+        subject: 'Delivery issue',
+        description: 'The package arrived late and was not in its original condition when received.',
+        category: 'delivery_issue'
+      }).expect(201);
+
+      ticketId = response.body._id.toString();
+    });
+
+    test('GET /api/support -> users can retrieve their own tickets', async () => {
+      const response = await request(app)
+        .get('/api/support')
         .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Delivery issue',
-          description: 'The package arrived late and was not in original condition when received',
-          category: 'delivery_issue'
-        });
-      ticketId = res.body._id;
+        .expect(200);
+
+      expect(response.body).toHaveProperty('tickets');
+      expect(response.body).toHaveProperty('pagination');
+      expect(Array.isArray(response.body.tickets)).toBe(true);
+      expect(response.body.tickets.length).toBeGreaterThan(0);
     });
 
-    test('GET /api/support -> Get user tickets', async () => {
-      const res = await request(app)
+    test('GET /api/support -> admins can retrieve all tickets', async () => {
+      const response = await request(app)
         .get('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`);
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('tickets');
-      expect(res.body).toHaveProperty('pagination');
-      expect(Array.isArray(res.body.tickets)).toBe(true);
-      expect(res.body.tickets.length).toBeGreaterThan(0);
+      expect(response.body.tickets.length).toBeGreaterThan(0);
     });
 
-    test('GET /api/support -> Admin sees all tickets', async () => {
-      const res = await request(app)
-        .get('/api/support')
-        .set('Authorization', `Bearer ${adminToken}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.tickets.length).toBeGreaterThan(0);
-    });
-
-    test('GET /api/support/:ticketId -> Get single ticket', async () => {
-      const res = await request(app)
+    test('GET /api/support/:ticketId -> participants can retrieve a single ticket', async () => {
+      const response = await request(app)
         .get(`/api/support/${ticketId}`)
-        .set('Authorization', `Bearer ${buyerToken}`);
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body._id).toBe(ticketId);
-      expect(res.body).toHaveProperty('messages');
-      expect(Array.isArray(res.body.messages)).toBe(true);
+      expect(response.body._id.toString()).toBe(ticketId);
+      expect(Array.isArray(response.body.messages)).toBe(true);
     });
 
-    test('GET /api/support/:ticketId -> Reject unauthorized access', async () => {
-      // Create another user
-      const otherRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Other',
-          lastName: 'User',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `other2_support_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const otherToken = otherRes.body.token;
+    test('GET /api/support/:ticketId -> rejects unauthorized access', async () => {
+      const otherAccount = await registerUser({ role: 'buyer', label: 'SupportOtherRead' });
 
-      const res = await request(app)
+      const response = await request(app)
         .get(`/api/support/${ticketId}`)
-        .set('Authorization', `Bearer ${otherToken}`);
+        .set('Authorization', `Bearer ${otherAccount.token}`)
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('Access denied');
-
-      // Cleanup
-      await User.deleteOne({ email: new RegExp('other2_support') }).catch(() => {});
+      expect(response.body.message).toContain('Access denied');
     });
 
-    test('GET /api/support/:ticketId -> Return 404 for non-existent ticket', async () => {
-      const fakeId = new mongoose.Types.ObjectId();
-      const res = await request(app)
+    test('GET /api/support/:ticketId -> returns 404 for unknown tickets', async () => {
+      const fakeId = new mongoose.Types.ObjectId().toString();
+
+      const response = await request(app)
         .get(`/api/support/${fakeId}`)
-        .set('Authorization', `Bearer ${buyerToken}`);
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(404);
 
-      expect(res.status).toBe(404);
-      expect(res.body.message).toContain('Ticket not found');
+      expect(response.body.message).toContain('Ticket not found');
     });
   });
 
@@ -300,67 +317,50 @@ describe('Support Ticket Controller', () => {
     let ticketId;
 
     beforeAll(async () => {
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Payment issue',
-          description: 'I was charged twice for this order and need immediate refund for the duplicate charge',
-          category: 'payment_issue'
-        });
-      ticketId = res.body._id;
+      const response = await createSupportTicket({
+        subject: 'Payment issue',
+        description: 'I was charged twice for this order and need a refund for the duplicate charge.',
+        category: 'payment_issue'
+      }).expect(201);
+
+      ticketId = response.body._id.toString();
     });
 
-    test('POST /api/support/:ticketId/message -> Add message to ticket', async () => {
-      const res = await request(app)
+    test('POST /api/support/:ticketId/message -> participants can add messages', async () => {
+      const response = await request(app)
         .post(`/api/support/${ticketId}/message`)
         .set('Authorization', `Bearer ${sellerToken}`)
         .send({
-          message: 'I have investigated this issue and can confirm the duplicate charge. Let me help resolve this.'
-        });
+          message: 'I have investigated this issue and can help resolve the duplicate charge.'
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.messages.length).toBeGreaterThan(1);
-      expect(res.body.messages[res.body.messages.length - 1].message).toContain('duplicate charge');
+      expect(response.body.messages.length).toBeGreaterThan(1);
+      expect(response.body.messages[response.body.messages.length - 1].message).toContain('duplicate charge');
     });
 
-    test('POST /api/support/:ticketId/message -> Reject short message', async () => {
-      const res = await request(app)
+    test('POST /api/support/:ticketId/message -> rejects short messages', async () => {
+      const response = await request(app)
         .post(`/api/support/${ticketId}/message`)
         .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          message: 'OK'
-        });
+        .send({ message: 'OK' })
+        .expect(400);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('at least 5 characters');
+      expect(response.body.message).toContain('at least 5 characters');
     });
 
-    test('POST /api/support/:ticketId/message -> Non-participant cannot add message', async () => {
-      const otherRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Third',
-          lastName: 'User',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `third_support_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const otherToken = otherRes.body.token;
+    test('POST /api/support/:ticketId/message -> rejects non-participants', async () => {
+      const otherAccount = await registerUser({ role: 'buyer', label: 'SupportOtherMessage' });
 
-      const res = await request(app)
+      const response = await request(app)
         .post(`/api/support/${ticketId}/message`)
-        .set('Authorization', `Bearer ${otherToken}`)
+        .set('Authorization', `Bearer ${otherAccount.token}`)
         .send({
-          message: 'Trying to interfere with this support ticket conversation here'
-        });
+          message: 'Trying to interfere with this support conversation.'
+        })
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('Access denied');
-
-      await User.deleteOne({ email: new RegExp('third_support') }).catch(() => {});
+      expect(response.body.message).toContain('Access denied');
     });
   });
 
@@ -368,68 +368,61 @@ describe('Support Ticket Controller', () => {
     let ticketId;
 
     beforeAll(async () => {
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Order dispute',
-          description: 'There is a fundamental disagreement with the seller regarding product authenticity and condition claims',
-          category: 'dispute'
-        });
-      ticketId = res.body._id;
+      const response = await createSupportTicket({
+        subject: 'Order dispute',
+        description: 'There is a disagreement with the seller regarding product authenticity and condition claims.',
+        category: 'dispute'
+      }).expect(201);
+
+      ticketId = response.body._id.toString();
     });
 
-    test('PUT /api/support/:ticketId/status -> Admin updates status to in_progress', async () => {
-      const res = await request(app)
+    test('PUT /api/support/:ticketId/status -> admins can mark tickets in progress', async () => {
+      const response = await request(app)
         .put(`/api/support/${ticketId}/status`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           status: 'in_progress',
           resolution: 'Investigating product authenticity claims'
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('in_progress');
-      expect(res.body.resolution).toContain('Investigating');
+      expect(response.body.status).toBe('in_progress');
+      expect(response.body.resolution).toContain('Investigating');
     });
 
-    test('PUT /api/support/:ticketId/status -> Admin resolves ticket', async () => {
-      const res = await request(app)
+    test('PUT /api/support/:ticketId/status -> admins can resolve tickets', async () => {
+      const response = await request(app)
         .put(`/api/support/${ticketId}/status`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           status: 'resolved',
-          resolution: 'Seller has agreed to accept return and issue refund'
-        });
+          resolution: 'Seller has agreed to accept a return and issue a refund.'
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('resolved');
-      expect(res.body).toHaveProperty('resolvedAt');
+      expect(response.body.status).toBe('resolved');
+      expect(response.body).toHaveProperty('resolvedAt');
     });
 
-    test('PUT /api/support/:ticketId/status -> Non-admin cannot update status', async () => {
-      const res = await request(app)
+    test('PUT /api/support/:ticketId/status -> non-admins cannot update status', async () => {
+      const response = await request(app)
         .put(`/api/support/${ticketId}/status`)
         .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          status: 'closed'
-        });
+        .send({ status: 'closed' })
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('permissions');
+      expect(response.body.message).toContain('permissions');
     });
 
-    test('PUT /api/support/:ticketId/status -> Reject invalid status', async () => {
-      const res = await request(app)
+    test('PUT /api/support/:ticketId/status -> rejects invalid statuses', async () => {
+      const response = await request(app)
         .put(`/api/support/${ticketId}/status`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({
-          status: 'invalid_status'
-        });
+        .send({ status: 'invalid_status' })
+        .expect(400);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('must be one of');
+      expect(response.body.message).toContain('must be one of');
     });
   });
 
@@ -437,78 +430,75 @@ describe('Support Ticket Controller', () => {
     let ticketId;
 
     beforeAll(async () => {
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Urgent delivery complaint',
-          description: 'Package never arrived and tracking shows it was delivered. Need immediate assistance to locate package',
-          category: 'delivery_issue'
-        });
-      ticketId = res.body._id;
+      const response = await createSupportTicket({
+        subject: 'Urgent delivery complaint',
+        description: 'The package never arrived and tracking incorrectly shows it was delivered.',
+        category: 'delivery_issue'
+      }).expect(201);
+
+      ticketId = response.body._id.toString();
     });
 
-    test('PUT /api/support/:ticketId/assign -> Admin assigns ticket to admin', async () => {
-      const res = await request(app)
+    test('PUT /api/support/:ticketId/assign -> admins can assign tickets to admins', async () => {
+      const response = await request(app)
         .put(`/api/support/${ticketId}/assign`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           assignedToId: admin.id
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.assignedTo._id).toBe(admin.id);
+      expect(getId(response.body.assignedTo)).toBe(admin.id);
     });
 
-    test('PUT /api/support/:ticketId/assign -> Non-admin cannot assign', async () => {
-      const res = await request(app)
+    test('PUT /api/support/:ticketId/assign -> non-admins cannot assign tickets', async () => {
+      const response = await request(app)
         .put(`/api/support/${ticketId}/assign`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .send({
           assignedToId: admin.id
-        });
+        })
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('permissions');
+      expect(response.body.message).toContain('permissions');
     });
 
-    test('PUT /api/support/:ticketId/assign -> Cannot assign to non-admin', async () => {
-      const res = await request(app)
+    test('PUT /api/support/:ticketId/assign -> rejects non-admin assignees', async () => {
+      const response = await request(app)
         .put(`/api/support/${ticketId}/assign`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           assignedToId: buyer.id
-        });
+        })
+        .expect(400);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('must be an admin');
+      expect(response.body.message).toContain('must be an admin');
     });
   });
 
   describe('Ticket Statistics (Admin)', () => {
-    test('GET /api/support/stats -> Get ticket statistics', async () => {
-      const res = await request(app)
+    test('GET /api/support/stats -> admins can retrieve ticket statistics', async () => {
+      const response = await request(app)
         .get('/api/support/stats')
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('total');
-      expect(res.body).toHaveProperty('open');
-      expect(res.body).toHaveProperty('inProgress');
-      expect(res.body).toHaveProperty('resolved');
-      expect(res.body).toHaveProperty('closed');
-      expect(res.body).toHaveProperty('byCategory');
-      expect(res.body).toHaveProperty('avgResolutionTimeHours');
+      expect(response.body).toHaveProperty('total');
+      expect(response.body).toHaveProperty('open');
+      expect(response.body).toHaveProperty('inProgress');
+      expect(response.body).toHaveProperty('resolved');
+      expect(response.body).toHaveProperty('closed');
+      expect(response.body).toHaveProperty('byCategory');
+      expect(response.body).toHaveProperty('avgResolutionTimeHours');
     });
 
-    test('GET /api/support/stats -> Non-admin cannot view statistics', async () => {
-      const res = await request(app)
+    test('GET /api/support/stats -> non-admins cannot view statistics', async () => {
+      const response = await request(app)
         .get('/api/support/stats')
-        .set('Authorization', `Bearer ${buyerToken}`);
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('permissions');
+      expect(response.body.message).toContain('permissions');
     });
   });
 
@@ -516,69 +506,48 @@ describe('Support Ticket Controller', () => {
     let ticketId;
 
     beforeAll(async () => {
-      const res = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Product question',
-          description: 'I have a question about the product specifications and usage. Can you provide more information about the warranty coverage',
-          category: 'other'
-        });
-      ticketId = res.body._id;
+      const response = await createSupportTicket({
+        subject: 'Product question',
+        description: 'I need more information about the product specifications and warranty coverage.',
+        category: 'other'
+      }).expect(201);
+
+      ticketId = response.body._id.toString();
     });
 
-    test('POST /api/support/:ticketId/close -> User closes their ticket', async () => {
-      const res = await request(app)
+    test('POST /api/support/:ticketId/close -> ticket creators can close their tickets', async () => {
+      const response = await request(app)
         .post(`/api/support/${ticketId}/close`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .send({
           feedback: 'Issue resolved satisfactorily'
-        });
+        })
+        .expect(200);
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('closed');
-      expect(res.body.feedback).toContain('resolved');
-      expect(res.body).toHaveProperty('closedAt');
+      expect(response.body.status).toBe('closed');
+      expect(response.body.feedback).toContain('resolved');
+      expect(response.body).toHaveProperty('closedAt');
     });
 
-    test('POST /api/support/:ticketId/close -> Only user or admin can close', async () => {
-      // Create a new ticket
-      const ticketRes = await request(app)
-        .post('/api/support')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          orderId: order._id,
-          subject: 'Seller payment issue',
-          description: 'I have not received payment for the completed order yet. The delivery was confirmed and accepted',
-          category: 'payment_issue'
-        });
-      const newTicketId = ticketRes.body._id;
+    test('POST /api/support/:ticketId/close -> only the creator or an admin can close', async () => {
+      const ticketResponse = await createSupportTicket({
+        token: sellerToken,
+        subject: 'Seller payment issue',
+        description: 'I have not received payment for the completed order yet and need help.',
+        category: 'payment_issue'
+      }).expect(201);
 
-      // Try to close with different user
-      const otherRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'Fourth',
-          lastName: 'User',
-          phone: `+1555${Math.random().toString().slice(2, 8)}`,
-          email: `fourth_support_${Math.random()}@test.com`,
-          password: 'Test1234',
-          role: 'user'
-        });
-      const otherToken = otherRes.body.token;
+      const otherAccount = await registerUser({ role: 'buyer', label: 'SupportOtherClose' });
 
-      const res = await request(app)
-        .post(`/api/support/${newTicketId}/close`)
-        .set('Authorization', `Bearer ${otherToken}`)
+      const response = await request(app)
+        .post(`/api/support/${ticketResponse.body._id}/close`)
+        .set('Authorization', `Bearer ${otherAccount.token}`)
         .send({
           feedback: 'Attempting to close someone elses ticket'
-        });
+        })
+        .expect(403);
 
-      expect(res.status).toBe(403);
-      expect(res.body.message).toContain('Access denied');
-
-      await User.deleteOne({ email: new RegExp('fourth_support') }).catch(() => {});
+      expect(response.body.message).toContain('Access denied');
     });
   });
 });

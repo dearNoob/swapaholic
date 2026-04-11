@@ -1,19 +1,24 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { verificationApi } from '../../api/verification';
 import { FaCheckCircle, FaTimesCircle, FaHourglassHalf } from 'react-icons/fa';
 import { Button } from '../../components/ui/Button';
 import Link from 'next/link';
 
+interface VerificationStatusResponse {
+    status: 'loading' | 'pending' | 'approved' | 'verified' | 'rejected' | 'error';
+    message?: string;
+}
+
 export const VerificationStatus = () => {
     const [status, setStatus] = useState<string>('loading');
-    const [details, setDetails] = useState<any>(null);
+    const [details, setDetails] = useState<VerificationStatusResponse | null>(null);
 
     useEffect(() => {
         const fetchStatus = async () => {
             try {
-                const data = await verificationApi.getUserStatus();
+                const data = await verificationApi.getUserStatus() as VerificationStatusResponse;
                 setStatus(data.status);
                 setDetails(data);
             } catch (err) {

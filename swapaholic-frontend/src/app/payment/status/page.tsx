@@ -1,15 +1,19 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from 'react-icons/fa';
 import Link from 'next/link';
 
-export default function PaymentStatusPage() {
+function PaymentStatusContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
 
     const status = searchParams.get('status');
     const trxId = searchParams.get('trxId');
+    const orderId = searchParams.get('orderId');
+    const paymentId = searchParams.get('paymentId');
+    const retryHref = orderId ? `/payments/${orderId}` : '/buyer/dashboard';
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -28,9 +32,14 @@ export default function PaymentStatusPage() {
                                     Transaction ID: {trxId}
                                 </div>
                             )}
+                            {paymentId && (
+                                <div className="bg-gray-100 p-3 rounded text-sm font-mono text-gray-700">
+                                    Payment ID: {paymentId}
+                                </div>
+                            )}
                             <div className="mt-6">
-                                <Link href="/buyer/dashboard" className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                    Go to Dashboard
+                                <Link href={retryHref} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                    View Payment Details
                                 </Link>
                             </div>
                         </div>
@@ -45,7 +54,7 @@ export default function PaymentStatusPage() {
                             </p>
                             <div className="mt-6 space-y-3">
                                 <button
-                                    onClick={() => router.back()}
+                                    onClick={() => orderId ? router.push(`/payments/${orderId}`) : router.back()}
                                     className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                                 >
                                     Try Again
@@ -65,8 +74,8 @@ export default function PaymentStatusPage() {
                                 You cancelled the payment process. No charges were made.
                             </p>
                             <div className="mt-6">
-                                <Link href="/buyer/dashboard" className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                                    Return to Dashboard
+                                <Link href={retryHref} className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                    {orderId ? 'Back to Payment Page' : 'Return to Dashboard'}
                                 </Link>
                             </div>
                         </div>
@@ -81,5 +90,23 @@ export default function PaymentStatusPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function PaymentStatusPage() {
+    return (
+        <Suspense
+            fallback={(
+                <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+                    <div className="sm:mx-auto sm:w-full sm:max-w-md">
+                        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 text-center">
+                            <p className="text-gray-500">Checking payment status...</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+        >
+            <PaymentStatusContent />
+        </Suspense>
     );
 }

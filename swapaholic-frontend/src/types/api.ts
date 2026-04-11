@@ -97,8 +97,19 @@ export interface TokenPair {
 export interface Order {
     id: string;
     userId: string;
+    buyerId?: string;
+    sellerId?: string;
+    productId?: string;
+    product?: {
+        id?: string;
+        _id?: string;
+        title?: string;
+        images?: string[];
+        category?: string;
+    };
     products: Array<{ productId: string; quantity: number }>;
     totalAmount: number;
+    finalPrice?: number;
     status: 'pending' | 'confirmed' | 'qc_pending' | 'qc_approved' | 'in_delivery' | 'delivered' | 'completed' | 'disputed' | 'cancelled';
     createdAt: string;
     updatedAt: string;
@@ -108,11 +119,18 @@ export interface Payment {
     id: string;
     orderId: string;
     amount: number;
-    method: 'card' | 'paypal' | 'stripe' | 'bkash' | 'rocket' | 'nagad';
-    status: 'initiated' | 'processed' | 'failed' | 'refunded';
+    method: 'card' | 'paypal' | 'stripe' | 'bkash' | 'rocket' | 'nagad' | 'upi' | 'bank_transfer' | 'wallet';
+    paymentMethod?: 'card' | 'paypal' | 'stripe' | 'bkash' | 'rocket' | 'nagad' | 'upi' | 'bank_transfer' | 'wallet';
+    status: 'pending' | 'escrowed' | 'released' | 'refunded' | 'failed';
     createdAt: string;
     updatedAt: string;
     clientSecret?: string;
+    gatewayUrl?: string;
+    sessionKey?: string;
+    transactionId?: string;
+    releaseDate?: string;
+    refundDate?: string;
+    refundReason?: string;
 }
 
 export interface Review {

@@ -3,18 +3,26 @@ import { ApiResponse } from '../types/api';
 import { Order } from '../types/api';
 
 export const ordersApi = {
-    // Create a new order
-    async createOrder(data: { products: Array<{ productId: string; quantity: number }>; totalAmount: number }): Promise<Order> {
+    // Create an order from an accepted bid
+    async createOrder(data: { bidId: string }): Promise<Order> {
         const response = await apiClient.post<ApiResponse<Order>>('/orders', data);
         return response.data.data;
     },
 
     // Get current user's orders with pagination
-    async getOrders(page = 1, limit = 20): Promise<{ data: Order[]; total: number }> {
+    async getOrders(
+        page = 1,
+        limit = 20,
+        options?: { scope?: 'buyer' | 'seller'; status?: Order['status'] }
+    ): Promise<{ data: Order[]; total: number }> {
         const response = await apiClient.get<ApiResponse<{ data: Order[]; total: number }>>('/orders', {
-            params: { page, limit },
+            params: { page, limit, ...options },
         });
         return response.data.data;
+    },
+
+    async getBuyerOrders(page = 1, limit = 20): Promise<{ data: Order[]; total: number }> {
+        return this.getOrders(page, limit, { scope: 'buyer' });
     },
 
     // Get order by ID

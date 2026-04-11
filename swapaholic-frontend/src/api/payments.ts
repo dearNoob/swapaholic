@@ -38,7 +38,7 @@ export const paymentsApi = {
     },
 
     // Process a payment (e.g., after redirect from gateway)
-    async process(data: { paymentId: string; details: any }): Promise<Payment> {
+    async process(data: { paymentId: string; details?: { stripePaymentIntentId?: string }; stripePaymentIntentId?: string }): Promise<Payment> {
         const response = await apiClient.post<ApiResponse<Payment>>('/payments/process', data);
         return response.data.data;
     },
@@ -92,7 +92,8 @@ export const paymentsApi = {
     },
 
     // Escrow methods (aliases for now, can be specialized if needed)
-    async initiateEscrow(orderId: string, amount: number): Promise<Payment> {
+    async initiateEscrow(orderId: string, _amount: number): Promise<Payment> {
+        void _amount;
         return this.initiate({ orderId, method: 'stripe' }); // Default to stripe for escrow
     },
 
@@ -124,7 +125,7 @@ export const paymentsApi = {
     /**
      * Admin manually releases escrowed payment to seller
      */
-    async adminReleasePayout(orderId: string): Promise<{ message: string; payment: any }> {
+    async adminReleasePayout(orderId: string): Promise<{ message: string; payment: Payment & { platformFee?: number; netAmount?: number; releasedBy?: string } }> {
         const response = await apiClient.post(`/payments/admin/release/${orderId}`);
         return response.data;
     }

@@ -10,11 +10,32 @@ import { logisticsApi } from '../../../api/logistics';
 import { useRequireLogisticsAuth } from '../../../hooks/useRequireLogisticsAuth';
 import { toast } from 'react-toastify';
 
+interface LogisticsProfile {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    bio?: string;
+    email?: string;
+    createdAt?: string;
+    accountStatus?: string;
+}
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error && typeof error === 'object' && 'response' in error) {
+        const response = error.response as { data?: { message?: string } };
+        if (response?.data?.message) {
+            return response.data.message;
+        }
+    }
+
+    return fallback;
+};
+
 export default function LogisticsProfilePage() {
     const { isLoading: isAuthLoading } = useRequireLogisticsAuth();
     const router = useRouter();
 
-    const [profile, setProfile] = useState<any>(null);
+    const [profile, setProfile] = useState<LogisticsProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -40,7 +61,7 @@ export default function LogisticsProfilePage() {
                     phone: res.user.phone || '',
                     bio: res.user.bio || '',
                 });
-            } catch (err: any) {
+            } catch {
                 toast.error('Failed to load profile');
             } finally {
                 setIsLoading(false);
@@ -61,8 +82,8 @@ export default function LogisticsProfilePage() {
             setSaveSuccess(true);
             toast.success('Profile updated successfully!');
             setTimeout(() => setSaveSuccess(false), 3000);
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Failed to save profile');
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, 'Failed to save profile'));
         } finally {
             setIsSaving(false);
         }

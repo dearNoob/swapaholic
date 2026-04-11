@@ -1,6 +1,5 @@
 const request = require('supertest');
 const app = require('../src/index');
-const mongoose = require('mongoose');
 const User = require('../src/models/User');
 const Product = require('../src/models/Product');
 const Bid = require('../src/models/Bid');
@@ -9,351 +8,336 @@ const { connectDB, disconnectDB } = require('../src/config/mongodb');
 
 jest.setTimeout(30000);
 
+const uniqueSuffix = () => `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+
 describe('Bid & Order Controllers', () => {
-  let sellerToken, buyerToken, seller, buyer, product, bid;
+  let sellerToken;
+  let buyerToken;
+  let seller;
+  let buyer;
+  let mainProduct;
+  let mainBidId;
+  let mainOrderId;
+
+  const registerUser = async ({ role, label }) => {
+    const suffix = uniqueSuffix();
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({
+        firstName: label,
+        lastName: 'Test',
+        phone: `+1555${suffix.slice(-7)}`,
+        email: `${label.toLowerCase()}_${suffix}@test.com`,
+        password: 'Test1234',
+        role
+      })
+      .expect(201);
+
+    const user = response.body.data.user;
+
+    return {
+      token: response.body.data.accessToken,
+      user: {
+        ...user,
+        id: user.id || user._id?.toString()
+      }
+    };
+  };
+
+  const createProduct = async ({
+    titlePrefix = 'Test Product',
+    basePrice = 1000,
+    condition = 'excellent'
+  } = {}) => {
+    const response = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({
+        title: `${titlePrefix} ${uniqueSuffix()}`,
+        description: 'Test product description',
+        category: 'electronics',
+        basePrice,
+        condition,
+        geometry: { type: 'Point', coordinates: [-118.2437, 34.0522] }
+      })
+      .expect(201);
+
+    return response.body;
+  };
+
+  const createPendingOrderFlow = async ({
+    titlePrefix = 'Order Flow Product',
+    basePrice = 300,
+    bidAmount = 350
+  } = {}) => {
+    const product = await createProduct({ titlePrefix, basePrice, condition: 'good' });
+
+    const bidResponse = await request(app)
+      .post('/api/bids')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ productId: product._id, bidAmount })
+      .expect(201);
+
+    const bidId = bidResponse.body.data.id;
+
+    await request(app)
+      .post(`/api/bids/${bidId}/accept`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .expect(200);
+
+    const confirmResponse = await request(app)
+      .post(`/api/bids/${bidId}/confirm-win`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(200);
+
+    return {
+      productId: product._id.toString(),
+      bidId,
+      orderId: confirmResponse.body.data.order.id
+    };
+  };
 
   beforeAll(async () => {
     await connectDB();
 
-    // Create seller
-    const sellerRes = await request(app)
-      .post('/api/auth/register')
-      .send({
-        firstName: 'Seller',
-        lastName: 'Test',
-        phone: `+1555${Date.now().toString().slice(-6)}`,
-        email: `seller_${Date.now()}@test.com`,
-        password: 'Test1234',
-        role: 'user'
-      });
-    sellerToken = sellerRes.body.token;
-    seller = sellerRes.body.user;
+    const sellerAccount = await registerUser({ role: 'seller', label: 'Seller' });
+    sellerToken = sellerAccount.token;
+    seller = sellerAccount.user;
 
-    // Create buyer
-    const buyerRes = await request(app)
-      .post('/api/auth/register')
-      .send({
-        firstName: 'Buyer',
-        lastName: 'Test',
-        phone: `+1555${Date.now().toString().slice(-7)}`,
-        email: `buyer_${Date.now()}@test.com`,
-        password: 'Test1234',
-        role: 'user'
-      });
-    buyerToken = buyerRes.body.token;
-    buyer = buyerRes.body.user;
+    const buyerAccount = await registerUser({ role: 'buyer', label: 'Buyer' });
+    buyerToken = buyerAccount.token;
+    buyer = buyerAccount.user;
 
-    // Create product
-    const productRes = await request(app)
-      .post('/api/products')
-      .set('Authorization', `Bearer ${sellerToken}`)
-      .send({
-        title: 'Test Laptop',
-        description: 'High-end gaming laptop',
-        category: 'electronics',
-        basePrice: 1000,
-        condition: 'excellent',
-        geometry: { type: 'Point', coordinates: [-118.2437, 34.0522] }
-      });
-    product = productRes.body;
+    mainProduct = await createProduct({ titlePrefix: 'Test Laptop', basePrice: 1000 });
   });
 
   afterAll(async () => {
-    await User.deleteMany({ email: new RegExp('^seller_|^buyer_') }).catch(() => {});
-    await Product.deleteMany({}).catch(() => {});
-    await Bid.deleteMany({}).catch(() => {});
-    await Order.deleteMany({}).catch(() => {});
+    await User.deleteMany({ email: new RegExp('^seller_|^buyer_') }).catch(() => { });
+    await Product.deleteMany({}).catch(() => { });
+    await Bid.deleteMany({}).catch(() => { });
+    await Order.deleteMany({}).catch(() => { });
     await disconnectDB();
   });
 
   describe('Bid Controller', () => {
-    test('POST /api/bids -> Place a bid on product', async () => {
-      const res = await request(app)
+    test('POST /api/bids -> buyer can place a bid on a product', async () => {
+      const response = await request(app)
         .post('/api/bids')
         .set('Authorization', `Bearer ${buyerToken}`)
-        .send({ productId: product._id, bidAmount: 1100 })
+        .send({ productId: mainProduct._id, bidAmount: 1100 })
         .expect(201);
 
-      expect(res.body).toHaveProperty('_id');
-      expect(res.body.bidAmount).toBe(1100);
-      expect(res.body.status).toBe('active');
-      expect(res.body.buyerId._id).toBe(buyer.id);
-      bid = res.body;
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.data.bidAmount).toBe(1100);
+      expect(response.body.data.status).toBe('active');
+      expect(response.body.data.userId).toBe(buyer.id);
+
+      mainBidId = response.body.data.id;
     });
 
-    test('POST /api/bids -> Reject bid if below base price', async () => {
-      const res = await request(app)
+    test('POST /api/bids -> rejects bids below the minimum allowed threshold', async () => {
+      const response = await request(app)
         .post('/api/bids')
         .set('Authorization', `Bearer ${buyerToken}`)
-        .send({ productId: product._id, bidAmount: 500 })
+        .send({ productId: mainProduct._id, bidAmount: 100 })
         .expect(400);
 
-      expect(res.body.message).toContain('Bid must be');
+      expect(response.body.message).toContain('Bid must be');
     });
 
-    test('POST /api/bids -> Reject if seller tries to bid on own product', async () => {
-      const res = await request(app)
+    test('POST /api/bids -> seller cannot bid on their own product', async () => {
+      const response = await request(app)
         .post('/api/bids')
         .set('Authorization', `Bearer ${sellerToken}`)
-        .send({ productId: product._id, bidAmount: 1200 })
+        .send({ productId: mainProduct._id, bidAmount: 1200 })
         .expect(400);
 
-      expect(res.body.message).toContain('Cannot bid on your own product');
+      expect(response.body.message).toContain('Cannot bid on your own product');
     });
 
-    test('GET /api/bids/:productId -> Get all bids for product (seller only)', async () => {
-      const res = await request(app)
-        .get(`/api/bids/${product._id}`)
+    test('GET /api/bids/:productId -> seller receives bids inside the normalized array payload', async () => {
+      const response = await request(app)
+        .get(`/api/bids/${mainProduct._id}`)
         .set('Authorization', `Bearer ${sellerToken}`)
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
-      expect(res.body[0].bidAmount).toBe(1100);
+      expect(response.body).toHaveProperty('success', true);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(response.body.data[0].bidAmount).toBe(1100);
     });
 
-    test('GET /api/bids/user/:userId -> Get user bid history', async () => {
-      const res = await request(app)
+    test('GET /api/bids/user/:userId -> buyer receives their bid history in the normalized payload', async () => {
+      const response = await request(app)
         .get(`/api/bids/user/${buyer.id}`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
+      expect(response.body).toHaveProperty('success', true);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
     });
 
-    test('PUT /api/bids/:bidId -> Update bid amount', async () => {
-      const res = await request(app)
-        .put(`/api/bids/${bid._id}`)
+    test('PUT /api/bids/:bidId -> buyer can update an active bid amount', async () => {
+      const response = await request(app)
+        .put(`/api/bids/${mainBidId}`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .send({ bidAmount: 1200 })
         .expect(200);
 
-      expect(res.body.bidAmount).toBe(1200);
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.data.bidAmount).toBe(1200);
     });
 
-    test('POST /api/bids/:bidId/accept -> Accept bid (seller only)', async () => {
-      const res = await request(app)
-        .post(`/api/bids/${bid._id}/accept`)
+    test('POST /api/bids/:bidId/accept -> seller can move the highest bid into confirmation', async () => {
+      const response = await request(app)
+        .post(`/api/bids/${mainBidId}/accept`)
         .set('Authorization', `Bearer ${sellerToken}`)
         .expect(200);
 
-      expect(res.body.message).toContain('Bid accepted');
-      expect(res.body.bid.status).toBe('accepted');
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.message).toContain('buyer has 3 hours');
+      expect(response.body.data.bid.status).toBe('pending_confirmation');
     });
 
-    test('POST /api/bids/:bidId/reject -> Reject bid', async () => {
-      // Create another product to reject bid on
-      const rejectProductRes = await request(app)
-        .post('/api/products')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          title: 'Reject Test Product',
-          description: 'Product for reject test',
-          category: 'electronics',
-          basePrice: 400,
-          condition: 'good'
-        });
+    test('POST /api/bids/:bidId/confirm-win -> buyer confirms the auction win and creates the order', async () => {
+      const response = await request(app)
+        .post(`/api/bids/${mainBidId}/confirm-win`)
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .expect(200);
 
-      const bidRes = await request(app)
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.data.bid.status).toBe('accepted');
+      expect(response.body.data.order.status).toBe('pending');
+      expect(response.body.data.order.finalPrice).toBe(1200);
+
+      mainOrderId = response.body.data.order.id;
+    });
+
+    test('POST /api/bids/:bidId/reject -> seller can reject another bid', async () => {
+      const rejectProduct = await createProduct({ titlePrefix: 'Reject Test Product', basePrice: 400, condition: 'good' });
+
+      const bidResponse = await request(app)
         .post('/api/bids')
         .set('Authorization', `Bearer ${buyerToken}`)
-        .send({ productId: rejectProductRes.body._id, bidAmount: 450 })
+        .send({ productId: rejectProduct._id, bidAmount: 450 })
         .expect(201);
 
-      const res = await request(app)
-        .post(`/api/bids/${bidRes.body._id}/reject`)
+      const response = await request(app)
+        .post(`/api/bids/${bidResponse.body.data.id}/reject`)
         .set('Authorization', `Bearer ${sellerToken}`)
         .expect(200);
 
-      expect(res.body.bid.status).toBe('rejected');
+      expect(response.body.bid.status).toBe('rejected');
     });
 
-    test('POST /api/bids/:bidId/withdraw -> Withdraw bid (buyer)', async () => {
-      // Create a new product and bid for this test
-      const newProductRes = await request(app)
-        .post('/api/products')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          title: 'Test Phone',
-          description: 'Smartphone',
-          category: 'electronics',
-          basePrice: 500,
-          condition: 'good'
-        });
+    test('POST /api/bids/:bidId/withdraw -> buyer can withdraw an active bid', async () => {
+      const withdrawProduct = await createProduct({ titlePrefix: 'Withdraw Test Product', basePrice: 500, condition: 'good' });
 
-      const withdrawBidRes = await request(app)
+      const bidResponse = await request(app)
         .post('/api/bids')
         .set('Authorization', `Bearer ${buyerToken}`)
-        .send({ productId: newProductRes.body._id, bidAmount: 550 })
+        .send({ productId: withdrawProduct._id, bidAmount: 550 })
         .expect(201);
 
-      const res = await request(app)
-        .post(`/api/bids/${withdrawBidRes.body._id}/withdraw`)
+      const response = await request(app)
+        .post(`/api/bids/${bidResponse.body.data.id}/withdraw`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .expect(200);
 
-      expect(res.body.bid.status).toBe('withdrawn');
+      expect(response.body.bid.status).toBe('withdrawn');
     });
   });
 
   describe('Order Controller', () => {
-    test('POST /api/orders -> Create order from accepted bid', async () => {
-      const res = await request(app)
+    test('POST /api/orders -> create order remains idempotent after confirm-win creates it', async () => {
+      const response = await request(app)
         .post('/api/orders')
         .set('Authorization', `Bearer ${buyerToken}`)
-        .send({ bidId: bid._id })
+        .send({ bidId: mainBidId })
         .expect(201);
 
-      expect(res.body).toHaveProperty('_id');
-      expect(res.body.status).toBe('pending');
-      expect(res.body.finalPrice).toBe(1200);
-      expect(res.body.escrowStatus).toBe('held');
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.data.status).toBe('pending');
+      expect(response.body.data.finalPrice).toBe(1200);
+      expect(response.body.data.escrowStatus).toBe('held');
+      expect(response.body.data.id).toBe(mainOrderId);
     });
 
-    test('GET /api/orders -> Get user orders', async () => {
-      const res = await request(app)
+    test('GET /api/orders -> buyer receives paginated normalized orders', async () => {
+      const response = await request(app)
         .get('/api/orders')
         .set('Authorization', `Bearer ${buyerToken}`)
         .expect(200);
 
-      expect(res.body).toHaveProperty('orders');
-      expect(res.body).toHaveProperty('pagination');
-      expect(Array.isArray(res.body.orders)).toBe(true);
+      expect(response.body).toHaveProperty('success', true);
+      expect(Array.isArray(response.body.data.data)).toBe(true);
+      expect(response.body.data.total).toBeGreaterThan(0);
     });
 
-    test('GET /api/orders/:id -> Get order details', async () => {
-      // First get the order
-      const ordersRes = await request(app)
-        .get('/api/orders')
+    test('GET /api/orders/:id -> buyer can fetch normalized order details', async () => {
+      const response = await request(app)
+        .get(`/api/orders/${mainOrderId}`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .expect(200);
 
-      const order = ordersRes.body.orders[0];
-
-      const res = await request(app)
-        .get(`/api/orders/${order._id}`)
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .expect(200);
-
-      expect(res.body._id).toBe(order._id);
-      expect(res.body).toHaveProperty('buyerId');
-      expect(res.body).toHaveProperty('sellerId');
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.data.id).toBe(mainOrderId);
+      expect(response.body.data).toHaveProperty('buyerId');
+      expect(response.body.data).toHaveProperty('sellerId');
     });
 
-    test('PUT /api/orders/:id -> Update order status', async () => {
-      const ordersRes = await request(app)
-        .get('/api/orders')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .expect(200);
-
-      const order = ordersRes.body.orders[0];
-
-      const res = await request(app)
-        .put(`/api/orders/${order._id}`)
+    test('PUT /api/orders/:id -> seller can update an order status', async () => {
+      const response = await request(app)
+        .put(`/api/orders/${mainOrderId}`)
         .set('Authorization', `Bearer ${sellerToken}`)
         .send({ status: 'confirmed', notes: 'Order confirmed by seller' })
         .expect(200);
 
-      expect(res.body.status).toBe('confirmed');
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.data.status).toBe('confirmed');
     });
 
-    test('PUT /api/orders/:id/confirm-delivery -> Confirm delivery (buyer)', async () => {
-      const ordersRes = await request(app)
-        .get('/api/orders')
+    test('PUT /api/orders/:id/confirm-delivery -> buyer confirms delivery after seller moves order in delivery', async () => {
+      await request(app)
+        .put(`/api/orders/${mainOrderId}`)
+        .set('Authorization', `Bearer ${sellerToken}`)
+        .send({ status: 'in_delivery' })
+        .expect(200);
+
+      const response = await request(app)
+        .put(`/api/orders/${mainOrderId}/confirm-delivery`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .expect(200);
 
-      const order = ordersRes.body.orders[0];
-
-      // First move to in_delivery
-      await request(app)
-        .put(`/api/orders/${order._id}`)
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({ status: 'in_delivery' });
-
-      const res = await request(app)
-        .put(`/api/orders/${order._id}/confirm-delivery`)
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .expect(200);
-
-      expect(res.body.message).toContain('Delivery confirmed');
-      expect(res.body.order.status).toBe('completed');
+      expect(response.body.message).toContain('Delivery confirmed');
+      expect(response.body.data.status).toBe('completed');
     });
 
-    test('PUT /api/orders/:id/dispute -> Raise dispute', async () => {
-      // Create new order for dispute test
-      const product2Res = await request(app)
-        .post('/api/products')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          title: 'Test Tablet',
-          description: 'Tablet device',
-          category: 'electronics',
-          basePrice: 300,
-          condition: 'good'
-        });
+    test('PUT /api/orders/:id/dispute -> buyer can raise a dispute on a fresh pending order', async () => {
+      const flow = await createPendingOrderFlow({ titlePrefix: 'Dispute Test Product', basePrice: 300, bidAmount: 350 });
 
-      const bid2Res = await request(app)
-        .post('/api/bids')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({ productId: product2Res.body._id, bidAmount: 350 })
-        .expect(201);
-
-      await request(app)
-        .post(`/api/bids/${bid2Res.body._id}/accept`)
-        .set('Authorization', `Bearer ${sellerToken}`);
-
-      const order2Res = await request(app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({ bidId: bid2Res.body._id })
-        .expect(201);
-
-      const res = await request(app)
-        .put(`/api/orders/${order2Res.body._id}/dispute`)
+      const response = await request(app)
+        .put(`/api/orders/${flow.orderId}/dispute`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .send({ reason: 'Product damaged on arrival' })
         .expect(200);
 
-      expect(res.body.order.status).toBe('disputed');
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.data.order.status).toBe('disputed');
     });
 
-    test('PUT /api/orders/:id/cancel -> Cancel order (pending only)', async () => {
-      const product3Res = await request(app)
-        .post('/api/products')
-        .set('Authorization', `Bearer ${sellerToken}`)
-        .send({
-          title: 'Test Headphones',
-          description: 'Wireless headphones',
-          category: 'electronics',
-          basePrice: 200,
-          condition: 'good'
-        });
+    test('PUT /api/orders/:id/cancel -> buyer can cancel a pending order', async () => {
+      const flow = await createPendingOrderFlow({ titlePrefix: 'Cancel Test Product', basePrice: 200, bidAmount: 250 });
 
-      const bid3Res = await request(app)
-        .post('/api/bids')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({ productId: product3Res.body._id, bidAmount: 250 })
-        .expect(201);
-
-      await request(app)
-        .post(`/api/bids/${bid3Res.body._id}/accept`)
-        .set('Authorization', `Bearer ${sellerToken}`);
-
-      const order3Res = await request(app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${buyerToken}`)
-        .send({ bidId: bid3Res.body._id })
-        .expect(201);
-
-      const res = await request(app)
-        .put(`/api/orders/${order3Res.body._id}/cancel`)
+      const response = await request(app)
+        .put(`/api/orders/${flow.orderId}/cancel`)
         .set('Authorization', `Bearer ${buyerToken}`)
         .expect(200);
 
-      expect(res.body.order.status).toBe('cancelled');
-      expect(res.body.order.escrowStatus).toBe('refunded');
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.data.order.status).toBe('cancelled');
+      expect(response.body.data.order.escrowStatus).toBe('refunded');
     });
   });
 });

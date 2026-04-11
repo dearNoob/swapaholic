@@ -39,7 +39,6 @@ export const bidsApi = {
      * Place a bid on a product
      */
     async placeBid(data: PlaceBidData): Promise<Bid> {
-        // Map frontend's `amount` to backend's expected `bidAmount` parameter
         const payload = {
             productId: data.productId,
             bidAmount: data.amount
@@ -47,7 +46,6 @@ export const bidsApi = {
         const response = await apiClient.post<ApiResponse<Bid>>('/bids', payload);
         return response.data.data;
     },
-
 
     /**
      * Get user's bid history
@@ -63,7 +61,6 @@ export const bidsApi = {
     async getUserBids(page = 1, limit = 20): Promise<{ data: BidHistory[]; total: number }> {
         return this.getMyBids(page, limit);
     },
-
 
     /**
      * Get bid history for a product
@@ -108,7 +105,7 @@ export const bidsApi = {
      * Retract a bid (if allowed by business rules)
      */
     async retractBid(bidId: string): Promise<{ message: string }> {
-        const response = await apiClient.delete<ApiResponse<{ message: string }>>(`/bids/৳{bidId}`);
+        const response = await apiClient.delete<ApiResponse<{ message: string }>>(`/bids/${bidId}`);
         return response.data.data;
     },
 
@@ -134,10 +131,6 @@ export const bidsApi = {
         return response.data.data;
     },
 
-    // ═══════════════════════════════════════════════
-    // POST-AUCTION WORKFLOW
-    // ═══════════════════════════════════════════════
-
     /**
      * Get buyer's won bids (pending confirmation)
      */
@@ -154,8 +147,12 @@ export const bidsApi = {
         bid: { id: string; status: string; bidAmount: number };
         order: { id: string; finalPrice: number; platformFee: number; totalPayable: number; status: string };
     }> {
-        const response = await apiClient.post(`/bids/${bidId}/confirm-win`);
-        return response.data;
+        const response = await apiClient.post<ApiResponse<{
+            message: string;
+            bid: { id: string; status: string; bidAmount: number };
+            order: { id: string; finalPrice: number; platformFee: number; totalPayable: number; status: string };
+        }>>(`/bids/${bidId}/confirm-win`);
+        return response.data.data;
     }
 };
 

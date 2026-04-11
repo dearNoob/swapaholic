@@ -3,6 +3,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Product = require('../models/Product');
 const logger = require('../utils/logger');
 const path = require('path');
+const storageService = require('../services/storageService');
 
 // Initialize AI clients
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
@@ -179,30 +180,12 @@ const createProduct = async (req, res) => {
     };
     const mappedCondition = conditionMap[condition] || condition;
 
-    // Handle images from multer (req.files) - save to disk
+    // Handle uploaded images through the configured storage provider
     let imageUrls = [];
     if (req.files && req.files.length > 0) {
-      const fs = require('fs');
-      const path = require('path');
-      const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'products');
-      
-      // Ensure directory exists (fallback)
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-
-      imageUrls = req.files.map(file => {
-        // Generate unique filename
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname) || '.jpg';
-        const filename = `${uniqueSuffix}${ext}`;
-        const filePath = path.join(uploadDir, filename);
-        
-        // Write file to disk
-        fs.writeFileSync(filePath, file.buffer);
-        
-        // Return public URL path
-        return `/uploads/products/${filename}`;
+      imageUrls = await storageService.uploadFiles(req.files, {
+        folder: 'products',
+        resourceType: 'image'
       });
     }
 
@@ -677,26 +660,12 @@ const updateProduct = async (req, res) => {
       }
     });
 
-    // Handle new images from multer (req.files) - save to disk
+    // Handle new images through the configured storage provider
     let newImageUrls = [];
     if (req.files && req.files.length > 0) {
-      const fs = require('fs');
-      const path = require('path');
-      const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'products');
-      
-      // Ensure directory exists
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-
-      newImageUrls = req.files.map(file => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname) || '.jpg';
-        const filename = `${uniqueSuffix}${ext}`;
-        const filePath = path.join(uploadDir, filename);
-        
-        fs.writeFileSync(filePath, file.buffer);
-        return `/uploads/products/${filename}`;
+      newImageUrls = await storageService.uploadFiles(req.files, {
+        folder: 'products',
+        resourceType: 'image'
       });
     }
 
@@ -955,21 +924,9 @@ const uploadImages = async (req, res) => {
       return res.status(400).json({ message: 'No images provided' });
     }
 
-    const fs = require('fs');
-    const path = require('path');
-    const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'products');
-    
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    const newImageUrls = req.files.map(file => {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const ext = path.extname(file.originalname) || '.jpg';
-      const filename = `${uniqueSuffix}${ext}`;
-      const filePath = path.join(uploadDir, filename);
-      fs.writeFileSync(filePath, file.buffer);
-      return `/uploads/products/${filename}`;
+    const newImageUrls = await storageService.uploadFiles(req.files, {
+      folder: 'products',
+      resourceType: 'image'
     });
 
     product.images = [...(product.images || []), ...newImageUrls];

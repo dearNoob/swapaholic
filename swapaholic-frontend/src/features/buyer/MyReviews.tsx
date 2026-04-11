@@ -7,6 +7,30 @@ import { Button } from '../../components/ui/Button';
 import Link from 'next/link';
 import { useAppSelector } from '../../store/hooks';
 
+interface RawReview {
+    _id?: string;
+    id?: string;
+    rating?: number;
+    comment?: string;
+    createdAt: string;
+    reportCount?: number;
+    orderId?: {
+        _id?: string;
+        productId?: {
+            _id?: string;
+            title?: string;
+        };
+    };
+    revieweeId?: {
+        _id?: string;
+    };
+    reviewerId?: {
+        _id?: string;
+        firstName?: string;
+        lastName?: string;
+    };
+}
+
 export const MyReviews = () => {
     const { user } = useAppSelector((state) => state.auth);
     const [reviews, setReviews] = useState<Review[]>([]);
@@ -24,7 +48,7 @@ export const MyReviews = () => {
             const data = await reviewsApi.getUserReviews(user?.id || '');
             
             const rawReviews = Array.isArray(data.reviews) ? data.reviews : [];
-            const mappedReviews = rawReviews.map((r: any) => ({
+            const mappedReviews = rawReviews.map((r: RawReview) => ({
                 id: r._id || r.id,
                 productId: r.orderId?.productId || r.orderId?._id || 'unknown',
                 sellerId: r.revieweeId?._id || 'unknown',
@@ -66,7 +90,7 @@ export const MyReviews = () => {
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">My Reviews</h1>
                     <p className="mt-2 text-lg text-gray-600">
-                        Reviews you've written for products and sellers
+                        Reviews you&apos;ve written for products and sellers
                     </p>
                 </div>
 
@@ -102,7 +126,7 @@ export const MyReviews = () => {
                     <div className="bg-white rounded-lg shadow-md p-12 text-center">
                         <FaStar className="mx-auto h-16 w-16 text-gray-400 mb-4" />
                         <h3 className="text-lg font-medium text-gray-900 mb-2">No Reviews Yet</h3>
-                        <p className="text-gray-500 mb-6">You haven't written any reviews yet</p>
+                        <p className="text-gray-500 mb-6">You haven&apos;t written any reviews yet</p>
                         <Link href="/my-bids">
                             <Button>View Your Purchases</Button>
                         </Link>

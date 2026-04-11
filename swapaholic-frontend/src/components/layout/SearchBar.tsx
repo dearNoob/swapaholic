@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { FaSearch, FaClock, FaTimes, FaTag, FaChevronRight, FaArrowRight } from 'react-icons/fa';
 import { productsApi } from '../../api/products';
 
@@ -11,20 +10,26 @@ export default function SearchBar() {
     const [searchQuery, setSearchQuery] = useState('');
     const [suggestions, setSuggestions] = useState<{ type: 'category' | 'title', value: string }[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
-    const [searchHistory, setSearchHistory] = useState<string[]>([]);
+    const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+        if (typeof window === 'undefined') {
+            return [];
+        }
+
+        const history = localStorage.getItem('swapaholic_search_history');
+        if (!history) {
+            return [];
+        }
+
+        try {
+            const parsedHistory = JSON.parse(history);
+            return Array.isArray(parsedHistory) ? parsedHistory.filter((item): item is string => typeof item === 'string') : [];
+        } catch {
+            return [];
+        }
+    });
     const searchRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Load search history from localStorage
-        const history = localStorage.getItem('swapaholic_search_history');
-        if (history) {
-            try {
-                setSearchHistory(JSON.parse(history));
-            } catch (e) {
-                setSearchHistory([]);
-            }
-        }
-
         // Click outside to close sessions
         const handleClickOutside = (event: MouseEvent) => {
             if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -177,7 +182,7 @@ export default function SearchBar() {
                                     onClick={() => performSearch(searchQuery)}
                                     className="w-full flex items-center justify-between px-3 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-xl text-left transition-colors font-semibold text-sm"
                                 >
-                                    <span>See all results for "{searchQuery}"</span>
+                                    <span>See all results for &quot;{searchQuery}&quot;</span>
                                     <FaArrowRight className="text-xs" />
                                 </button>
                             </div>

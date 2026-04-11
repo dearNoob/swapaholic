@@ -234,11 +234,15 @@ const getNotificationsByType = async (req, res) => {
     const validTypes = [
       'order_created', 'bid_received', 'bid_accepted', 'bid_rejected',
       'order_confirmed', 'payment_released', 'payment_received',
-      'delivery_started', 'delivery_completed', 'review_received',
+      'delivery_started', 'delivery_completed', 'order_completed', 'review_received',
       'review_posted', 'dispute_opened', 'dispute_resolved',
-      'message_received', 'qc_passed', 'qc_failed',
-      'ticket_resolved', 'ticket_updated', 'seller_suspended',
-      'seller_banned', 'product_listed', 'product_sold', 'support_notice'
+      'message_received', 'qc_passed', 'qc_failed', 'new_product_match',
+      'ticket_resolved', 'ticket_updated', 'account_approved',
+      'account_rejected', 'seller_suspended',
+      'seller_banned', 'product_listed', 'product_sold', 'support_notice',
+      'auction_won', 'auction_confirmation_reminder',
+      'auction_confirmation_expired', 'auction_second_chance',
+      'seller_payout', 'outbid'
     ];
 
     if (!validTypes.includes(type)) {
