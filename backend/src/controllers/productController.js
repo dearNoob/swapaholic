@@ -18,137 +18,80 @@ const analyzeProduct = async (req, res) => {
     const files = req.files;
 
     let imageBase64 = null;
-    let mimeType = null;
-
     if (files && files.length > 0) {
-      // Convert first image to base64 for Hugging Face
-      imageBase64 = files[0].buffer.toString("base64");
-      mimeType = files[0].mimetype;
+      imageBase64 = files[0].buffer.toString('base64');
     }
 
-    const promptText = `
-      You are an expert product copywriter for Swapaholic, a second-hand P2P marketplace. 
-      Generate a compelling and detailed product description for a listing.
-      
-      Product Details:
-      - Title: ${title}
-      - Category: ${category}
-      - Condition: ${condition}
-      ${imageBase64 ? '- Vision: Please analyze the provided image to infer quality and features.' : '- Note: No image provided. Base your analysis strictly on the title and category.'}
-      
-      Key Requirements:
-      1. Generate a professional, persuasive description.
-      2. If it is an electronics item, infer specifications typical for the model.
-      3. Calculate a "Quality Score" (0-100) based on the condition (New=100, Like New=90, Good=75, Fair=60, Poor=40).
-      
-      You MUST output ONLY a valid JSON object. Do not include any conversational text.
-      Format:
-      {
-        "description": "...",
-        "score": 85,
-        "detectedLabels": ["label1", "label2"]
-      }
-    `;
+    let aiDescription = "High quality product looking for a new home.";
+    let aiQualityScore = 85;
+    let aiSuggestedPrice = 0;
 
     try {
-        let textResponse = '';
-        let usedProvider = 'gemini';
-
-        try {
-            // First attempt: Gemini 1.5 Flash
-            if (imageBase64) {
-                const result = await model.generateContent([
-                    promptText,
-                    {
-                        inlineData: {
-                            data: imageBase64,
-                            mimeType: mimeType
-                        }
-                    }
-                ]);
-                const response = await result.response;
-                textResponse = response.text();
-            } else {
-                const result = await model.generateContent(promptText);
-                const response = await result.response;
-                textResponse = response.text();
+      if (imageBase64) {
+        const prompt = `Analyze this product image. Title: ${title}, Category: ${category}, Condition: ${condition}. 
+        Provide a concise description (max 100 words), a quality score (0-100), and a suggested price in USD. 
+        Format as JSON: { "description": "...", "score": 85, "price": 100 }`;
+        
+        const result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: imageBase64,
+              mimeType: files[0].mimetype
             }
-        } catch (geminiError) {
-            logger.warn('Gemini API failed, falling back to Hugging Face:', geminiError.message);
-            // Fallback to Hugging Face Qwen 2.5
-            usedProvider = 'huggingface';
-            const { HfInference } = require("@huggingface/inference");
-            const hfFallback = new HfInference(process.env.HUGGINGFACE_API_KEY);
-            
-            const messages = [
-            {
-                role: "user",
-                content: imageBase64
-                ? [
-                    { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-                    { type: "text", text: promptText + "\n\nCRITICAL: Respond ONLY in valid English JSON." }
-                ]
-                : [{ type: "text", text: promptText + "\n\nCRITICAL: Respond ONLY in valid English JSON." }]
-            }
-            ];
-
-            const result = await hfFallback.chatCompletion({
-                model: "Qwen/Qwen2.5-7B-Instruct",
-                messages: messages,
-                max_tokens: 1500,
-                temperature: 0.5,
-            });
-
-            textResponse = result.choices[0].message.content;
-        }
-
-        console.log(`--- RAW AI RESPONSE (${usedProvider}) ---`);
-        console.log(textResponse);
-        console.log('-----------------------');
-
-        // Robust JSON extraction: Find the first { and the last }
-        const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error(`AI did not return valid JSON format. Response: ${textResponse.substring(0, 50)}...`);
-        }
-
-        const cleanJson = jsonMatch[0];
-        const content = JSON.parse(cleanJson);
-
-        res.json({
-            description: content.description || 'No description generated.',
-            score: content.score || 0,
-            detectedLabels: content.detectedLabels || []
-        });
-
+          }
+        ]);
+        
+        const response = await result.response;
+        const text = response.text();
+        const cleanedText = text.replace(/```json|```/g, '').trim();
+        const aiData = JSON.parse(cleanedText);
+        
+        aiDescription = aiData.description || aiDescription;
+        aiQualityScore = aiData.score || aiQualityScore;
+        aiSuggestedPrice = aiData.price || aiSuggestedPrice;
+      }
     } catch (aiError) {
-        logger.error('API or Parsing error:', aiError);
-        throw aiError; // Handled by the outer catch
+      logger.error('AI Analysis Error:', aiError);
     }
 
+    res.json({
+      success: true,
+      description: aiDescription,
+      qualityScore: aiQualityScore,
+      suggestedPrice: aiSuggestedPrice
+    });
   } catch (error) {
     logger.error('Analyze product error:', error);
-    console.error('Full Analyze Error:', error);
-
-    let errorMessage = 'Failed to analyze product. Please try again.';
-    if (error.message && error.message.includes('API key was reported as leaked')) {
-        errorMessage = 'Both AI providers failed. Your Gemini API key is leaked, and Hugging Face fallback failed.';
-    }
-
-    res.status(500).json({
-      message: errorMessage,
-      error: error.message || 'Unknown error'
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Regenerate description (Alias for part of analyze logic)
+// Regenerate description based on current details
 const regenerateDescription = async (req, res) => {
-    // For now, we reuse the analyze logic but specifically for text regeneration
-    // In a real app, this might avoid image re-processing if not needed
-    return analyzeProduct(req, res);
-};
+  try {
+    const { title, category, condition, description } = req.body;
+    
+    const prompt = `Rewrite this product description to be more attractive for buyers. 
+    Current Title: ${title}
+    Category: ${category}
+    Condition: ${condition}
+    Current Description: ${description}
+    Provide only the rewritten description.`;
 
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const aiDescription = response.text();
+
+    res.json({
+      success: true,
+      description: aiDescription
+    });
+  } catch (error) {
+    logger.error('Regenerate description error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
 
 // Create product (seller only)
 const createProduct = async (req, res) => {
@@ -164,7 +107,16 @@ const createProduct = async (req, res) => {
     basePrice = parseFloat(basePrice);
 
     if (!title || !description || !category || !basePrice || !condition) {
-      return res.status(400).json({ message: 'Missing required fields', details: { title: !!title, description: !!description, category: !!category, basePrice: !!basePrice, condition: !!condition } });
+      return res.status(400).json({ 
+        message: 'Missing required fields', 
+        details: { 
+          title: !!title, 
+          description: !!description, 
+          category: !!category, 
+          basePrice: !!basePrice, 
+          condition: !!condition 
+        } 
+      });
     }
 
     // Map frontend condition values to schema enum values
@@ -174,9 +126,8 @@ const createProduct = async (req, res) => {
       'excellent': 'excellent',
       'good': 'good',
       'fair': 'fair',
-      // Also accept schema values directly
       'brand_new': 'brand_new',
-      'like_new': 'like_new',
+      'like_new': 'like_new'
     };
     const mappedCondition = conditionMap[condition] || condition;
 
@@ -189,12 +140,20 @@ const createProduct = async (req, res) => {
       });
     }
 
-    // Also handle pre-existing image URLs from body (for updates)
+    // Also handle pre-existing image URLs from body
     if (req.body.images) {
       const bodyImages = typeof req.body.images === 'string' ? JSON.parse(req.body.images) : req.body.images;
       if (Array.isArray(bodyImages)) {
         imageUrls = [...imageUrls, ...bodyImages];
       }
+    }
+
+    // Strict 4-image rule enforcement
+    if (imageUrls.length < 4) {
+      return res.status(400).json({
+        message: 'Validation failed: You must upload at least 4 images to list a product.',
+        details: { count: imageUrls.length }
+      });
     }
 
     const product = new Product({
@@ -216,15 +175,12 @@ const createProduct = async (req, res) => {
     await product.save();
     res.status(201).json(product);
 
-    // After responding, process notifications asynchronously
+    // Notifications
     setImmediate(async () => {
       try {
         const User = require('../models/User');
         const notificationService = require('../utils/notificationService');
-        
-        // Use words > 2 chars to avoid matching 'and', 'the', etc.
         const titleWords = title.split(/\s+/).filter(w => w.length > 2).map(w => new RegExp(w, 'i'));
-        
         const matchCondition = {
           $or: [
             { interests: { $regex: new RegExp(category, 'i') } },
@@ -232,23 +188,19 @@ const createProduct = async (req, res) => {
           ],
           _id: { $ne: req.user.id }
         };
-        
         const interestedUsers = await User.find(matchCondition).select('_id');
         const userIds = interestedUsers.map(u => u._id.toString());
-        
         if (userIds.length > 0) {
           await notificationService.notifyNewProductMatch(userIds, title, product._id, category);
         }
       } catch (notifError) {
-        logger.error('Error sending new product match notifications:', notifError);
+        logger.error('Error sending notifications:', notifError);
       }
     });
 
   } catch (error) {
-
     logger.error('Create product error:', error);
-    console.error('Full Create Product Error:', JSON.stringify(error, null, 2));
-    res.status(500).json({ message: 'Failed to create product', error: error.message, details: error.toString() });
+    res.status(500).json({ message: 'Failed to create product', error: error.message });
   }
 };
 
@@ -258,7 +210,7 @@ const getProducts = async (req, res) => {
     const {
       category,
       condition,
-      status = 'active',
+      status: reqStatus,
       page = 1,
       limit = 10,
       sortBy = 'createdAt',
@@ -274,476 +226,85 @@ const getProducts = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Strategy: If both text search and geospatial are provided, we can't use aggregation properly
-    // So we'll use different approaches based on what's requested
+    // Default status: show active and bidden products
+    let statusFilter;
+    if (reqStatus && reqStatus !== 'all') {
+      statusFilter = reqStatus;
+    } else {
+      statusFilter = { $in: ['active', 'bidden'] };
+    }
 
-    // Case 1: Geospatial search only (use $geoNear as first stage)
-    if (lat && lng && radius && !search) {
+    // Base match stage
+    const matchStage = { status: statusFilter };
+    
+    // Case-insensitive category match
+    if (category && category !== 'all') {
+      matchStage.category = { $regex: new RegExp(`^${category}$`, 'i') };
+    }
+    
+    if (condition) matchStage.condition = condition;
+    
+    if (minPrice || maxPrice) {
+      matchStage.basePrice = {};
+      if (minPrice) matchStage.basePrice.$gte = parseFloat(minPrice);
+      if (maxPrice) matchStage.basePrice.$lte = parseFloat(maxPrice);
+    }
+
+    let pipeline = [];
+    let countMatchStage = { ...matchStage };
+
+    // Case 1: Geospatial search
+    if (lat && lng && radius) {
       const latitude = parseFloat(lat);
       const longitude = parseFloat(lng);
-      const radiusKm = parseFloat(radius);
+      const radiusMeters = parseFloat(radius) * 1000;
 
-      const pipeline = [];
-
-      // $geoNear MUST be first
       pipeline.push({
-        $geoNear: {
-          near: {
-            type: 'Point',
-            coordinates: [longitude, latitude]
-          },
-          distanceField: 'distance',
-          maxDistance: radiusKm * 1000,
-          spherical: true,
-          query: { status }
-        }
-      });
-
-      // Then apply other filters
-      const matchStage = {};
-      if (category) matchStage.category = category;
-      if (condition) matchStage.condition = condition;
-      if (minPrice || maxPrice) {
-        matchStage.basePrice = {};
-        if (minPrice) matchStage.basePrice.$gte = parseFloat(minPrice);
-        if (maxPrice) matchStage.basePrice.$lte = parseFloat(maxPrice);
-      }
-
-      if (Object.keys(matchStage).length > 0) {
-        pipeline.push({ $match: matchStage });
-      }
-
-      // Sort
-      const sortStage = {};
-      if (sortBy === 'price_asc' || sortBy === 'price-low') {
-        sortStage.basePrice = 1;
-      } else if (sortBy === 'price_desc' || sortBy === 'price-high') {
-        sortStage.basePrice = -1;
-      } else if (sortBy === 'newest') {
-        sortStage.createdAt = -1;
-      } else if (sortBy === 'oldest') {
-        sortStage.createdAt = 1;
-      } else if (sortBy === 'ending-soon') {
-        sortStage.bidEndDate = 1;
-      } else if (sortBy === 'most-bids') {
-        sortStage.highestBidAmount = -1;
-      } else {
-        sortStage.distance = 1; // Default: sort by distance for geospatial
-      }
-      pipeline.push({ $sort: sortStage });
-
-      // Pagination
-      pipeline.push({ $skip: skip });
-      pipeline.push({ $limit: limitNum });
-
-      // Lookup seller info
-      pipeline.push({
-        $lookup: {
-          from: 'users',
-          localField: 'sellerId',
-          foreignField: '_id',
-          as: 'seller'
-        }
-      });
-      pipeline.push({ $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } });
-      pipeline.push({
-        $addFields: {
-          'sellerId': {
-            _id: '$seller._id',
-            firstName: '$seller.firstName',
-            lastName: '$seller.lastName',
-            ratingAverage: '$seller.ratingAverage'
-          }
-        }
-      });
-      pipeline.push({ $project: { seller: 0 } });
-
-      const products = await Product.aggregate(pipeline);
-
-      // Count: Use same pipeline but without pagination
-      const countPipeline = [];
-      countPipeline.push({
         $geoNear: {
           near: { type: 'Point', coordinates: [longitude, latitude] },
           distanceField: 'distance',
-          maxDistance: radiusKm * 1000,
+          maxDistance: radiusMeters,
           spherical: true,
-          query: { status }
+          query: matchStage
         }
       });
-      if (Object.keys(matchStage).length > 0) {
-        countPipeline.push({ $match: matchStage });
-      }
-      countPipeline.push({ $count: 'total' });
-      const countResult = await Product.aggregate(countPipeline);
-      const total = countResult[0]?.total || 0;
-      // Map _id to id for frontend compatibility
-      const mappedProducts = products.map(p => ({
-        ...p,
-        id: p._id,
-        price: p.basePrice || 0,
-        currentBid: p.highestBidAmount || p.basePrice || 0,
-        auctionEndTime: p.bidEndDate,
-        images: p.images || [],
-        bidCount: p.bidCount || 0,
-        seller: p.sellerId // Already unwound and projected above
-      }));
-
-      return res.json({
-        success: true,
-        data: {
-          data: mappedProducts,
-          total,
-          pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
-          filters: { category, condition, minPrice, maxPrice, search, sortBy }
-        }
-      });
-    }
-
-    // Case 2: Text search only (use $match with $text as first stage)
-    if (search && !lat && !lng && !radius) {
-      const pipeline = [];
-
-      // $text search MUST be in first $match
-      const firstMatch = { status, $text: { $search: search } };
-      pipeline.push({ $match: firstMatch });
+      countMatchStage = null; 
+    } else if (search) {
+      // Case 2: Text search
+      pipeline.push({ $match: { ...matchStage, $text: { $search: search } } });
       pipeline.push({ $addFields: { score: { $meta: 'textScore' } } });
-
-      // Then apply other filters
-      const secondMatch = {};
-      if (category) secondMatch.category = category;
-      if (condition) secondMatch.condition = condition;
-      if (minPrice || maxPrice) {
-        secondMatch.basePrice = {};
-        if (minPrice) secondMatch.basePrice.$gte = parseFloat(minPrice);
-        if (maxPrice) secondMatch.basePrice.$lte = parseFloat(maxPrice);
-      }
-
-      if (Object.keys(secondMatch).length > 0) {
-        pipeline.push({ $match: secondMatch });
-      }
-
-      // Sort by relevance first
-      const sortStage = { score: -1 };
-      if (sortBy === 'price_asc' || sortBy === 'price-low') {
-        sortStage.basePrice = 1;
-      } else if (sortBy === 'price_desc' || sortBy === 'price-high') {
-        sortStage.basePrice = -1;
-      } else if (sortBy === 'newest') {
-        sortStage.createdAt = -1;
-      } else if (sortBy === 'oldest') {
-        sortStage.createdAt = 1;
-      } else if (sortBy === 'ending-soon') {
-        sortStage.bidEndDate = 1;
-      } else if (sortBy === 'most-bids') {
-        sortStage.highestBidAmount = -1;
-      }
-      pipeline.push({ $sort: sortStage });
-
-      // Pagination
-      pipeline.push({ $skip: skip });
-      pipeline.push({ $limit: limitNum });
-
-      // Lookup seller info
-      pipeline.push({
-        $lookup: {
-          from: 'users',
-          localField: 'sellerId',
-          foreignField: '_id',
-          as: 'seller'
-        }
-      });
-      pipeline.push({ $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } });
-      pipeline.push({
-        $addFields: {
-          'sellerId': {
-            _id: '$seller._id',
-            firstName: '$seller.firstName',
-            lastName: '$seller.lastName',
-            ratingAverage: '$seller.ratingAverage'
-          }
-        }
-      });
-      pipeline.push({ $project: { seller: 0 } });
-
-      const products = await Product.aggregate(pipeline);
-
-      // Count with same text search
-      const countPipeline = [];
-      countPipeline.push({ $match: firstMatch });
-      if (Object.keys(secondMatch).length > 0) {
-        countPipeline.push({ $match: secondMatch });
-      }
-      countPipeline.push({ $count: 'total' });
-      const countResult = await Product.aggregate(countPipeline);
-      const total = countResult[0]?.total || 0;
-
-      // Map _id to id for frontend compatibility
-      const mappedProducts = products.map(p => ({
-        ...p,
-        id: p._id,
-        price: p.basePrice || 0,
-        currentBid: p.highestBidAmount || p.basePrice || 0,
-        auctionEndTime: p.bidEndDate,
-        images: p.images || [],
-        bidCount: p.bidCount || 0,
-        seller: p.sellerId
-      }));
-
-      return res.json({
-        success: true,
-        data: {
-          data: mappedProducts,
-          total,
-          pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
-          filters: { category, condition, minPrice, maxPrice, search, sortBy }
-        }
-      });
+      countMatchStage = { ...matchStage, $text: { $search: search } };
+    } else {
+      // Case 3: Standard match
+      pipeline.push({ $match: matchStage });
     }
 
-    // Case 3: No text search and no geospatial (simple aggregation)
-    const pipeline = [];
-
-    const matchStage = { status };
-    if (category) matchStage.category = category;
-    if (condition) matchStage.condition = condition;
-    if (minPrice || maxPrice) {
-      matchStage.basePrice = {};
-      if (minPrice) matchStage.basePrice.$gte = parseFloat(minPrice);
-      if (maxPrice) matchStage.basePrice.$lte = parseFloat(maxPrice);
-    }
-
-    pipeline.push({ $match: matchStage });
-
-    // Sort
+    // Sorting
     const sortStage = {};
-    if (sortBy === 'price_asc' || sortBy === 'price-low') {
-      sortStage.basePrice = 1;
-    } else if (sortBy === 'price_desc' || sortBy === 'price-high') {
-      sortStage.basePrice = -1;
-    } else if (sortBy === 'newest') {
-} else {
-        sortStage.distance = 1; // Default: sort by distance for geospatial
-      }
-      pipeline.push({ $sort: sortStage });
-
-      // Pagination
-      pipeline.push({ $skip: skip });
-      pipeline.push({ $limit: limitNum });
-
-      // Lookup seller info
-      pipeline.push({
-        $lookup: {
-          from: 'users',
-          localField: 'sellerId',
-          foreignField: '_id',
-          as: 'seller'
-        }
-      });
-      pipeline.push({ $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } });
-      pipeline.push({
-        $addFields: {
-          'sellerId': {
-            _id: '$seller._id',
-            firstName: '$seller.firstName',
-            lastName: '$seller.lastName',
-            ratingAverage: '$seller.ratingAverage'
-          }
-        }
-      });
-      pipeline.push({ $project: { seller: 0 } });
-
-      const products = await Product.aggregate(pipeline);
-
-      // Count: Use same pipeline but without pagination
-      const countPipeline = [];
-      countPipeline.push({
-        $geoNear: {
-          near: { type: 'Point', coordinates: [longitude, latitude] },
-          distanceField: 'distance',
-          maxDistance: radiusKm * 1000,
-          spherical: true,
-          query: { status }
-        }
-      });
-      if (Object.keys(matchStage).length > 0) {
-        countPipeline.push({ $match: matchStage });
-      }
-      countPipeline.push({ $count: 'total' });
-      const countResult = await Product.aggregate(countPipeline);
-      const total = countResult[0]?.total || 0;
-      // Map _id to id for frontend compatibility
-      const mappedProducts = products.map(p => ({
-        ...p,
-        id: p._id,
-        price: p.basePrice || 0,
-        currentBid: p.highestBidAmount || p.basePrice || 0,
-        auctionEndTime: p.bidEndDate,
-        images: p.images || [],
-        bidCount: p.bidCount || 0,
-        seller: p.sellerId // Already unwound and projected above
-      }));
-
-      return res.json({
-        success: true,
-        data: {
-          data: mappedProducts,
-          total,
-          pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
-          filters: { category, condition, minPrice, maxPrice, search, sortBy }
-        }
-      });
+    if (search && !lat) {
+      sortStage.score = -1;
     }
-
-    // Case 2: Text search only (use $match with $text as first stage)
-    if (search && !lat && !lng && !radius) {
-      const pipeline = [];
-
-      // $text search MUST be in first $match
-      const firstMatch = { status, $text: { $search: search } };
-      pipeline.push({ $match: firstMatch });
-      pipeline.push({ $addFields: { score: { $meta: 'textScore' } } });
-
-      // Then apply other filters
-      const secondMatch = {};
-      if (category) secondMatch.category = category;
-      if (condition) secondMatch.condition = condition;
-      if (minPrice || maxPrice) {
-        secondMatch.basePrice = {};
-        if (minPrice) secondMatch.basePrice.$gte = parseFloat(minPrice);
-        if (maxPrice) secondMatch.basePrice.$lte = parseFloat(maxPrice);
-      }
-
-      if (Object.keys(secondMatch).length > 0) {
-        pipeline.push({ $match: secondMatch });
-      }
-
-      // Sort by relevance first
-      const sortStage = { score: -1 };
-      if (sortBy === 'price_asc' || sortBy === 'price-low') {
-        sortStage.basePrice = 1;
-      } else if (sortBy === 'price_desc' || sortBy === 'price-high') {
-        sortStage.basePrice = -1;
-      } else if (sortBy === 'newest') {
-        sortStage.createdAt = -1;
-      } else if (sortBy === 'oldest') {
-        sortStage.createdAt = 1;
-      } else if (sortBy === 'ending-soon') {
-        sortStage.bidEndDate = 1;
-      } else if (sortBy === 'most-bids') {
-        sortStage.highestBidAmount = -1;
-      }
-      pipeline.push({ $sort: sortStage });
-
-      // Pagination
-      pipeline.push({ $skip: skip });
-      pipeline.push({ $limit: limitNum });
-
-      // Lookup seller info
-      pipeline.push({
-        $lookup: {
-          from: 'users',
-          localField: 'sellerId',
-          foreignField: '_id',
-          as: 'seller'
-        }
-      });
-      pipeline.push({ $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } });
-      pipeline.push({
-        $addFields: {
-          'sellerId': {
-            _id: '$seller._id',
-            firstName: '$seller.firstName',
-            lastName: '$seller.lastName',
-            ratingAverage: '$seller.ratingAverage'
-          }
-        }
-      });
-      pipeline.push({ $project: { seller: 0 } });
-
-      const products = await Product.aggregate(pipeline);
-
-      // Count with same text search
-      const countPipeline = [];
-      countPipeline.push({ $match: firstMatch });
-      if (Object.keys(secondMatch).length > 0) {
-        countPipeline.push({ $match: secondMatch });
-      }
-      countPipeline.push({ $count: 'total' });
-      const countResult = await Product.aggregate(countPipeline);
-      const total = countResult[0]?.total || 0;
-
-      // Map _id to id for frontend compatibility
-      const mappedProducts = products.map(p => ({
-        ...p,
-        id: p._id,
-        price: p.basePrice || 0,
-        currentBid: p.highestBidAmount || p.basePrice || 0,
-        auctionEndTime: p.bidEndDate,
-        images: p.images || [],
-        bidCount: p.bidCount || 0,
-        seller: p.sellerId
-      }));
-
-      return res.json({
-        success: true,
-        data: {
-          data: mappedProducts,
-          total,
-          pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
-          filters: { category, condition, minPrice, maxPrice, search, sortBy }
-        }
-      });
-    }
-
-    // Case 3: No text search and no geospatial (simple aggregation)
-    const pipeline = [];
-
-    const matchStage = { status };
-    if (category) matchStage.category = category;
-    if (condition) matchStage.condition = condition;
-    if (minPrice || maxPrice) {
-      matchStage.basePrice = {};
-      if (minPrice) matchStage.basePrice.$gte = parseFloat(minPrice);
-      if (maxPrice) matchStage.basePrice.$lte = parseFloat(maxPrice);
-    }
-
-    pipeline.push({ $match: matchStage });
-
-    // Sort
-    const sortStage = {};
+    
     if (sortBy === 'price_asc' || sortBy === 'price-low') {
       sortStage.basePrice = 1;
     } else if (sortBy === 'price_desc' || sortBy === 'price-high') {
       sortStage.basePrice = -1;
     } else if (sortBy === 'newest') {
       sortStage.createdAt = -1;
-    } else if (sortBy === 'oldest') {
-      sortStage.createdAt = 1;
     } else if (sortBy === 'ending-soon') {
       sortStage.bidEndDate = 1;
     } else if (sortBy === 'most-bids') {
       sortStage.highestBidAmount = -1;
-    } else {
+    } else if (!sortStage.score) {
       sortStage.createdAt = -1;
     }
-    // Filter by status (default to active and bidden if not specified)
-    let statusFilter;
-    if (status && status !== 'all') {
-      statusFilter = status;
-    } else {
-      // Show both active and products with bids by default
-      statusFilter = { $in: ['active', 'bidden'] };
-    }
-    matchStage.status = statusFilter;
-
     pipeline.push({ $sort: sortStage });
 
     // Pagination
     pipeline.push({ $skip: skip });
     pipeline.push({ $limit: limitNum });
 
-    // Lookup seller info
+    // Lookups
     pipeline.push({
       $lookup: {
         from: 'users',
@@ -768,11 +329,28 @@ const getProducts = async (req, res) => {
     const products = await Product.aggregate(pipeline);
 
     // Count
-    const countPipeline = [{ $match: matchStage }, { $count: 'total' }];
-    const countResult = await Product.aggregate(countPipeline);
-    const total = countResult[0]?.total || 0;
+    let total = 0;
+    if (lat && lng && radius) {
+      const latitude = parseFloat(lat);
+      const longitude = parseFloat(lng);
+      const radiusMeters = parseFloat(radius) * 1000;
+      const countResult = await Product.aggregate([
+        {
+          $geoNear: {
+            near: { type: 'Point', coordinates: [longitude, latitude] },
+            distanceField: 'distance',
+            maxDistance: radiusMeters,
+            spherical: true,
+            query: matchStage
+          }
+        },
+        { $count: 'total' }
+      ]);
+      total = countResult[0]?.total || 0;
+    } else {
+      total = await Product.countDocuments(countMatchStage);
+    }
 
-    // Map _id to id for frontend compatibility
     const mappedProducts = products.map(p => ({
       ...p,
       id: p._id,
@@ -789,7 +367,12 @@ const getProducts = async (req, res) => {
       data: {
         data: mappedProducts,
         total,
-        pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
+        pagination: { 
+          page: pageNum, 
+          limit: limitNum, 
+          total, 
+          totalPages: Math.ceil(total / limitNum) 
+        },
         filters: { category, condition, minPrice, maxPrice, search, sortBy }
       }
     });
@@ -815,17 +398,21 @@ const getProductById = async (req, res) => {
     product.viewCount = (product.viewCount || 0) + 1;
     await product.save();
 
-    // Emit Socket.IO event to seller about product view
-    const notificationService = require('../utils/notificationService');
-    notificationService.sendToUser(
-      product.sellerId._id.toString(),
-      'product:view',
-      {
-        productId: product._id,
-        productTitle: product.title,
-        viewCount: product.viewCount
-      }
-    );
+    // Socket.IO notification to seller
+    try {
+      const notificationService = require('../utils/notificationService');
+      notificationService.sendToUser(
+        product.sellerId._id.toString(),
+        'product:view',
+        {
+          productId: product._id,
+          productTitle: product.title,
+          viewCount: product.viewCount
+        }
+      );
+    } catch (notifErr) {
+      logger.error('Error sending view notification:', notifErr);
+    }
 
     res.json({
       status: 'success',
@@ -848,54 +435,39 @@ const updateProduct = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const allowed = ['title', 'description', 'category', 'basePrice', 'condition', 'geometry', 'location', 'status', 'aiQualityScore', 'aiSuggestedPrice'];
-    const updates = {};
+    let updates = req.body;
     
-    // Map price to basePrice if frontend sent price
-    if (req.body.price && !req.body.basePrice) {
-        req.body.basePrice = req.body.price;
+    // Logic for images: handle new uploads and removals
+    let finalImages = product.images || [];
+    
+    // If frontend sends remainingImages, use that
+    if (req.body.remainingImages) {
+      finalImages = typeof req.body.remainingImages === 'string' ? JSON.parse(req.body.remainingImages) : req.body.remainingImages;
     }
 
-    // Map geometry
-    if (req.body.geometry) {
-        updates.geometry = typeof req.body.geometry === 'string' 
-            ? JSON.parse(req.body.geometry) 
-            : req.body.geometry;
-    }
-
-    allowed.forEach(field => {
-      if (req.body[field] !== undefined && field !== 'geometry') {
-          updates[field] = req.body[field];
-      }
-    });
-
-    // Handle new images through the configured storage provider
-    let newImageUrls = [];
+    // Handle new uploads
     if (req.files && req.files.length > 0) {
-      newImageUrls = await storageService.uploadFiles(req.files, {
-        folder: 'products',
-        resourceType: 'image'
+      const newImageUrls = await storageService.uploadFiles(req.files, {
+        folder: 'products'
+      });
+      finalImages = [...finalImages, ...newImageUrls];
+    }
+
+    // Strict 4-image rule enforcement
+    if (finalImages.length < 4) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed: A product must have at least 4 images. You currently have ' + finalImages.length + '.',
+        details: { count: finalImages.length }
       });
     }
 
-    // Handle existing images
-    let existingImages = [];
-    if (req.body.existingImages) {
-      existingImages = typeof req.body.existingImages === 'string' 
-        ? JSON.parse(req.body.existingImages) 
-        : req.body.existingImages;
-    }
-
-    // Only update images if there are new ones or if the existing images were explicitly provided
-    if (newImageUrls.length > 0 || req.body.existingImages) {
-        updates.images = [...existingImages, ...newImageUrls];
-    }
-
+    updates.images = finalImages;
     updates.updatedAt = new Date();
 
     const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updates, { 
       new: true,
-      runValidators: true // Ensure validation runs on update too
+      runValidators: true 
     });
 
     res.json({
@@ -904,7 +476,6 @@ const updateProduct = async (req, res) => {
     });
   } catch (error) {
     logger.error('Update product error:', error);
-    
     if (error.name === 'ValidationError') {
       return res.status(400).json({
         success: false,
@@ -912,11 +483,9 @@ const updateProduct = async (req, res) => {
         errors: Object.values(error.errors).map(err => err.message)
       });
     }
-
     res.status(500).json({ message: 'Server error' });
   }
 };
-
 
 // Delete product (seller only)
 const deleteProduct = async (req, res) => {
@@ -942,13 +511,10 @@ const deleteProduct = async (req, res) => {
   }
 };
 
-
 // Search products by geolocation
 const searchNearby = async (req, res) => {
   try {
-    const { lng, lat, maxDistance = 50000 } = req.query; // maxDistance in meters
-
-    // $geoNear requires coordinates as numbers
+    const { lng, lat, maxDistance = 50000 } = req.query;
     const longitude = parseFloat(lng);
     const latitude = parseFloat(lat);
     const distanceMeters = parseInt(maxDistance);
@@ -960,7 +526,7 @@ const searchNearby = async (req, res) => {
           distanceField: 'distance',
           maxDistance: distanceMeters,
           spherical: true,
-          query: { status: 'active' }
+          query: { status: { $in: ['active', 'bidden'] } }
         }
       },
       {
@@ -996,23 +562,18 @@ const searchNearby = async (req, res) => {
 const getSearchSuggestions = async (req, res) => {
   try {
     const { q = '' } = req.query;
+    if (!q || q.length < 2) return res.json({ suggestions: [] });
 
-    if (!q || q.length < 2) {
-      return res.json({ suggestions: [] });
-    }
-
-    // Get unique categories matching search (with limit)
     const categoryMatches = await Product.find({
       category: { $regex: q, $options: 'i' },
-      status: 'active'
+      status: { $in: ['active', 'bidden'] }
     })
       .distinct('category')
       .then(cats => cats.slice(0, 5));
 
-    // Get unique titles matching search (with limit)
     const titleMatches = await Product.find({
       title: { $regex: q, $options: 'i' },
-      status: 'active'
+      status: { $in: ['active', 'bidden'] }
     })
       .distinct('title')
       .then(titles => titles.slice(0, 5));
@@ -1029,15 +590,13 @@ const getSearchSuggestions = async (req, res) => {
   }
 };
 
-// Get available categories and filters metadata
+// Get filter metadata
 const getFilterMetadata = async (req, res) => {
   try {
-    const categories = await Product.distinct('category', { status: 'active' });
+    const categories = await Product.distinct('category', { status: { $in: ['active', 'bidden'] } });
     const conditions = ['brand_new', 'like_new', 'excellent', 'good', 'fair'];
-
-    // Get price range
     const priceStats = await Product.aggregate([
-      { $match: { status: 'active' } },
+      { $match: { status: { $in: ['active', 'bidden'] } } },
       {
         $group: {
           _id: null,
@@ -1047,28 +606,20 @@ const getFilterMetadata = async (req, res) => {
         }
       }
     ]);
-
     const priceRange = priceStats[0] || { minPrice: 0, maxPrice: 0, avgPrice: 0 };
-
-    res.json({
-      categories,
-      conditions,
-      priceRange
-    });
+    res.json({ categories, conditions, priceRange });
   } catch (error) {
     logger.error('Get filter metadata error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Get featured products (random active products for now)
+// Get featured products
 const getFeaturedProducts = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
-
-    // Get random products
     const products = await Product.aggregate([
-      { $match: { status: 'active' } },
+      { $match: { status: { $in: ['active', 'bidden'] } } },
       { $sample: { size: limit } },
       {
         $lookup: {
@@ -1091,153 +642,89 @@ const getFeaturedProducts = async (req, res) => {
       },
       { $project: { seller: 0 } }
     ]);
-
-    // Map fields for frontend
-    const mappedProducts = products.map(p => ({
+    res.json(products.map(p => ({
+      ...p,
       id: p._id,
-      title: p.title,
       currentBid: p.highestBidAmount || p.basePrice || 0,
-      basePrice: p.basePrice,
       images: p.images || [],
-      auctionEndTime: p.bidEndDate || new Date(Date.now() + 86400000).toISOString(), // Default 24h if missing
+      auctionEndTime: p.bidEndDate || new Date(Date.now() + 86400000).toISOString(),
       seller: p.sellerId
-    }));
-
-    res.json(mappedProducts);
+    })));
   } catch (error) {
     logger.error('Get featured products error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Admin: Approve a pending product
+// Admin actions
 const approveProduct = async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(
-      req.params.productId,
-      { status: 'active' },
-      { new: true }
-    );
-    if (!product) return res.status(404).json({ message: 'Product not found' });
-    res.json({ message: 'Product approved successfully', product });
+    const product = await Product.findByIdAndUpdate(req.params.id, { status: 'active' }, { new: true });
+    res.json(product);
   } catch (error) {
-    logger.error('Approve product error:', error);
-    res.status(500).json({ message: 'Failed to approve product' });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Admin: Reject a pending product
 const rejectProduct = async (req, res) => {
   try {
-    const { reason } = req.body;
-    const product = await Product.findByIdAndUpdate(
-      req.params.productId,
-      { status: 'rejected', rejectionReason: reason || 'Violation of terms' },
-      { new: true }
-    );
-    if (!product) return res.status(404).json({ message: 'Product not found' });
-    res.json({ message: 'Product rejected successfully', product });
+    const product = await Product.findByIdAndUpdate(req.params.id, { status: 'qc_rejected' }, { new: true });
+    res.json(product);
   } catch (error) {
-    logger.error('Reject product error:', error);
-    res.status(500).json({ message: 'Failed to reject product' });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Upload additional images to existing product
 const uploadImages = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) return res.status(400).json({ message: 'No files uploaded' });
+    const urls = await storageService.uploadFiles(req.files, { folder: 'products' });
+    res.json({ success: true, urls });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const getSellerProducts = async (req, res) => {
+  try {
+    const products = await Product.find({ sellerId: req.user.id }).sort({ createdAt: -1 });
+    res.json({ success: true, data: products });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const getSimilarProducts = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ message: 'Product not found' });
-
-    if (product.sellerId.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: 'No images provided' });
-    }
-
-    const newImageUrls = await storageService.uploadFiles(req.files, {
-      folder: 'products',
-      resourceType: 'image'
-    });
-    
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    const query = { sellerId, status: 'active' };
-    const products = await Product.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum);
-
-    const total = await Product.countDocuments(query);
-
-    res.json({
-      success: true,
-      data: {
-        data: products.map(p => ({ ...p.toObject(), id: p._id })),
-        total,
-        pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) }
-      }
-    });
-  } catch (error) {
-    logger.error('Get seller products error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// Get similar products (same category, different ID)
-const getSimilarProducts = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const limit = parseInt(req.query.limit) || 6;
-
-    const product = await Product.findById(id);
-    if (!product) return res.status(404).json({ message: 'Product not found' });
-
     const similar = await Product.find({
       category: product.category,
-      _id: { $ne: id },
-      status: 'active'
+      _id: { $ne: product._id },
+      status: { $in: ['active', 'bidden'] }
     })
-    .limit(limit)
+    .limit(4)
     .populate('sellerId', 'firstName lastName ratingAverage');
-
-    res.json({
-        success: true,
-        data: similar.map(p => ({ ...p.toObject(), id: p._id }))
-    });
+    res.json({ success: true, data: similar.map(p => ({ ...p.toObject(), id: p._id })) });
   } catch (error) {
-    logger.error('Get similar products error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Discrete route to increment view count
 const incrementViewCount = async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { $inc: { viewCount: 1 } },
-      { new: true }
-    );
-    if (!product) return res.status(404).json({ message: 'Product not found' });
+    const product = await Product.findByIdAndUpdate(req.params.id, { $inc: { viewCount: 1 } }, { new: true });
     res.json({ success: true, viewCount: product.viewCount });
   } catch (error) {
-    logger.error('Increment view count error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Simple categories list
 const getCategories = async (req, res) => {
   try {
-    const categories = await Product.distinct('category', { status: 'active' });
+    const categories = await Product.distinct('category', { status: { $in: ['active', 'bidden'] } });
     res.json({ success: true, data: categories });
   } catch (error) {
-    logger.error('Get categories error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
