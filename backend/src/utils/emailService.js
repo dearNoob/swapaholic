@@ -1,6 +1,24 @@
 const nodemailer = require('nodemailer');
 const logger = require('./logger');
 
+const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS || 8000);
+
+const withTimeout = (promise, timeoutMs, label) => new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise
+        .then((value) => {
+            clearTimeout(timeoutId);
+            resolve(value);
+        })
+        .catch((error) => {
+            clearTimeout(timeoutId);
+            reject(error);
+        });
+});
+
 const transporter = process.env.NODE_ENV === 'test'
     ? {
         sendMail: async () => ({ messageId: 'test-message-id' })
@@ -11,7 +29,13 @@ const transporter = process.env.NODE_ENV === 'test'
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS,
         },
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: EMAIL_TIMEOUT_MS,
     });
+
+const sendMailWithTimeout = (mailOptions, label) =>
+    withTimeout(transporter.sendMail(mailOptions), EMAIL_TIMEOUT_MS, label);
 
 const sendOTP = async (email, otp) => {
     try {
@@ -30,7 +54,7 @@ const sendOTP = async (email, otp) => {
       `,
         };
 
-        const info = await transporter.sendMail(mailOptions);
+        const info = await sendMailWithTimeout(mailOptions, `OTP email to ${email}`);
         try {
             logger.info(`Email sent to ${email}: ${info.messageId}`);
         } catch (logError) {
@@ -70,7 +94,7 @@ const sendLogisticsApprovalEmail = async (email, firstName) => {
         </div>
       `,
         };
-        await transporter.sendMail(mailOptions);
+        await sendMailWithTimeout(mailOptions, `Logistics approval email to ${email}`);
         logger.info(`Logistics approval email sent to ${email}`);
         return true;
     } catch (error) {
@@ -102,7 +126,7 @@ const sendLogisticsRejectionEmail = async (email, firstName, reason) => {
         </div>
       `,
         };
-        await transporter.sendMail(mailOptions);
+        await sendMailWithTimeout(mailOptions, `Logistics rejection email to ${email}`);
         logger.info(`Logistics rejection email sent to ${email}`);
         return true;
     } catch (error) {
@@ -149,7 +173,7 @@ const sendAuctionWonEmail = async (email, buyerName, productTitle, winningPrice,
         </div>
       `,
         };
-        await transporter.sendMail(mailOptions);
+        await sendMailWithTimeout(mailOptions, `Auction won email to ${email}`);
         logger.info(`Auction won email sent to ${email}`);
         return true;
     } catch (error) {
@@ -191,7 +215,7 @@ const sendSecondChanceEmail = async (email, buyerName, productTitle, price, conf
         </div>
       `,
         };
-        await transporter.sendMail(mailOptions);
+        await sendMailWithTimeout(mailOptions, `Second chance email to ${email}`);
         logger.info(`Second chance email sent to ${email}`);
         return true;
     } catch (error) {
@@ -224,7 +248,7 @@ const sendConfirmationExpiredEmail = async (email, buyerName, productTitle) => {
         </div>
       `,
         };
-        await transporter.sendMail(mailOptions);
+        await sendMailWithTimeout(mailOptions, `Confirmation expired email to ${email}`);
         logger.info(`Confirmation expired email sent to ${email}`);
         return true;
     } catch (error) {
@@ -262,7 +286,7 @@ const sendPayoutReceiptEmail = async (email, sellerName, productTitle, amount, p
         </div>
       `,
         };
-        await transporter.sendMail(mailOptions);
+        await sendMailWithTimeout(mailOptions, `Payout receipt email to ${email}`);
         logger.info(`Payout receipt email sent to ${email}`);
         return true;
     } catch (error) {
@@ -296,7 +320,7 @@ const sendPaymentConfirmationEmail = async (email, buyerName, productTitle, amou
         </div>
       `,
         };
-        await transporter.sendMail(mailOptions);
+        await sendMailWithTimeout(mailOptions, `Payment confirmation email to ${email}`);
         logger.info(`Payment confirmation email sent to ${email}`);
         return true;
     } catch (error) {
@@ -329,7 +353,7 @@ const sendBidPlacedEmail = async (email, sellerName, productTitle, bidAmount, bi
       `,
         };
 
-        await transporter.sendMail(mailOptions);
+        await sendMailWithTimeout(mailOptions, `Bid placed email to ${email}`);
         logger.info(`Bid placed email sent to ${email}`);
         return true;
     } catch (error) {
@@ -367,7 +391,7 @@ const sendOrderShippedEmail = async (email, buyerName, productTitle, orderId) =>
       `,
         };
 
-        await transporter.sendMail(mailOptions);
+        await sendMailWithTimeout(mailOptions, `Order shipped email to ${email}`);
         logger.info(`Order shipped email sent to ${email}`);
         return true;
     } catch (error) {

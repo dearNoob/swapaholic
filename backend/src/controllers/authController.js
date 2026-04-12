@@ -8,6 +8,8 @@ const emailService = require('../utils/emailService');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 
+const TRUSTED_DEVICE_COOKIE = 'trustedDeviceId';
+
 const generateOTP = (length = 6) => {
   const digits = '0123456789';
   let otp = '';
@@ -17,10 +19,20 @@ const generateOTP = (length = 6) => {
   return otp;
 };
 
-const generateFingerprint = (req) => {
-  const ip = req.ip || req.connection.remoteAddress;
+const getRequestIp = (req) => {
+  const forwardedFor = req.headers['x-forwarded-for'];
+
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+
+  return req.ip || req.connection.remoteAddress || 'unknown';
+};
+
+const generateLegacyFingerprint = (req) => {
+  const ip = getRequestIp(req);
   const userAgent = req.headers['user-agent'] || 'unknown';
-  return crypto.createHash('sha256').update(ip + userAgent).digest('hex');
+  return crypto.createHash('sha256').update(`${ip}:${userAgent}`).digest('hex');
 };
 
 const generateToken = (user) => {
@@ -33,7 +45,72 @@ const generateRefreshToken = (user) => {
   return jwt.sign(payload, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
-const sendTokenResponse = (user, statusCode, res) => {
+const getTrustedDeviceCookieOptions = () => ({
+  expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+});
+
+const readTrustedDeviceId = (req) => {
+  const deviceId = req.cookies?.[TRUSTED_DEVICE_COOKIE];
+
+  if (typeof deviceId !== 'string') {
+    return null;
+  }
+
+  const normalizedDeviceId = deviceId.trim();
+  return /^[a-f0-9]{64}$/i.test(normalizedDeviceId) ? normalizedDeviceId : null;
+};
+
+const createTrustedDeviceId = () => crypto.randomBytes(32).toString('hex');
+
+const setTrustedDeviceCookie = (res, trustedDeviceId) => {
+  res.cookie(TRUSTED_DEVICE_COOKIE, trustedDeviceId, getTrustedDeviceCookieOptions());
+};
+
+const upsertTrustedDevice = (user, req, trustedDeviceId) => {
+  if (!user.loginHistory) {
+    user.loginHistory = [];
+  }
+
+  const currentIp = getRequestIp(req);
+  const existingDevice = user.loginHistory.find((device) => device.deviceFingerprint === trustedDeviceId);
+
+  if (existingDevice) {
+    existingDevice.lastLogin = new Date();
+    existingDevice.ip = currentIp;
+    existingDevice.isTrusted = true;
+    return trustedDeviceId;
+  }
+
+  user.loginHistory.push({
+    ip: currentIp,
+    deviceFingerprint: trustedDeviceId,
+    lastLogin: new Date(),
+    isTrusted: true
+  });
+
+  return trustedDeviceId;
+};
+
+const resolveKnownDeviceId = (user, req) => {
+  const devices = user.loginHistory || [];
+  const trustedDeviceId = readTrustedDeviceId(req);
+
+  if (trustedDeviceId && devices.some((device) => device.deviceFingerprint === trustedDeviceId && device.isTrusted !== false)) {
+    return trustedDeviceId;
+  }
+
+  const legacyFingerprint = generateLegacyFingerprint(req);
+  if (devices.some((device) => device.deviceFingerprint === legacyFingerprint && device.isTrusted !== false)) {
+    return legacyFingerprint;
+  }
+
+  return null;
+};
+
+const sendTokenResponse = (user, statusCode, res, options = {}) => {
   const token = generateToken(user);
   const refreshToken = generateRefreshToken(user);
 
@@ -45,6 +122,9 @@ const sendTokenResponse = (user, statusCode, res) => {
   };
 
   res.cookie('refreshToken', refreshToken, cookieOptions);
+  if (options.trustedDeviceId) {
+    setTrustedDeviceCookie(res, options.trustedDeviceId);
+  }
 
   res.status(statusCode).json({
     success: true,
@@ -195,12 +275,12 @@ const login = async (req, res) => {
     if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
 
     // Device Detection
-    const fingerprint = generateFingerprint(req);
-    const isKnownDevice = user.loginHistory && user.loginHistory.some(d => d.deviceFingerprint === fingerprint);
+    const knownDeviceId = resolveKnownDeviceId(user, req);
+    const existingTrustedDeviceId = readTrustedDeviceId(req);
 
     // If new device OR phone not verified (safety net), require OTP
     // NOTE: For now, strict new device check for non-admins
-    if (process.env.NODE_ENV !== 'test' && !isKnownDevice && user.role !== 'admin') {
+    if (process.env.NODE_ENV !== 'test' && !knownDeviceId && user.role !== 'admin') {
       const otpCode = generateOTP();
       const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
@@ -211,30 +291,41 @@ const login = async (req, res) => {
       };
       await user.save();
 
-      // Send OTP via Email
-      await emailService.sendOTP(email, otpCode);
-      logger.info(`2FA OTP sent to ${email}`);
+      // Send the OTP after responding so SMTP/network delays do not block login.
+      void emailService.sendOTP(email, otpCode)
+        .then((emailSent) => {
+          if (emailSent) {
+            logger.info(`2FA OTP sent to ${email}`);
+            return;
+          }
+
+          logger.warn(`2FA OTP delivery did not complete for ${email}`);
+        })
+        .catch((emailError) => {
+          logger.error(`2FA OTP background send failed for ${email}:`, emailError);
+        });
 
       return res.status(200).json({
         require2FA: true,
-        message: 'New device detected. Please verify OTP sent to your phone/email.'
+        message: 'New device detected. Enter the OTP when it arrives in your email.'
       });
     }
 
-    // Update login history for known device
-    if (!user.loginHistory) user.loginHistory = [];
-    // Update last login if exists, or push generic logic? 
-    // Usually we just track unique devices. 
-    // Here we just update the timestamp if found, or push if verifyOTP successful (which happens later).
-    // Wait, if we are here, it IS a known device. So we update timestamp.
-    const deviceIndex = user.loginHistory.findIndex(d => d.deviceFingerprint === fingerprint);
-    if (deviceIndex >= 0) {
-      user.loginHistory[deviceIndex].lastLogin = new Date();
-      user.loginHistory[deviceIndex].ip = req.ip || req.connection.remoteAddress;
-      await user.save();
+    let trustedDeviceId = existingTrustedDeviceId;
+    if (!trustedDeviceId) {
+      trustedDeviceId = createTrustedDeviceId();
     }
 
-    sendTokenResponse(user, 200, res);
+    upsertTrustedDevice(user, req, trustedDeviceId);
+
+    // Migrate old IP-based fingerprints to the stable trusted-device cookie.
+    if (!existingTrustedDeviceId && knownDeviceId && knownDeviceId !== trustedDeviceId) {
+      user.loginHistory = user.loginHistory.filter((device) => device.deviceFingerprint !== knownDeviceId);
+    }
+
+    await user.save();
+
+    sendTokenResponse(user, 200, res, { trustedDeviceId });
   } catch (error) {
     logger.error('Login error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -446,23 +537,16 @@ const verifyOTP = async (req, res) => {
     if (purpose === 'PHONE_VERIFY') {
       user.phoneVerified = true;
       user.emailVerified = true; // Assumption: if this is registration OTP, we might mark both or just phone. Prompt says "Email: Verified (link/code), Phone: OTP".
+      const trustedDeviceId = upsertTrustedDevice(user, req, readTrustedDeviceId(req) || createTrustedDeviceId());
       await user.save();
       // Auto-login or ask to login? Prompt says "verification before access".
-      return sendTokenResponse(user, 200, res);
+      return sendTokenResponse(user, 200, res, { trustedDeviceId });
     }
 
     if (purpose === 'LOGIN_2FA') {
-      // Add to known devices
-      const fingerprint = generateFingerprint(req);
-      if (!user.loginHistory) user.loginHistory = [];
-      user.loginHistory.push({
-        ip: req.ip || req.connection.remoteAddress,
-        deviceFingerprint: fingerprint,
-        lastLogin: new Date(),
-        isTrusted: true
-      });
+      const trustedDeviceId = upsertTrustedDevice(user, req, readTrustedDeviceId(req) || createTrustedDeviceId());
       await user.save();
-      return sendTokenResponse(user, 200, res);
+      return sendTokenResponse(user, 200, res, { trustedDeviceId });
     }
 
     // For PASSWORD_RESET, we generate a temp token to allow reset
