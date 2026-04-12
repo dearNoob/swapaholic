@@ -52,36 +52,50 @@ const uploadToCloudinary = async (file, options = {}) => {
   const { cloudName, apiKey, apiSecret } = getCloudinaryConfig();
 
   if (!cloudName || !apiKey || !apiSecret) {
+    logger.error('Cloudinary configuration missing during attempt to upload');
     throw new Error('Cloudinary storage is enabled but CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, or CLOUDINARY_API_SECRET is missing');
   }
 
   const folder = sanitizeFolder(options.folder);
   const publicId = path.basename(generateFilename(file.originalname), path.extname(file.originalname || ''));
   const resourceType = options.resourceType || 'auto';
-  const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
-  const formBody = new URLSearchParams({
-    file: toDataUri(file),
-    folder: `swapaholic/${folder}`,
-    public_id: publicId,
-    use_filename: 'false',
-    unique_filename: 'false',
-    overwrite: 'false'
-  });
+  
+  logger.info(`Uploading ${file.originalname} to Cloudinary folder: swapaholic/${folder} (${resourceType})`);
 
-  const response = await axios.post(endpoint, formBody, {
-    auth: {
-      username: apiKey,
-      password: apiSecret
-    },
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    maxBodyLength: Infinity,
-    maxContentLength: Infinity,
-    timeout: 60000
-  });
+  try {
+    const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
+    const formBody = new URLSearchParams({
+      file: toDataUri(file),
+      folder: `swapaholic/${folder}`,
+      public_id: publicId,
+      use_filename: 'false',
+      unique_filename: 'false',
+      overwrite: 'false'
+    });
 
-  return response.data.secure_url || response.data.url;
+    const response = await axios.post(endpoint, formBody, {
+      auth: {
+        username: apiKey,
+        password: apiSecret
+      },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      timeout: 60000
+    });
+
+    logger.info(`Cloudinary upload successful for ${file.originalname}: ${response.data.secure_url || response.data.url}`);
+    return response.data.secure_url || response.data.url;
+  } catch (error) {
+    const errorMsg = error.response?.data?.error?.message || error.message;
+    logger.error(`Cloudinary upload failed for ${file.originalname}: ${errorMsg}`, {
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    throw new Error(`Cloudinary upload failed: ${errorMsg}`);
+  }
 };
 
 const uploadSingleFile = async (file, options = {}) => {

@@ -47,12 +47,21 @@ export const resolvePublicAssetUrl = (value?: string | null) => {
         return value;
     }
 
-    if (value.startsWith('/uploads/')) {
-        return resolveBackendPath(value);
+    // Normalize path (fix backslashes if any)
+    const normalizedPath = value.replace(/\\/g, '/');
+
+    if (normalizedPath.startsWith('/uploads/')) {
+        return resolveBackendPath(normalizedPath);
     }
 
-    if (value.startsWith('uploads/')) {
-        return resolveBackendPath(`/${value}`);
+    if (normalizedPath.startsWith('uploads/')) {
+        return resolveBackendPath(`/${normalizedPath}`);
+    }
+
+    // Handle nested uploads or other relative paths
+    if (normalizedPath.includes('uploads/')) {
+        const uploadIndex = normalizedPath.indexOf('uploads/');
+        return resolveBackendPath(`/${normalizedPath.substring(uploadIndex)}`);
     }
 
     return value;

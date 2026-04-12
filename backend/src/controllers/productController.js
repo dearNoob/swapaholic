@@ -522,6 +522,201 @@ const getProducts = async (req, res) => {
     } else if (sortBy === 'price_desc' || sortBy === 'price-high') {
       sortStage.basePrice = -1;
     } else if (sortBy === 'newest') {
+} else {
+        sortStage.distance = 1; // Default: sort by distance for geospatial
+      }
+      pipeline.push({ $sort: sortStage });
+
+      // Pagination
+      pipeline.push({ $skip: skip });
+      pipeline.push({ $limit: limitNum });
+
+      // Lookup seller info
+      pipeline.push({
+        $lookup: {
+          from: 'users',
+          localField: 'sellerId',
+          foreignField: '_id',
+          as: 'seller'
+        }
+      });
+      pipeline.push({ $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } });
+      pipeline.push({
+        $addFields: {
+          'sellerId': {
+            _id: '$seller._id',
+            firstName: '$seller.firstName',
+            lastName: '$seller.lastName',
+            ratingAverage: '$seller.ratingAverage'
+          }
+        }
+      });
+      pipeline.push({ $project: { seller: 0 } });
+
+      const products = await Product.aggregate(pipeline);
+
+      // Count: Use same pipeline but without pagination
+      const countPipeline = [];
+      countPipeline.push({
+        $geoNear: {
+          near: { type: 'Point', coordinates: [longitude, latitude] },
+          distanceField: 'distance',
+          maxDistance: radiusKm * 1000,
+          spherical: true,
+          query: { status }
+        }
+      });
+      if (Object.keys(matchStage).length > 0) {
+        countPipeline.push({ $match: matchStage });
+      }
+      countPipeline.push({ $count: 'total' });
+      const countResult = await Product.aggregate(countPipeline);
+      const total = countResult[0]?.total || 0;
+      // Map _id to id for frontend compatibility
+      const mappedProducts = products.map(p => ({
+        ...p,
+        id: p._id,
+        price: p.basePrice || 0,
+        currentBid: p.highestBidAmount || p.basePrice || 0,
+        auctionEndTime: p.bidEndDate,
+        images: p.images || [],
+        bidCount: p.bidCount || 0,
+        seller: p.sellerId // Already unwound and projected above
+      }));
+
+      return res.json({
+        success: true,
+        data: {
+          data: mappedProducts,
+          total,
+          pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
+          filters: { category, condition, minPrice, maxPrice, search, sortBy }
+        }
+      });
+    }
+
+    // Case 2: Text search only (use $match with $text as first stage)
+    if (search && !lat && !lng && !radius) {
+      const pipeline = [];
+
+      // $text search MUST be in first $match
+      const firstMatch = { status, $text: { $search: search } };
+      pipeline.push({ $match: firstMatch });
+      pipeline.push({ $addFields: { score: { $meta: 'textScore' } } });
+
+      // Then apply other filters
+      const secondMatch = {};
+      if (category) secondMatch.category = category;
+      if (condition) secondMatch.condition = condition;
+      if (minPrice || maxPrice) {
+        secondMatch.basePrice = {};
+        if (minPrice) secondMatch.basePrice.$gte = parseFloat(minPrice);
+        if (maxPrice) secondMatch.basePrice.$lte = parseFloat(maxPrice);
+      }
+
+      if (Object.keys(secondMatch).length > 0) {
+        pipeline.push({ $match: secondMatch });
+      }
+
+      // Sort by relevance first
+      const sortStage = { score: -1 };
+      if (sortBy === 'price_asc' || sortBy === 'price-low') {
+        sortStage.basePrice = 1;
+      } else if (sortBy === 'price_desc' || sortBy === 'price-high') {
+        sortStage.basePrice = -1;
+      } else if (sortBy === 'newest') {
+        sortStage.createdAt = -1;
+      } else if (sortBy === 'oldest') {
+        sortStage.createdAt = 1;
+      } else if (sortBy === 'ending-soon') {
+        sortStage.bidEndDate = 1;
+      } else if (sortBy === 'most-bids') {
+        sortStage.highestBidAmount = -1;
+      }
+      pipeline.push({ $sort: sortStage });
+
+      // Pagination
+      pipeline.push({ $skip: skip });
+      pipeline.push({ $limit: limitNum });
+
+      // Lookup seller info
+      pipeline.push({
+        $lookup: {
+          from: 'users',
+          localField: 'sellerId',
+          foreignField: '_id',
+          as: 'seller'
+        }
+      });
+      pipeline.push({ $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } });
+      pipeline.push({
+        $addFields: {
+          'sellerId': {
+            _id: '$seller._id',
+            firstName: '$seller.firstName',
+            lastName: '$seller.lastName',
+            ratingAverage: '$seller.ratingAverage'
+          }
+        }
+      });
+      pipeline.push({ $project: { seller: 0 } });
+
+      const products = await Product.aggregate(pipeline);
+
+      // Count with same text search
+      const countPipeline = [];
+      countPipeline.push({ $match: firstMatch });
+      if (Object.keys(secondMatch).length > 0) {
+        countPipeline.push({ $match: secondMatch });
+      }
+      countPipeline.push({ $count: 'total' });
+      const countResult = await Product.aggregate(countPipeline);
+      const total = countResult[0]?.total || 0;
+
+      // Map _id to id for frontend compatibility
+      const mappedProducts = products.map(p => ({
+        ...p,
+        id: p._id,
+        price: p.basePrice || 0,
+        currentBid: p.highestBidAmount || p.basePrice || 0,
+        auctionEndTime: p.bidEndDate,
+        images: p.images || [],
+        bidCount: p.bidCount || 0,
+        seller: p.sellerId
+      }));
+
+      return res.json({
+        success: true,
+        data: {
+          data: mappedProducts,
+          total,
+          pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
+          filters: { category, condition, minPrice, maxPrice, search, sortBy }
+        }
+      });
+    }
+
+    // Case 3: No text search and no geospatial (simple aggregation)
+    const pipeline = [];
+
+    const matchStage = { status };
+    if (category) matchStage.category = category;
+    if (condition) matchStage.condition = condition;
+    if (minPrice || maxPrice) {
+      matchStage.basePrice = {};
+      if (minPrice) matchStage.basePrice.$gte = parseFloat(minPrice);
+      if (maxPrice) matchStage.basePrice.$lte = parseFloat(maxPrice);
+    }
+
+    pipeline.push({ $match: matchStage });
+
+    // Sort
+    const sortStage = {};
+    if (sortBy === 'price_asc' || sortBy === 'price-low') {
+      sortStage.basePrice = 1;
+    } else if (sortBy === 'price_desc' || sortBy === 'price-high') {
+      sortStage.basePrice = -1;
+    } else if (sortBy === 'newest') {
       sortStage.createdAt = -1;
     } else if (sortBy === 'oldest') {
       sortStage.createdAt = 1;
@@ -532,6 +727,16 @@ const getProducts = async (req, res) => {
     } else {
       sortStage.createdAt = -1;
     }
+    // Filter by status (default to active and bidden if not specified)
+    let statusFilter;
+    if (status && status !== 'all') {
+      statusFilter = status;
+    } else {
+      // Show both active and products with bids by default
+      statusFilter = { $in: ['active', 'bidden'] };
+    }
+    matchStage.status = statusFilter;
+
     pipeline.push({ $sort: sortStage });
 
     // Pagination
@@ -688,31 +893,55 @@ const updateProduct = async (req, res) => {
 
     updates.updatedAt = new Date();
 
-    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updates, { new: true });
-    res.json(updatedProduct);
+    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updates, { 
+      new: true,
+      runValidators: true // Ensure validation runs on update too
+    });
+
+    res.json({
+      success: true,
+      data: updatedProduct
+    });
   } catch (error) {
     logger.error('Update product error:', error);
+    
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Update validation failed',
+        errors: Object.values(error.errors).map(err => err.message)
+      });
+    }
+
     res.status(500).json({ message: 'Server error' });
   }
 };
 
+
 // Delete product (seller only)
 const deleteProduct = async (req, res) => {
   try {
+    logger.info(`Attempting to delete product ${req.params.id} by user ${req.user.id}`);
     const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ message: 'Product not found' });
+    if (!product) {
+      logger.warn(`Product ${req.params.id} not found for deletion`);
+      return res.status(404).json({ message: 'Product not found' });
+    }
 
     if (product.sellerId.toString() !== req.user.id && req.user.role !== 'admin') {
+      logger.warn(`Unauthorized delete attempt on product ${req.params.id} by user ${req.user.id}`);
       return res.status(403).json({ message: 'Access denied' });
     }
 
     await Product.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Product deleted' });
+    logger.info(`Successfully deleted product ${req.params.id}`);
+    res.json({ success: true, message: 'Product deleted' });
   } catch (error) {
     logger.error('Delete product error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Search products by geolocation
 const searchNearby = async (req, res) => {
@@ -932,22 +1161,6 @@ const uploadImages = async (req, res) => {
       folder: 'products',
       resourceType: 'image'
     });
-
-    product.images = [...(product.images || []), ...newImageUrls];
-    await product.save();
-
-    res.json({ success: true, images: product.images });
-  } catch (error) {
-    logger.error('Upload product images error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// Get products by a specific seller
-const getSellerProducts = async (req, res) => {
-  try {
-    const { sellerId } = req.params;
-    const { page = 1, limit = 10 } = req.query;
     
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);

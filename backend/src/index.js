@@ -122,31 +122,6 @@ app.use(cookieParser());
 app.use(compression({
   level: 6,
   threshold: 1024,
-  filter: (req, res) => {
-    if (req.headers['x-no-compression']) return false;
-    return compression.filter(req, res);
-  },
-}));
-
-// Security middleware
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
-}));
-
-// Request Logger
-app.use((req, res, next) => {
-  logger.info(`[${req.method}] ${req.originalUrl}`);
-  next();
-});
 
 // Rate limiting for all routes
 const limiter = rateLimit({
@@ -171,7 +146,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/uploads', (req, res, next) => {
+  logger.info(`Static file request: ${req.url}`);
+  next();
+}, express.static(path.join(__dirname, '..', 'uploads')));
 
 // Input sanitization
 app.use(sanitizeInput);
