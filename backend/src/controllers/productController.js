@@ -597,6 +597,10 @@ const getProducts = async (req, res) => {
 // Get product by ID with view tracking
 const getProductById = async (req, res) => {
   try {
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid product ID format' });
+    }
     const product = await Product.findById(req.params.id)
       .populate('sellerId', 'firstName lastName ratingAverage createdAt totalTransactions profilePicture');
 

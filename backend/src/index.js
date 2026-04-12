@@ -9,6 +9,8 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const backendPackage = require('../package.json');
 require('dotenv').config();
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first'); // Force IPv4 to fix ENETUNREACH on Render
 const { validateEnvironment } = require('./config/validateEnv');
 const logger = require('./utils/logger');
 const { connectDB } = require('./config/mongodb');
@@ -88,7 +90,14 @@ const isAllowedOrigin = (origin) => {
     return true;
   }
 
-  return allowedOrigins.has(normalizeOrigin(origin));
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (allowedOrigins.has(normalizedOrigin)) return true;
+  
+  if (normalizedOrigin && normalizedOrigin.endsWith('.vercel.app')) {
+    return true;
+  }
+
+  return false;
 };
 
 // CORS configuration - moved to top to ensure headers are set correctly

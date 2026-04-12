@@ -61,9 +61,9 @@ export default function RecentlyViewed() {
                 </div>
 
                 <div className="flex overflow-x-auto gap-6 pb-4 scrollbar-hide snap-x">
-                    {recentlyViewed.map((product, index) => (
-                        (() => {
-                            const productId = product.id || product._id || `recent-${index}`;
+                    {recentlyViewed.map((product, index) => {
+                            const productId = product.id || product._id;
+                            if (!productId) return null;
                             return (
                         <Link 
                             key={productId} 
@@ -97,8 +97,8 @@ export default function RecentlyViewed() {
                             </div>
                         </Link>
                             );
-                        })()
-                    ))}
+                        }
+                    )}
                 </div>
             </div>
         </section>
