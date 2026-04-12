@@ -550,8 +550,9 @@ const verifyUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    user.isVerified = true;
-    user.verifiedAt = new Date();
+    user.isVerifiedUser = true;
+    user.role = 'seller';
+    user.updatedAt = new Date();
     await user.save();
 
     logger.info(`User verified: ${userId}`);
