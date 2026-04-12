@@ -100,7 +100,7 @@ const isAllowedOrigin = (origin) => {
   return false;
 };
 
-// CORS configuration - moved to top to ensure headers are set correctly
+// 1. CORS Middleware
 const corsOptions = {
   origin: (origin, callback) => {
     if (isAllowedOrigin(origin)) {
@@ -116,17 +116,35 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
+
+// 2. Helmet Middleware (Relaxed CSP for Cloudinary/Local images)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.stripe.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "blob:", "*"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      connectSrc: ["'self'", "https://api.cloudinary.com", "*"],
+      frameSrc: ["'self'", "https://checkout.stripe.com"],
+    },
+  },
+}));
+
 app.use(cookieParser());
 
-// Compression middleware
+// 3. Compression middleware
 app.use(compression({
   level: 6,
   threshold: 1024,
+}));
 
-// Rate limiting for all routes
+// 4. Rate limiting for all routes
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000, // Increased for development to prevent 429 errors from Next.js fast refresh
+  max: 1000, 
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
