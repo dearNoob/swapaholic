@@ -39,7 +39,6 @@ export const Register = () => {
     const [showOTP, setShowOTP] = React.useState(false);
     const [otpCode, setOtpCode] = React.useState('');
     const [registeredEmail, setRegisteredEmail] = React.useState('');
-    const [savedFormData, setSavedFormData] = React.useState<FormData | null>(null);
     const [resendCooldown, setResendCooldown] = React.useState(0);
 
     React.useEffect(() => {
@@ -101,7 +100,6 @@ export const Register = () => {
             if ('requireVerification' in result && result.requireVerification) {
                 // Save state for OTP verification and resend
                 setRegisteredEmail(data.email);
-                setSavedFormData(data);
                 // Show OTP input UI
                 setShowOTP(true);
                 return;
@@ -182,17 +180,19 @@ export const Register = () => {
                                 type="button" 
                                 variant="outline" 
                                 fullWidth 
-                                disabled={isLoading || resendCooldown > 0 || !savedFormData}
+                                disabled={isLoading || resendCooldown > 0 || !registeredEmail}
                                 onClick={async () => {
-                                    if (!savedFormData) return;
+                                    if (!registeredEmail) return;
                                     setIsLoadingState(true);
                                     try {
-                                        const { confirmPassword, ...authData } = savedFormData;
-                                        await authApi.register(authData);
+                                        await authApi.resendOTP({
+                                            email: registeredEmail,
+                                            purpose: 'PHONE_VERIFY'
+                                        });
                                         toast.success('Verification code resent successfully');
                                         setResendCooldown(60);
                                     } catch (err: any) {
-                                        toast.error(err.response?.data?.message || 'Failed to resend code');
+                                        toast.error(err.message || 'Failed to resend code');
                                     } finally {
                                         setIsLoadingState(false);
                                     }

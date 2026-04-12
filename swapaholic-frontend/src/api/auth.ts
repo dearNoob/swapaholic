@@ -14,7 +14,7 @@ type RegisterPayload = {
 type RegisterSuccessResponse = { user: User; accessToken: string };
 type RegisterVerificationResponse = { requireVerification: boolean; message: string; email: string };
 type LoginSuccessResponse = { accessToken: string; user: User };
-type LoginRequiresTwoFactorResponse = { require2FA: boolean; message: string };
+type LoginRequiresTwoFactorResponse = { require2FA: boolean; message: string; otpDispatched?: boolean };
 type LogisticsRegistrationResponse = { message: string };
 type VerifyOtpResponse = { message: string; accessToken?: string; user?: User; resetToken?: string };
 
@@ -40,9 +40,15 @@ export const authApi = {
             return {
                 require2FA: true,
                 message: response.data.message ?? 'Two-factor authentication required.',
+                otpDispatched: response.data.otpDispatched,
             };
         }
         return response.data.data;
+    },
+
+    async resendOTP(data: { email: string; purpose: 'PHONE_VERIFY' | 'LOGIN_2FA' | 'PASSWORD_RESET' }): Promise<{ message: string }> {
+        const response = await apiClient.post<{ message: string }>('/auth/resend-otp', data);
+        return response.data;
     },
 
     // Admin Login (separate portal for admin users)

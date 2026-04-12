@@ -27,6 +27,8 @@ interface LoginResponse {
     accessToken: string;
     user: User;
     require2FA?: boolean;
+    otpDispatched?: boolean;
+    message?: string;
     tempToken?: string;
 }
 
@@ -57,6 +59,17 @@ export const Login = () => {
 
     const [showTwoFactor, setShowTwoFactor] = React.useState(false);
     const [twoFactorToken, setTwoFactorToken] = React.useState('');
+    const [pendingOtpEmail, setPendingOtpEmail] = React.useState('');
+    const [resendCooldown, setResendCooldown] = React.useState(0);
+
+    React.useEffect(() => {
+        if (resendCooldown <= 0) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => setResendCooldown((value) => value - 1), 1000);
+        return () => window.clearTimeout(timer);
+    }, [resendCooldown]);
 
     const { register, handleSubmit, formState: { errors }, setValue } = useForm<FormData>({
         resolver: yupResolver(schema),
@@ -69,7 +82,7 @@ export const Login = () => {
             if (showTwoFactor) {
                 // Validate 2FA (New Device OTP)
                 const response = await authApi.verifyOTP({
-                    email: data.email,
+                    email: pendingOtpEmail || data.email,
                     otp: twoFactorToken,
                     purpose: 'LOGIN_2FA'
                 });
@@ -88,8 +101,9 @@ export const Login = () => {
                 // Check if 2FA is required (backend should return a specific structure or code)
                 // For this implementation, let's assume if response has 'requires2FA' property
                 if (response.require2FA) {
+                    setPendingOtpEmail(data.email);
                     setShowTwoFactor(true);
-                    toast.info('Please enter your 2FA code');
+                    toast.info(response.message || 'Please enter your 2FA code');
                     setIsLoadingState(false);
                     dispatch(setLoading(false));
                     return;
@@ -232,6 +246,36 @@ export const Login = () => {
                                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 text-center">
                                     Enter the 6-digit code sent to your email.
                                 </p>
+                                <div className="mt-4">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        fullWidth
+                                        disabled={isLoading || resendCooldown > 0 || !pendingOtpEmail}
+                                        onClick={async () => {
+                                            if (!pendingOtpEmail) return;
+
+                                            setIsLoadingState(true);
+                                            dispatch(setLoading(true));
+                                            try {
+                                                const response = await authApi.resendOTP({
+                                                    email: pendingOtpEmail,
+                                                    purpose: 'LOGIN_2FA'
+                                                });
+                                                toast.success(response.message || 'A new OTP has been sent.');
+                                                setResendCooldown(60);
+                                            } catch (error) {
+                                                const message = getErrorMessage(error, 'Failed to resend OTP.');
+                                                toast.error(message);
+                                            } finally {
+                                                setIsLoadingState(false);
+                                                dispatch(setLoading(false));
+                                            }
+                                        }}
+                                    >
+                                        {resendCooldown > 0 ? `Resend Code in ${resendCooldown}s` : 'Resend Code'}
+                                    </Button>
+                                </div>
                             </div>
 
                         )}

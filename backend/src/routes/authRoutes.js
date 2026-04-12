@@ -61,6 +61,14 @@ router.post('/verify-email', authController.verifyEmail);
 
 // Verify OTP (Unified endpoint for Registration Phone verify, Login 2FA, etc)
 router.post('/verify-otp', authController.verifyOTP);
+router.post(
+  '/resend-otp',
+  [
+    body('email').isEmail().withMessage('Valid email required'),
+    body('purpose').isIn(['PHONE_VERIFY', 'LOGIN_2FA', 'PASSWORD_RESET']).withMessage('Valid OTP purpose required'),
+  ],
+  authController.resendOTP
+);
 
 // Reset Password with OTP Token
 router.post('/reset-password-otp', authController.resetPasswordWithOTP);

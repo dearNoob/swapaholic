@@ -48,6 +48,21 @@ describe('Auth Routes', () => {
     expect(res.body.data.user.email).toBe(testEmail);
   });
 
+  test('POST /api/auth/resend-otp -> resends a registration verification code', async () => {
+    const res = await request(app)
+      .post('/api/auth/resend-otp')
+      .send({ email: testEmail, purpose: 'PHONE_VERIFY' })
+      .expect(200);
+
+    expect(res.body).toHaveProperty('success', true);
+    expect(res.body).toHaveProperty('message');
+
+    const user = await User.findOne({ email: testEmail });
+    expect(user).toBeTruthy();
+    expect(user.otp).toBeTruthy();
+    expect(user.otp.purpose).toBe('PHONE_VERIFY');
+  });
+
   test('POST /api/auth/login -> fails with wrong password', async () => {
     const res = await request(app)
       .post('/api/auth/login')

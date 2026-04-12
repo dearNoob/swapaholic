@@ -69,6 +69,12 @@ const setTrustedDeviceCookie = (res, trustedDeviceId) => {
   res.cookie(TRUSTED_DEVICE_COOKIE, trustedDeviceId, getTrustedDeviceCookieOptions());
 };
 
+const createOtpPayload = (purpose) => ({
+  code: generateOTP(),
+  expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  purpose
+});
+
 const upsertTrustedDevice = (user, req, trustedDeviceId) => {
   if (!user.loginHistory) {
     user.loginHistory = [];
@@ -281,33 +287,22 @@ const login = async (req, res) => {
     // If new device OR phone not verified (safety net), require OTP
     // NOTE: For now, strict new device check for non-admins
     if (process.env.NODE_ENV !== 'test' && !knownDeviceId && user.role !== 'admin') {
-      const otpCode = generateOTP();
-      const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
-
-      user.otp = {
-        code: otpCode,
-        expiresAt: otpExpires,
-        purpose: 'LOGIN_2FA'
-      };
+      user.otp = createOtpPayload('LOGIN_2FA');
       await user.save();
 
-      // Send the OTP after responding so SMTP/network delays do not block login.
-      void emailService.sendOTP(email, otpCode)
-        .then((emailSent) => {
-          if (emailSent) {
-            logger.info(`2FA OTP sent to ${email}`);
-            return;
-          }
-
-          logger.warn(`2FA OTP delivery did not complete for ${email}`);
-        })
-        .catch((emailError) => {
-          logger.error(`2FA OTP background send failed for ${email}:`, emailError);
-        });
+      const emailSent = await emailService.sendOTP(email, user.otp.code);
+      if (emailSent) {
+        logger.info(`2FA OTP sent to ${email}`);
+      } else {
+        logger.warn(`2FA OTP delivery did not complete for ${email}`);
+      }
 
       return res.status(200).json({
         require2FA: true,
-        message: 'New device detected. Enter the OTP when it arrives in your email.'
+        otpDispatched: emailSent,
+        message: emailSent
+          ? 'New device detected. Enter the OTP sent to your email.'
+          : 'New device detected, but the OTP email may not have arrived. Use Resend Code to request a new OTP.'
       });
     }
 
@@ -499,6 +494,51 @@ const generate2FA = async (req, res) => {
   } catch (error) {
     logger.error('Generate 2FA error:', error);
     res.status(500).json({ message: 'Server error generating 2FA secret' });
+  }
+};
+
+const resendOTP = async (req, res) => {
+  const { email, purpose } = req.body;
+
+  try {
+    if (!['PHONE_VERIFY', 'LOGIN_2FA', 'PASSWORD_RESET'].includes(purpose)) {
+      return res.status(400).json({ message: 'Invalid OTP purpose' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (purpose === 'PHONE_VERIFY' && user.emailVerified && user.phoneVerified) {
+      return res.status(400).json({ message: 'Account is already verified' });
+    }
+
+    if (purpose !== 'PHONE_VERIFY' && (!user.otp || user.otp.purpose !== purpose)) {
+      return res.status(400).json({
+        message: purpose === 'LOGIN_2FA'
+          ? 'Please start the login process again before requesting a new code.'
+          : 'Please restart the password reset process before requesting a new code.'
+      });
+    }
+
+    user.otp = createOtpPayload(purpose);
+    await user.save();
+
+    const emailSent = await emailService.sendOTP(email, user.otp.code);
+    if (!emailSent) {
+      logger.warn(`Resend OTP delivery did not complete for ${email} (${purpose})`);
+      return res.status(503).json({ message: 'Failed to send OTP email. Please try again.' });
+    }
+
+    logger.info(`OTP resent to ${email} for purpose ${purpose}`);
+    return res.json({
+      success: true,
+      message: 'A new OTP has been sent to your email.'
+    });
+  } catch (error) {
+    logger.error('Resend OTP error:', error);
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -758,5 +798,6 @@ module.exports = {
   disable2FA,
   updateProfile,
   verifyOTP,
-  resetPasswordWithOTP
+  resetPasswordWithOTP,
+  resendOTP
 };

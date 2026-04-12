@@ -5,16 +5,32 @@ import {
   FaGavel, FaShieldAlt, FaTruck, FaStar, FaUsers, 
   FaCheckCircle, FaArrowRight, FaSearch, FaCamera, FaClock 
 } from 'react-icons/fa';
-import { productsApi, type Product } from '../api/products';
+import { type Product } from '../api/products';
 import AuthRedirect from '../components/auth/AuthRedirect';
 import RecentlyViewed from '../components/RecentlyViewed';
 import HeroActions from '../components/home/HeroActions';
+import { resolveApiPath, resolvePublicAssetUrl } from '../lib/publicUrls';
 
 export const dynamic = 'force-dynamic';
 
 async function getFeaturedProductsForHome(): Promise<Product[]> {
   try {
-    return await productsApi.getFeaturedProducts(6);
+    const response = await fetch(resolveApiPath('/products/featured?limit=6'), {
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch featured products: ${response.status}`);
+    }
+
+    const products = await response.json() as Product[];
+
+    return products.map((product) => ({
+      ...product,
+      images: Array.isArray(product.images)
+        ? product.images.map((image) => resolvePublicAssetUrl(image))
+        : [],
+    }));
   } catch (error) {
     console.error('Error fetching featured products on server:', error);
     return [];
