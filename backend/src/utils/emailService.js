@@ -1,7 +1,10 @@
-const nodemailer = require('nodemailer');
 const logger = require('./logger');
 
-const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS || 8000);
+const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS || 15000);
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+
+const SENDER_NAME = 'Swapaholic';
+const SENDER_EMAIL = process.env.SMTP_USER || 'earnasfast@gmail.com';
 
 const withTimeout = (promise, timeoutMs, label) => new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
@@ -19,23 +22,61 @@ const withTimeout = (promise, timeoutMs, label) => new Promise((resolve, reject)
         });
 });
 
-const transporter = process.env.NODE_ENV === 'test'
-    ? {
-        sendMail: async () => ({ messageId: 'test-message-id' })
+/**
+ * Send email via Brevo HTTP API (replaces Gmail SMTP which is blocked on Render free tier).
+ * @param {object} mailOptions - { from, to, subject, html }
+ * @param {string} label - Description for logging
+ * @returns {Promise<{messageId: string}>}
+ */
+const sendMailViaBrev = async (mailOptions, label) => {
+    if (process.env.NODE_ENV === 'test') {
+        return { messageId: 'test-message-id' };
     }
-    : nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
+
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+        throw new Error('BREVO_API_KEY environment variable is not set');
+    }
+
+    // Parse sender from mailOptions.from or use defaults
+    let senderName = SENDER_NAME;
+    let senderEmail = SENDER_EMAIL;
+    if (mailOptions.from) {
+        const fromMatch = mailOptions.from.match(/"([^"]+)"\s*<([^>]+)>/);
+        if (fromMatch) {
+            senderName = fromMatch[1];
+            senderEmail = fromMatch[2];
+        }
+    }
+
+    const payload = {
+        sender: { name: senderName, email: senderEmail },
+        to: [{ email: typeof mailOptions.to === 'string' ? mailOptions.to : mailOptions.to }],
+        subject: mailOptions.subject,
+        htmlContent: mailOptions.html,
+    };
+
+    const response = await fetch(BREVO_API_URL, {
+        method: 'POST',
+        headers: {
+            'accept': 'application/json',
+            'api-key': apiKey,
+            'content-type': 'application/json',
         },
-        connectionTimeout: 5000,
-        greetingTimeout: 5000,
-        socketTimeout: EMAIL_TIMEOUT_MS,
+        body: JSON.stringify(payload),
     });
 
+    if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Brevo API error (${response.status}): ${errorBody}`);
+    }
+
+    const result = await response.json();
+    return { messageId: result.messageId || `brevo-${Date.now()}` };
+};
+
 const sendMailWithTimeout = (mailOptions, label) =>
-    withTimeout(transporter.sendMail(mailOptions), EMAIL_TIMEOUT_MS, label);
+    withTimeout(sendMailViaBrev(mailOptions, label), EMAIL_TIMEOUT_MS, label);
 
 const sendOTP = async (email, otp) => {
     try {
