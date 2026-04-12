@@ -25,7 +25,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             transition-all duration-200 ease-in-out
             focus:outline-none focus:ring-2 focus:ring-offset-0
             disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed
-            text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 border
+            text-black dark:text-black bg-white dark:bg-white border
             placeholder:text-gray-500 dark:placeholder:text-gray-400
             ${icon ? 'pl-10' : ''}
             ${error

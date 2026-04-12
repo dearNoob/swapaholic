@@ -438,14 +438,14 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-white text-black py-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-5xl mx-auto">
                 <div className="md:flex md:items-center md:justify-between mb-8">
                     <div className="flex-1 min-w-0">
-                        <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl sm:truncate">
+                        <h2 className="text-3xl font-extrabold text-black sm:text-4xl sm:truncate">
                             {listingId ? 'Edit Listing' : 'Create New Listing'}
                         </h2>
-                        <p className="mt-1 text-lg text-gray-500">
+                        <p className="mt-1 text-lg text-black/80">
                             {listingId ? 'Update your product details below.' : 'Fill in the details below to list your item for sale.'}
                         </p>
                     </div>
@@ -470,9 +470,9 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                     placeholder="e.g., Vintage Sony Walkman Cassette Player"
                                     {...register('title')}
                                     error={errors.title?.message}
-                                    className="text-lg"
+                                    className="text-lg text-black"
                                 />
-                                <div className={`absolute top-0 right-0 text-xs mt-1 ${watchedTitle.length > 90 ? 'text-red-500 font-bold' : 'text-gray-400'
+                                <div className={`absolute top-0 right-0 text-xs mt-1 ${watchedTitle.length > 90 ? 'text-red-600 font-bold' : 'text-black/60'
                                     }`}>
                                     {watchedTitle.length}/100
                                 </div>
@@ -481,7 +481,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                             {/* Category & Condition Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-black mb-2">
                                         Category
                                     </label>
                                     <div className="grid grid-cols-2 gap-3">
@@ -495,7 +495,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                                     }`}
                                             >
                                                 <span className="text-xl">{cat.icon}</span>
-                                                <span className={`text-sm font-medium ${watchedCategory === cat.id ? 'text-indigo-700' : 'text-gray-700'}`}>
+                                                <span className={`text-sm font-medium ${watchedCategory === cat.id ? 'text-indigo-700' : 'text-black'}`}>
                                                     {cat.name}
                                                 </span>
                                                 {watchedCategory === cat.id && <FaCheckCircle className="ml-auto text-indigo-500" />}
@@ -511,7 +511,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-black mb-2">
                                         Condition
                                     </label>
                                     <div className="space-y-3">
@@ -525,12 +525,12 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                                     }`}
                                             >
                                                 <div className="flex items-center justify-between mb-1">
-                                                    <span className={`font-medium ${watchedCondition === cond.id ? 'text-indigo-700' : 'text-gray-900'}`}>
+                                                    <span className={`font-medium ${watchedCondition === cond.id ? 'text-indigo-700' : 'text-black'}`}>
                                                         {cond.name}
                                                     </span>
                                                     {watchedCondition === cond.id && <FaCheckCircle className="text-indigo-500" />}
                                                 </div>
-                                                <p className="text-xs text-gray-500">{cond.description}</p>
+                                                <p className="text-xs text-black/60">{cond.description}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -543,134 +543,134 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                 </div>
                             </div>
 
-                               {/* Image Upload Section */}
-                    <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100 transition-all hover:shadow-2xl">
-                        <div className="px-6 py-4 bg-linear-to-r from-purple-600 to-pink-600 border-b border-gray-200 flex items-center justify-between">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                <FaImage className="text-purple-200" />
-                                Product Images
-                            </h3>
-                            <span className="text-purple-100 text-sm bg-white/20 px-3 py-1 rounded-full">Step 2 of 2</span>
-                        </div>
-
-                        <div className="p-6 sm:p-8">
-                            <div className="mb-4">
-                                <p className="text-sm text-gray-500 mb-2">
-                                    Quality Control: Upload at least 4 images covering different angles (Front, Back, Sides).
-                                </p>
-                                <div className="flex items-center gap-2 text-xs text-gray-400">
-                                    <span className="bg-gray-100 px-2 py-1 rounded">JPG, PNG, WEBP</span>
-                                    <span className="bg-gray-100 px-2 py-1 rounded">Max 10MB each</span>
+                            {/* Image Upload Section */}
+                            <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100 transition-all hover:shadow-2xl">
+                                <div className="px-6 py-4 bg-linear-to-r from-purple-600 to-pink-600 border-b border-gray-200 flex items-center justify-between">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                        <FaImage className="text-purple-200" />
+                                        Product Images
+                                    </h3>
+                                    <span className="text-purple-100 text-sm bg-white/20 px-3 py-1 rounded-full">Step 2 of 2</span>
                                 </div>
-                            </div>
 
-                            <div
-                                {...getRootProps()}
-                                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${isDragActive
-                                    ? 'border-indigo-500 bg-indigo-50 scale-[1.02]'
-                                    : (images.length + existingImages.length) >= 5
-                                        ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
-                                        : 'border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
-                                    }`}
-                            >
-                                <input {...getInputProps()} />
-                                <div className="flex flex-col items-center justify-center space-y-4">
-                                    <div className={`p-4 rounded-full ${isDragActive ? 'bg-indigo-100' : 'bg-gray-100'}`}>
-                                        <FaCloudUploadAlt className={`text-4xl ${isDragActive ? 'text-indigo-600' : 'text-gray-400'}`} />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-lg font-medium text-gray-900">
-                                            {isDragActive ? 'Drop images here' : 'Drag & drop images here'}
+                                <div className="p-6 sm:p-8">
+                                    <div className="mb-4">
+                                        <p className="text-sm text-black/70 mb-2">
+                                            Quality Control: Upload at least 4 images covering different angles (Front, Back, Sides).
                                         </p>
-                                        <p className="text-sm text-gray-500">
-                                            or click to browse from your computer
-                                        </p>
+                                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                                            <span className="bg-gray-100 px-2 py-1 rounded">JPG, PNG, WEBP</span>
+                                            <span className="bg-gray-100 px-2 py-1 rounded">Max 10MB each</span>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
 
-                            {/* Image Previews */}
-                            {(imagePreviews.length > 0 || existingImages.length > 0) && (
-                                <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                                    {/* Existing Images */}
-                                    {existingImages.map((img, index) => (
-                                        <div key={`existing-${index}`} className="group relative aspect-square rounded-xl overflow-hidden shadow-md border border-gray-200 bg-gray-100">
-                                            <img
-                                                src={img}
-                                                alt={`Existing ${index + 1}`}
-                                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                            />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        removeExistingImage(index);
-                                                    }}
-                                                    className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transform hover:scale-110 transition-all shadow-lg"
-                                                    title="Remove image"
-                                                >
-                                                    <FaTrash size={16} />
-                                                </button>
+                                    <div
+                                        {...getRootProps()}
+                                        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${isDragActive
+                                            ? 'border-indigo-500 bg-indigo-50 scale-[1.02]'
+                                            : (images.length + existingImages.length) >= 5
+                                                ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                                                : 'border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        <input {...getInputProps()} />
+                                        <div className="flex flex-col items-center justify-center space-y-4">
+                                            <div className={`p-4 rounded-full ${isDragActive ? 'bg-indigo-100' : 'bg-gray-100'}`}>
+                                                <FaCloudUploadAlt className={`text-4xl ${isDragActive ? 'text-indigo-600' : 'text-gray-400'}`} />
                                             </div>
-                                            {index === 0 && (
-                                                <div className="absolute top-2 left-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded-md shadow-sm">
-                                                    Cover
+                                            <div className="space-y-1">
+                                                <p className="text-lg font-medium text-black">
+                                                    {isDragActive ? 'Drop images here' : 'Drag & drop images here'}
+                                                </p>
+                                                <p className="text-sm text-black/60">
+                                                    or click to browse from your computer
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Image Previews */}
+                                    {(imagePreviews.length > 0 || existingImages.length > 0) && (
+                                        <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                                            {/* Existing Images */}
+                                            {existingImages.map((img, index) => (
+                                                <div key={`existing-${index}`} className="group relative aspect-square rounded-xl overflow-hidden shadow-md border border-gray-200 bg-gray-100">
+                                                    <img
+                                                        src={img}
+                                                        alt={`Existing ${index + 1}`}
+                                                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                removeExistingImage(index);
+                                                            }}
+                                                            className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transform hover:scale-110 transition-all shadow-lg"
+                                                            title="Remove image"
+                                                        >
+                                                            <FaTrash size={16} />
+                                                        </button>
+                                                    </div>
+                                                    {index === 0 && (
+                                                        <div className="absolute top-2 left-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded-md shadow-sm">
+                                                            Cover
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+
+                                            {/* New Images */}
+                                            {imagePreviews.map((preview, index) => (
+                                                <div key={`new-${index}`} className="group relative aspect-square rounded-xl overflow-hidden shadow-md border border-gray-200 bg-gray-100">
+                                                    <img
+                                                        src={preview}
+                                                        alt={`Preview ${index + 1}`}
+                                                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                removeImage(index);
+                                                            }}
+                                                            className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transform hover:scale-110 transition-all shadow-lg"
+                                                            title="Remove image"
+                                                        >
+                                                            <FaTrash size={16} />
+                                                        </button>
+                                                    </div>
+                                                    {index === 0 && existingImages.length === 0 && (
+                                                        <div className="absolute top-2 left-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded-md shadow-sm">
+                                                            Cover
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+
+                                            {(images.length + existingImages.length) < 5 && (
+                                                <div
+                                                    onClick={(e) => {
+                                                        const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+                                                        input?.click();
+                                                    }}
+                                                    className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-gray-50 transition-all"
+                                                >
+                                                    <FaPlus className="text-gray-400 mb-2" size={20} />
+                                                    <span className="text-xs text-black/70 font-medium">Add More</span>
                                                 </div>
                                             )}
-                                        </div>
-                                    ))}
-
-                                    {/* New Images */}
-                                    {imagePreviews.map((preview, index) => (
-                                        <div key={`new-${index}`} className="group relative aspect-square rounded-xl overflow-hidden shadow-md border border-gray-200 bg-gray-100">
-                                            <img
-                                                src={preview}
-                                                alt={`Preview ${index + 1}`}
-                                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                            />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        removeImage(index);
-                                                    }}
-                                                    className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transform hover:scale-110 transition-all shadow-lg"
-                                                    title="Remove image"
-                                                >
-                                                    <FaTrash size={16} />
-                                                </button>
-                                            </div>
-                                            {index === 0 && existingImages.length === 0 && (
-                                                <div className="absolute top-2 left-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded-md shadow-sm">
-                                                    Cover
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-
-                                    {(images.length + existingImages.length) < 5 && (
-                                        <div
-                                            onClick={(e) => {
-                                                const input = document.querySelector('input[type="file"]') as HTMLInputElement;
-                                                input?.click();
-                                            }}
-                                            className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-gray-50 transition-all"
-                                        >
-                                            <FaPlus className="text-gray-400 mb-2" size={20} />
-                                            <span className="text-xs text-gray-500 font-medium">Add More</span>
                                         </div>
                                     )}
                                 </div>
-                            )}
-                        </div>
-                    </div>
+                            </div>
 
                             {/* Description and AI Section */}
                             <div>
                                 <div className="flex justify-between items-center mb-2">
-                                    <label className="block text-sm font-medium text-gray-700">
+                                    <label className="block text-sm font-medium text-black">
                                         Description
                                     </label>
                                     <div className="flex items-center gap-2">
@@ -699,10 +699,10 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                         {...register('description')}
                                         rows={6}
                                         placeholder="Describe your item in detail. Include features, condition specifics, and any other relevant information."
-                                        className={`shadow-sm block w-full sm:text-sm border rounded-lg p-4 transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${errors.description ? 'border-red-300' : 'border-gray-300'
+                                        className={`shadow-sm block w-full sm:text-sm border rounded-lg p-4 transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black ${errors.description ? 'border-red-300' : 'border-gray-300'
                                             }`}
                                     />
-                                    <div className={`absolute bottom-3 right-3 text-xs ${watchedDescription.length > 1900 ? 'text-red-500 font-bold' : 'text-blue-500'
+                                    <div className={`absolute bottom-3 right-3 text-xs ${watchedDescription.length > 1900 ? 'text-red-600 font-bold' : 'text-black/60'
                                         }`}>
                                         {watchedDescription.length}/2000
                                     </div>
@@ -716,7 +716,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
 
                             {/* Location */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-black mb-2">
                                     Location
                                 </label>
                                 <div className="flex gap-2">
@@ -726,6 +726,8 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                             {...register('location')}
                                             error={errors.location?.message}
                                             icon={<FaMapMarkerAlt className="text-gray-400" />}
+                                            className="text-black"
+                                            style={{ color: 'black' }}
                                         />
                                     </div>
                                     <Button
@@ -752,17 +754,18 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                             <div className="pt-4 border-t border-gray-100">
                                 <div className="flex items-center gap-2 mb-4">
                                     <span className="text-lg">🔮</span>
-                                    <h4 className="text-sm font-semibold text-indigo-700 uppercase tracking-wide">AI Price Prediction</h4>
-                                    <span className="text-xs text-gray-400">(Fill these fields to get a smart price suggestion)</span>
+                                    <h4 className="text-sm font-semibold text-black uppercase tracking-wide">AI Price Prediction</h4>
+                                    <span className="text-xs text-black/60">(Fill these fields to get a smart price suggestion)</span>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                                     <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Device Category <span className="text-gray-400 text-xs">(Select the closest match for accurate prediction)</span>
+                                        <label className="block text-sm font-medium text-black mb-2">
+                                            Device Category <span className="text-black/50 text-xs">(Select the closest match for accurate prediction)</span>
                                         </label>
                                         <select
                                             {...register('predictionCategory')}
-                                            className={`text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.predictionCategory ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            className={`text-black dark:text-black focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-white ${errors.predictionCategory ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            style={{ color: 'black' }}
                                         >
                                             <option value="">Select a category</option>
                                             <option value="Smartphone">Smartphone</option>
@@ -775,39 +778,41 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Brand Name <span className="text-gray-400 text-xs">(e.g., Samsung, Apple, HP)</span>
+                                        <label className="block text-sm font-medium text-black mb-2">
+                                            Brand Name <span className="text-black/50 text-xs">(e.g., Samsung, Apple, HP)</span>
                                         </label>
                                         <input
                                             type="text"
                                             {...register('brand')}
-                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.brand ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            className={`text-black dark:text-black focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-white ${errors.brand ? 'border-red-300 ring-1 ring-red-300' : ''}`}
                                             placeholder="e.g., Samsung"
+                                            style={{ color: 'black' }}  
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Device / Model <span className="text-gray-400 text-xs">(e.g., Galaxy S21, iPhone 13)</span>
+                                        <label className="block text-sm font-medium text-black mb-2">
+                                            Device / Model <span className="text-black/50 text-xs">(e.g., Galaxy S21, iPhone 13)</span>
                                         </label>
                                         <input
                                             type="text"
                                             {...register('deviceModel')}
-                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.deviceModel ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                            placeholder="e.g., Galaxy S21"
+                                            className={`text-black dark:text-black focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-white ${errors.deviceModel ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="e.g., Galaxy S21"style={{ color: 'black' }}
                                         />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <label className="block text-sm font-medium text-black mb-2">
                                             Original Price (BDT)
                                         </label>
                                         <input
                                             type="number"
                                             step="0.10"
                                             {...register('originalPrice')}
-                                            className={`focus:ring-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.originalPrice ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                            placeholder="Original buying price"
+                                            className={`text-black dark:text-black focus:ring-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-white ${errors.originalPrice ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            placeholder="Original buying price"style={{ color: 'black' }}
+
                                         />
                                         {errors.originalPrice && (
                                             <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
@@ -816,15 +821,16 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                         )}
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <label className="block text-sm font-medium text-black mb-2">
                                             Product Age (Years)
                                         </label>
                                         <input
                                             type="number"
                                             step="0.1"
                                             {...register('productAge')}
-                                            className={`focus:ring-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-slate-800 ${errors.productAge ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+                                            className={`text-black dark:text-black focus:ring-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-white ${errors.productAge ? 'border-red-300 ring-1 ring-red-300' : ''}`}
                                             placeholder="How old is the product?"
+                                            style={{ color: 'black' }}
                                         />
                                         {errors.productAge && (
                                             <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
@@ -839,7 +845,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-100">
                                 <div>
                                     <div className="flex justify-between items-center mb-2">
-                                        <label className="block text-sm font-medium text-gray-700">
+                                        <label className="block text-sm font-medium text-black">
                                             Starting Price
                                         </label>
                                         <Button
@@ -857,18 +863,19 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                     </div>
                                     <div className="relative rounded-md shadow-sm">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <span className="text-gray-700 dark:text-gray-300 sm:text-sm">৳</span>
+                                            <span className="text-black sm:text-sm">৳</span>
                                         </div>
                                         <input
                                             type="number"
                                             step="0.10"
                                             {...register('price')}
-                                            className={`focus:ring-indigo-500 dark:bg-slate-800 focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-lg border-gray-300 rounded-md py-3 ${errors.price ? 'border-red-300 ring-1 ring-red-300' : ''
+                                            className={`text-black dark:text-black focus:ring-indigo-500 dark:bg-white focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-lg border-gray-300 rounded-md py-3 ${errors.price ? 'border-red-300 ring-1 ring-red-300' : ''
                                                 }`}
                                             placeholder="0.00"
+                                            style={{ color: 'black' }}
                                         />
                                         <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                            <span className="text-gray-700 dark:text-gray-300 sm:text-sm">BDT</span>
+                                            <span className="text-black sm:text-sm">BDT</span>
                                         </div>
                                     </div>
                                     {errors.price && (
@@ -879,7 +886,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-black mb-2">
                                         Auction Duration (Days)
                                     </label>
                                     <div className="flex flex-wrap gap-2 mb-3">
@@ -890,7 +897,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                                 onClick={() => setValue('auctionDuration', days, { shouldValidate: true })}
                                                 className={`px-3 py-1.5 text-sm rounded-md border transition-all ${watchedDuration === days
                                                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                                    : 'bg-white text-black border-gray-300 hover:bg-gray-50'
                                                     }`}
                                             >
                                                 {days} Days
@@ -899,12 +906,12 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                     </div>
                                     <div className="relative rounded-md shadow-sm">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <FaClock className="text-gray-400" />
+                                            <FaClock className="text-black" />
                                         </div>
                                         <input
                                             type="number"
                                             {...register('auctionDuration')}
-                                            className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 ${errors.auctionDuration ? 'border-red-300 ring-1 ring-red-300' : ''
+                                            className={`text-black dark:text-black focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 bg-white dark:bg-white ${errors.auctionDuration ? 'border-red-300 ring-1 ring-red-300' : ''
                                                 }`}
                                         />
                                     </div>
@@ -918,7 +925,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                         </div>
                     </div>
 
-                 
+
 
                     {/* Action Buttons */}
                     <div className="flex items-center justify-end gap-4 pt-6">
