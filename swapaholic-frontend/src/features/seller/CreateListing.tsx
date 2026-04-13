@@ -81,6 +81,8 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiLimit, setAiLimit] = useState(2);
     const [isPredicting, setIsPredicting] = useState(false);
+    const [aiLanguage, setAiLanguage] = useState<'English' | 'Bengali'>('English');
+
 
     const { register, handleSubmit, watch, setValue, reset, formState: { errors, isDirty, isSubmitSuccessful } } = useForm<FormData>({
         resolver: yupResolver(schema) as any,
@@ -178,6 +180,8 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
             formData.append('title', title);
             formData.append('category', category);
             formData.append('condition', condition);
+            formData.append('language', aiLanguage);
+
 
             // Append first image
             if (images.length > 0) {
@@ -250,10 +254,9 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
             });
 
             if (response.success && response.suggestedPrice) {
-                setValue('price', response.suggestedPrice, { shouldValidate: true });
                 setValue('aiSuggestedPrice', response.suggestedPrice);
                 const sourceLabel = response.source === 'ml_model' ? '🤖 AI Model' : '📊 Smart Estimate';
-                toast.success(`${sourceLabel}: ৳${response.suggestedPrice.toLocaleString()} BDT`);
+                toast.success(`${sourceLabel} Prediction Complete!`);
             } else {
                 toast.error(`Prediction Failed: ${response.message || 'Model could not predict for this item.'}`);
             }
@@ -467,6 +470,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                             <div className="relative">
                                 <Input
                                     label="Product Title"
+                                    style={{ color: 'black' }}
                                     placeholder="e.g., Vintage Sony Walkman Cassette Player"
                                     {...register('title')}
                                     error={errors.title?.message}
@@ -689,18 +693,32 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                             className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
                                         >
                                             <span className="mr-1">✨</span>
-                                            {aiLimit < 2 ? 'Regenerate Description' : 'Auto-Generate Description'}
-                                            <span className="ml-1 text-gray-400 text-xs">({aiLimit} left)</span>
+                                            {aiLimit < 2 ? 'Regenerate' : 'Auto-Generate'}
+                                            <span className="ml-1 text-xs opacity-60">({aiLimit} left)</span>
                                         </Button>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-xs font-medium text-gray-500">Language:</label>
+                                        <select
+                                            value={aiLanguage}
+                                            onChange={(e) => setAiLanguage(e.target.value as any)}
+                                            className="text-xs text-black border border-gray-200 rounded px-1 py-1 focus:ring-1 focus:ring-indigo-500 outline-none bg-white "
+                                            style={{ color: "black" }}
+                                        >
+                                            <option value="English">English</option>
+                                            <option value="Bengali">Bengali</option>
+                                        </select>
                                     </div>
                                 </div>
                                 <div className="relative">
+
                                     <textarea
                                         {...register('description')}
                                         rows={6}
                                         placeholder="Describe your item in detail. Include features, condition specifics, and any other relevant information."
-                                        className={`shadow-sm block w-full sm:text-sm border rounded-lg p-4 transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black ${errors.description ? 'border-red-300' : 'border-gray-300'
+                                        className={`shadow-sm block w-full sm:text-sm border rounded-lg p-4 transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black ${errors.description ? 'border-red-300' : 'border-gray-300' 
                                             }`}
+                                        style={{ color: "black" }}
                                     />
                                     <div className={`absolute bottom-3 right-3 text-xs ${watchedDescription.length > 1900 ? 'text-red-600 font-bold' : 'text-black/60'
                                         }`}>
@@ -786,7 +804,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                             {...register('brand')}
                                             className={`text-black dark:text-black focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-white ${errors.brand ? 'border-red-300 ring-1 ring-red-300' : ''}`}
                                             placeholder="e.g., Samsung"
-                                            style={{ color: 'black' }}  
+                                            style={{ color: 'black' }}
                                         />
                                     </div>
                                     <div>
@@ -797,7 +815,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                             type="text"
                                             {...register('deviceModel')}
                                             className={`text-black dark:text-black focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-white ${errors.deviceModel ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                            placeholder="e.g., Galaxy S21"style={{ color: 'black' }}
+                                            placeholder="e.g., Galaxy S21" style={{ color: 'black' }}
                                         />
                                     </div>
                                 </div>
@@ -811,7 +829,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                             step="0.10"
                                             {...register('originalPrice')}
                                             className={`text-black dark:text-black focus:ring-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md py-2 px-3 bg-white dark:bg-white ${errors.originalPrice ? 'border-red-300 ring-1 ring-red-300' : ''}`}
-                                            placeholder="Original buying price"style={{ color: 'black' }}
+                                            placeholder="Original buying price" style={{ color: 'black' }}
 
                                         />
                                         {errors.originalPrice && (
@@ -883,7 +901,32 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                             <FaExclamationCircle /> {errors.price.message}
                                         </p>
                                     )}
+
+                                    {/* AI Price Recommendation Display */}
+                                    {watch('aiSuggestedPrice') && (
+                                        <div className="mt-4 p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-white p-2 rounded-lg shadow-sm">
+                                                    <span className="text-xl">📊</span>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">AI Recommended Price</p>
+                                                    <p className="text-xl font-extrabold text-black">৳{watch('aiSuggestedPrice')?.toLocaleString()} <span className="text-xs font-normal text-black/60 ml-1">BDT</span></p>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setValue('price', watch('aiSuggestedPrice')!, { shouldValidate: true })}
+                                                className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                                            >
+                                                Apply This Price
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
+
 
                                 <div>
                                     <label className="block text-sm font-medium text-black mb-2">

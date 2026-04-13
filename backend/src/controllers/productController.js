@@ -14,8 +14,20 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 // Analyze product images and generate description (Seller only)
 const analyzeProduct = async (req, res) => {
   try {
-    const { title, category, condition } = req.body;
+    const { title, category, condition, language = 'English' } = req.body;
     const files = req.files;
+
+    // Map frontend condition values to schema enum values
+    const conditionMap = {
+      'new': 'brand_new',
+      'like-new': 'like_new',
+      'excellent': 'excellent',
+      'good': 'good',
+      'fair': 'fair',
+      'brand_new': 'brand_new',
+      'like_new': 'like_new'
+    };
+    const mappedCondition = conditionMap[condition] || condition;
 
     let imageBase64 = null;
     if (files && files.length > 0) {
@@ -28,9 +40,24 @@ const analyzeProduct = async (req, res) => {
 
     try {
       if (imageBase64) {
-        const prompt = `Analyze this product image. Title: ${title}, Category: ${category}, Condition: ${condition}. 
-        Provide a concise description (max 100 words), a quality score (0-100), and a suggested price in USD. 
-        Format as JSON: { "description": "...", "score": 85, "price": 100 }`;
+        const prompt = `Analyze this product image in detail. 
+        Product Context - Title: ${title}, Category: ${category}, Condition: ${mappedCondition}. 
+        
+        Tasks:
+        1. Identify specific features, materials, and textures visible in the image.
+        2. Detect any visible wear, scratches, or defects to verify condition.
+        3. Provide a substantial, detailed professional product description in ${language} (Target: 100-200 words).
+        4. The description MUST be an extensive bulleted list of key features, specifications, and layout.
+        5. Provide a quality score (0-100) based on visible condition.
+        6. Suggest a fair resale price in USD.
+        
+        Format your response ONLY as this JSON structure: 
+        { 
+          "description": "• Feature 1\n• Feature 2...", 
+          "score": 85, 
+          "price": 100 
+        }`;
+
         
         const result = await model.generateContent([
           prompt,
@@ -67,17 +94,22 @@ const analyzeProduct = async (req, res) => {
   }
 };
 
+
 // Regenerate description based on current details
 const regenerateDescription = async (req, res) => {
   try {
-    const { title, category, condition, description } = req.body;
+    const { title, category, condition, description, language = 'English' } = req.body;
     
-    const prompt = `Rewrite this product description to be more attractive for buyers. 
+    
+    const prompt = `Rewrite this product description in ${language} to be highly professional, detailed, and attractive for buyers. 
     Current Title: ${title}
     Category: ${category}
     Condition: ${condition}
     Current Description: ${description}
-    Provide only the rewritten description.`;
+    
+    The output MUST be a detailed professional bulleted list of features with a total length of 100-200 words.
+    Provide ONLY the rewritten description text without any extra chat or labels.`;
+
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -92,6 +124,7 @@ const regenerateDescription = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Create product (seller only)
 const createProduct = async (req, res) => {
@@ -436,13 +469,29 @@ const updateProduct = async (req, res) => {
     }
 
     let updates = req.body;
+
+    // Map frontend condition values to schema enum values
+    const conditionMap = {
+      'new': 'brand_new',
+      'like-new': 'like_new',
+      'excellent': 'excellent',
+      'good': 'good',
+      'fair': 'fair',
+      'brand_new': 'brand_new',
+      'like_new': 'like_new'
+    };
+
+    if (updates.condition) {
+      updates.condition = conditionMap[updates.condition] || updates.condition;
+    }
     
     // Logic for images: handle new uploads and removals
     let finalImages = product.images || [];
     
     // If frontend sends remainingImages, use that
-    if (req.body.remainingImages) {
-      finalImages = typeof req.body.remainingImages === 'string' ? JSON.parse(req.body.remainingImages) : req.body.remainingImages;
+    if (req.body.remainingImages || req.body.existingImages) {
+      const existingImgs = req.body.remainingImages || req.body.existingImages;
+      finalImages = typeof existingImgs === 'string' ? JSON.parse(existingImgs) : existingImgs;
     }
 
     // Handle new uploads
@@ -470,6 +519,7 @@ const updateProduct = async (req, res) => {
       runValidators: true 
     });
 
+
     res.json({
       success: true,
       data: updatedProduct
@@ -490,26 +540,41 @@ const updateProduct = async (req, res) => {
 // Delete product (seller only)
 const deleteProduct = async (req, res) => {
   try {
-    logger.info(`Attempting to delete product ${req.params.id} by user ${req.user.id}`);
-    const product = await Product.findById(req.params.id);
+    const { id } = req.params;
+    logger.info(`Attempting to delete product ${id} by user ${req.user.id}`);
+    
+    const product = await Product.findById(id);
     if (!product) {
-      logger.warn(`Product ${req.params.id} not found for deletion`);
+      logger.warn(`Delete failed: Product ${id} not found.`);
       return res.status(404).json({ message: 'Product not found' });
     }
 
+    // Ownership check
     if (product.sellerId.toString() !== req.user.id && req.user.role !== 'admin') {
-      logger.warn(`Unauthorized delete attempt on product ${req.params.id} by user ${req.user.id}`);
-      return res.status(403).json({ message: 'Access denied' });
+      logger.warn(`Unauthorized delete attempt on product ${id} by user ${req.user.id}`);
+      return res.status(403).json({ message: 'Access denied: You do not own this product' });
     }
 
-    await Product.findByIdAndDelete(req.params.id);
-    logger.info(`Successfully deleted product ${req.params.id}`);
-    res.json({ success: true, message: 'Product deleted' });
+    // Prevent deletion if product is sold or has bidden status (optional security)
+    if (product.status === 'sold') {
+      logger.warn(`Delete blocked: Product ${id} is already sold.`);
+      return res.status(400).json({ message: 'Sold products cannot be deleted' });
+    }
+
+    const deleted = await Product.findByIdAndDelete(id);
+    if (!deleted) {
+      logger.error(`Failed to delete product ${id} from database.`);
+      return res.status(500).json({ message: 'Failed to delete product' });
+    }
+
+    logger.info(`Successfully deleted product ${id}`);
+    res.json({ success: true, message: 'Product deleted successfully' });
   } catch (error) {
     logger.error('Delete product error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
 
 // Search products by geolocation
 const searchNearby = async (req, res) => {

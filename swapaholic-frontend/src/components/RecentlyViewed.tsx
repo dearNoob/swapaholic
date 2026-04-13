@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { FaClock, FaCamera } from 'react-icons/fa';
@@ -15,24 +15,23 @@ interface Product {
 }
 
 export default function RecentlyViewed() {
-    const [recentlyViewed] = useState<Product[]>(() => {
-        if (typeof window === 'undefined') {
-            return [];
-        }
+    const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
+    const [isMounted, setIsMounted] = useState(false);
 
+    useEffect(() => {
+        setIsMounted(true);
         const storedRecent = localStorage.getItem('swapaholic_recently_viewed');
-        if (!storedRecent) {
-            return [];
+        if (storedRecent) {
+            try {
+                const parsed = JSON.parse(storedRecent);
+                if (Array.isArray(parsed)) {
+                    setRecentlyViewed(parsed);
+                }
+            } catch (error) {
+                console.error('Failed to parse recently viewed items', error);
+            }
         }
-
-        try {
-            const parsed = JSON.parse(storedRecent);
-            return Array.isArray(parsed) ? parsed : [];
-        } catch (error) {
-            console.error('Failed to parse recently viewed items', error);
-            return [];
-        }
-    });
+    }, []);
 
     const getTimeRemaining = (endTime: string) => {
         const now = new Date().getTime();

@@ -168,7 +168,8 @@ exports.predictPrice = async (req, res, next) => {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         logger.info(`ML API attempt ${attempt}: Sending prediction request for ${brand} ${model}`);
-        const response = await axios.post(mlUrl, payload, { timeout: 25000 });
+        // Reduced timeout to 10s to speed up fallback
+        const response = await axios.post(mlUrl, payload, { timeout: 10000 });
         
         if (response.data && response.data.predicted_price_bdt) {
           priceBdt = response.data.predicted_price_bdt;
@@ -181,11 +182,19 @@ exports.predictPrice = async (req, res, next) => {
         if (mlSuccess) break;
       } catch (mlError) {
         logger.warn(`ML API attempt ${attempt} failed for ${brand} ${model}: ${mlError.message}`);
+        
+        // If it was a timeout, don't even bother with the second attempt to save time
+        if (mlError.code === 'ECONNABORTED' || mlError.message.includes('timeout')) {
+          logger.warn(`ML API timeout on attempt ${attempt}. Skipping further retries.`);
+          break; 
+        }
+
         if (attempt < 2) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+          await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5s before retry
         }
       }
     }
+
 
     if (mlSuccess && priceBdt) {
       return res.status(200).json({
