@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { FaGavel, FaClock } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { bidsApi } from '../api/bids';
 import { useAppSelector } from '../store/hooks';
 import BidConfirmationModal from './bidding/BidConfirmationModal';
+import { useAuctionTimer } from '../hooks/useAuctionTimer';
 
 interface BiddingInterfaceProps {
     productId: string;
@@ -34,47 +35,14 @@ export default function BiddingInterface({
 }: BiddingInterfaceProps) {
     const [bidAmount, setBidAmount] = useState<number>(currentBid + minimumIncrement);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [timeRemaining, setTimeRemaining] = useState<string>('');
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+    
+    // Unified timer logic
+    const { formatted: timeRemaining, isEnded, isEndingSoon } = useAuctionTimer(endTime);
 
-    // Calculate minimum allowed bid (15% of base price or higher than current bid)
-    const minBidFromBasePrice = startingPrice * 0.15;
-    const minBid = currentBid > 0
-        ? Math.max(currentBid + minimumIncrement, minBidFromBasePrice)
-        : Math.max(startingPrice, minBidFromBasePrice);
-
-    // Countdown timer
-    useEffect(() => {
-        if (!endTime) return;
-
-        const updateTimer = () => {
-            const now = new Date().getTime();
-            const end = new Date(endTime).getTime();
-            const distance = end - now;
-
-            if (distance < 0) {
-                setTimeRemaining('Auction ended');
-                return;
-            }
-
-            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-            if (days > 0) {
-                setTimeRemaining(`${days}d ${hours}h ${minutes}m`);
-            } else if (hours > 0) {
-                setTimeRemaining(`${hours}h ${minutes}m ${seconds}s`);
-            } else {
-                setTimeRemaining(`${minutes}m ${seconds}s`);
-            }
-        };
-
-        updateTimer();
-        const interval = setInterval(updateTimer, 1000);
-        return () => clearInterval(interval);
-    }, [endTime]);
+    // Calculate minimum allowed bid (5% higher than current price)
+    const currentPrice = currentBid > 0 ? currentBid : startingPrice;
+    const minBid = currentPrice * 1.05;
 
     const { user } = useAppSelector((state) => state.auth);
 
@@ -83,6 +51,11 @@ export default function BiddingInterface({
 
         if (user?.id === sellerId) {
             toast.warning("You cannot bid on your own product.");
+            return;
+        }
+
+        if (isEnded) {
+            toast.error("This auction has already ended.");
             return;
         }
 
@@ -119,13 +92,13 @@ export default function BiddingInterface({
         const basePrice = startingPrice;
 
         // Always include minimum bid
-        suggestions.push(Math.max(minBid, basePrice * 0.15));
+        suggestions.push(minBid);
 
-        // Add strategic amounts if they're above minimum
-        if (basePrice * 0.25 > minBid) suggestions.push(basePrice * 0.25);
-        if (basePrice * 0.5 > minBid) suggestions.push(basePrice * 0.5);
-        if (basePrice > minBid) suggestions.push(basePrice);
-        if (basePrice * 1.25 > minBid) suggestions.push(basePrice * 1.25);
+        // Add strategic amounts (10%, 25%, 50% higher than current price)
+        if (currentPrice * 1.10 > minBid) suggestions.push(currentPrice * 1.10);
+        if (currentPrice * 1.25 > minBid) suggestions.push(currentPrice * 1.25);
+        if (currentPrice * 1.50 > minBid) suggestions.push(currentPrice * 1.50);
+        if (currentPrice * 2.00 > minBid) suggestions.push(currentPrice * 2.00);
 
         // Remove duplicates and return unique values
         return [...new Set(suggestions)].slice(0, 4);
@@ -153,12 +126,12 @@ export default function BiddingInterface({
             </div>
 
             {/* Time Remaining */}
-            {endTime && timeRemaining && (
-                <div className="flex items-center gap-2 text-orange-600 bg-orange-50 p-3 rounded-lg">
-                    <FaClock />
+            {endTime && (
+                <div className={`flex items-center gap-2 p-3 rounded-lg border ${isEnded ? 'bg-gray-50 border-gray-100 text-gray-500' : isEndingSoon ? 'bg-red-50 border-red-100 text-red-600 ring-2 ring-red-500/10' : 'bg-orange-50 border-orange-100 text-orange-600'}`}>
+                    <FaClock className={isEndingSoon && !isEnded ? 'animate-pulse' : ''} />
                     <div>
-                        <p className="text-xs font-medium">Time Remaining</p>
-                        <p className="text-sm font-bold">{timeRemaining}</p>
+                        <p className="text-xs font-medium uppercase tracking-wider">{isEnded ? 'Auction Status' : 'Time Remaining'}</p>
+                        <p className="text-sm font-bold font-mono tabular-nums uppercase">{timeRemaining}</p>
                     </div>
                 </div>
             )}
@@ -168,7 +141,7 @@ export default function BiddingInterface({
                 {/* Bidding Info */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                     <p className="text-xs text-blue-800">
-                        💡 <strong>Bidding Rules:</strong> You can bid as low as 15% of the base price (৳{(startingPrice * 0.15).toFixed(2)}), but must be higher than the current highest bid if there are existing bids.
+                        💡 <strong>Bidding Rules:</strong> Your bid must be at least 5% higher than the current highest bid or the base price (min: ৳{minBid.toFixed(2)}).
                     </p>
                 </div>
 
@@ -186,7 +159,8 @@ export default function BiddingInterface({
                             onChange={(e) => setBidAmount(Number(e.target.value))}
                             min={minBid}
                             step={minimumIncrement}
-                            className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-black focus:border-indigo-500 text-lg font-semibold"
+                            disabled={isEnded}
+                            className={`w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-black focus:border-indigo-500 text-lg font-semibold ${isEnded ? 'bg-gray-50 cursor-not-allowed border-gray-200' : 'border-gray-300'}`}
                             required
                         />
                     </div>
@@ -201,7 +175,8 @@ export default function BiddingInterface({
                                 key={index}
                                 type="button"
                                 onClick={() => setBidAmount(amount)}
-                                className="px-3 py-2 text-sm border border-gray-300 rounded-lg text-black hover:bg-indigo-50 hover:border-indigo-300 transition"
+                                disabled={isEnded}
+                                className={`px-3 py-2 text-sm border rounded-lg text-black transition ${isEnded ? 'bg-gray-50 cursor-not-allowed border-gray-100 text-gray-400' : 'border-gray-300 hover:bg-indigo-50 hover:border-indigo-300'}`}
                             >
                                 ৳{amount.toFixed(2)}
                             </button>
@@ -213,6 +188,10 @@ export default function BiddingInterface({
                 {user?.id === sellerId ? (
                     <div className="w-full bg-gray-100 text-gray-500 py-4 rounded-lg font-semibold text-lg text-center border border-gray-200">
                         You cannot bid on your own product
+                    </div>
+                ) : isEnded ? (
+                    <div className="w-full bg-red-50 text-red-500 py-4 rounded-lg font-semibold text-lg text-center border border-red-100 uppercase tracking-widest">
+                        Auction Ended
                     </div>
                 ) : (
                     <button
@@ -229,7 +208,7 @@ export default function BiddingInterface({
             {/* Bid Info */}
             <div className="text-xs text-gray-500 space-y-1">
                 <p>• Bids are binding commitments</p>
-                <p>• Minimum increment: ৳{minimumIncrement}</p>
+                <p>• Minimum increment: 5% of current price (min: ৳{(currentPrice * 0.05).toFixed(2)})</p>
                 <p>• You will be notified if outbid</p>
             </div>
 
@@ -242,7 +221,7 @@ export default function BiddingInterface({
                 currentBid={currentBid}
                 productName={productName}
                 productImage={productImage}
-                minimumIncrement={minimumIncrement}
+                minBid={minBid}
             />
         </div>
     );

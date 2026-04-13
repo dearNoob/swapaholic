@@ -2,7 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { FaClock, FaGavel, FaCheckCircle } from 'react-icons/fa';
+import { FaGavel } from 'react-icons/fa';
+import AuctionTimer from './AuctionTimer';
 
 interface Product {
     id: string;
@@ -15,6 +16,7 @@ interface Product {
     images: string[];
     bidCount?: number;
     endTime?: string;
+    auctionEndTime?: string; // Standard field from backend
     distance?: number; // distance in meters
 }
 
@@ -25,6 +27,7 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
     const isListView = viewMode === 'list';
+    const endTime = product.auctionEndTime || product.endTime;
 
     const getStatusColor = (status: string) => {
         switch (status.toLowerCase()) {
@@ -35,6 +38,8 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
                 return 'bg-yellow-100 text-yellow-800';
             case 'sold':
                 return 'bg-gray-100 text-gray-800';
+            case 'auction_ended':
+                return 'bg-red-100 text-red-800';
             default:
                 return 'bg-blue-100 text-blue-800';
         }
@@ -43,13 +48,17 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
     const getConditionColor = (condition: string) => {
         switch (condition.toLowerCase()) {
             case 'new':
+            case 'brand_new':
                 return 'text-green-600';
-            case 'like new':
+            case 'like-new':
+            case 'like_new':
                 return 'text-blue-600';
+            case 'excellent':
+                return 'text-indigo-600';
             case 'good':
-                return 'text-yellow-600';
-            case 'fair':
                 return 'text-orange-600';
+            case 'fair':
+                return 'text-red-500';
             default:
                 return 'text-gray-600';
         }
@@ -81,7 +90,7 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
                                 </h3>
                                 <div className="flex flex-col items-end gap-1">
                                     <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
-                                        {product.status}
+                                        {product.status.replace('_', ' ')}
                                     </span>
                                     {product.distance !== undefined && (
                                         <span className="text-xs text-indigo-600 font-medium">
@@ -92,7 +101,7 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
                             </div>
                             <p className="text-sm text-gray-500 mt-1">{product.category}</p>
                             <p className={`text-sm font-medium mt-2 ${getConditionColor(product.condition)}`}>
-                                Condition: {product.condition}
+                                Condition: {product.condition.replace('_', ' ')}
                             </p>
                         </div>
                         <div className="flex items-center justify-between mt-4">
@@ -108,11 +117,8 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
                                     <span className="text-sm">{product.bidCount} bids</span>
                                 </div>
                             )}
-                            {product.endTime && (
-                                <div className="flex items-center gap-2 text-gray-600">
-                                    <FaClock className="text-yellow-600" />
-                                    <span className="text-sm">Ends soon</span>
-                                </div>
+                            {endTime && (
+                                <AuctionTimer endTime={endTime} variant="compact" />
                             )}
                         </div>
                     </div>
@@ -123,7 +129,7 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
 
     return (
         <Link href={`/products/${product.id}`}>
-            <div className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 hover:border-indigo-300">
+            <div className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 hover:border-indigo-300 relative">
                 <div className="relative h-56 overflow-hidden bg-gray-100">
                     <Image
                         src={product.images[0] || '/products/placeholder.png'}
@@ -134,7 +140,7 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
                     />
                     <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
-                            {product.status}
+                            {product.status.replace('_', ' ')}
                         </span>
                         {product.distance !== undefined && (
                             <span className="px-2 py-1 text-xs font-semibold rounded-full bg-white/90 text-indigo-600 shadow-sm">
@@ -142,6 +148,16 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
                             </span>
                         )}
                     </div>
+                    {/* Floating Timer overlay for Grid View */}
+                    {endTime && (
+                        <div className="absolute bottom-2 left-2">
+                             <AuctionTimer 
+                                endTime={endTime} 
+                                variant="compact" 
+                                className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm" 
+                            />
+                        </div>
+                    )}
                 </div>
                 <div className="p-4">
                     <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-indigo-600 transition">
@@ -149,7 +165,7 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
                     </h3>
                     <p className="text-sm text-gray-500 mt-1">{product.category}</p>
                     <p className={`text-sm font-medium mt-2 ${getConditionColor(product.condition)}`}>
-                        {product.condition}
+                        {product.condition.replace('_', ' ')}
                     </p>
                     <div className="mt-3 flex items-center justify-between">
                         <div>
@@ -170,3 +186,4 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
         </Link>
     );
 }
+

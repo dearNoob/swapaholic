@@ -52,7 +52,7 @@ export interface RegenerateDescriptionData {
 }
 
 export interface ProductFilters extends FilterParams, PaginationParams {
-    status?: 'active' | 'sold' | 'all';
+    status?: 'active' | 'sold' | 'auction_ended' | 'all';
     sellerId?: string;
     isFeatured?: boolean;
 }

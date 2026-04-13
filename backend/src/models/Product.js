@@ -76,6 +76,39 @@ const productSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+}, {
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Virtual for id
+productSchema.virtual('id').get(function() {
+  return this._id.toHexString();
+});
+
+// Virtual for auctionEndTime (alias for bidEndDate)
+productSchema.virtual('auctionEndTime').get(function() {
+  return this.bidEndDate;
+});
+
+// Virtual for price (alias for basePrice)
+productSchema.virtual('price').get(function() {
+  return this.basePrice;
+});
+
+// Virtual for currentBid (alias for highestBidAmount or fallback to basePrice)
+productSchema.virtual('currentBid').get(function() {
+  return this.highestBidAmount || this.basePrice;
+});
+
+// Virtual for image (alias for first image)
+productSchema.virtual('image').get(function() {
+  return this.images && this.images.length > 0 ? this.images[0] : null;
+});
+
+// Virtual for bidCount (placeholder, often overridden by aggregation)
+productSchema.virtual('bidCount').get(function() {
+  return 0; // Default fallback
 });
 
 // Create geospatial index

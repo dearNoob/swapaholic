@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { setProducts, setLoading, setError, setFilters, setPagination, setSort, setViewMode, clearFilters } from '../../store/listingSlice';
 import { productsApi } from '../../api/products';
@@ -202,6 +203,9 @@ export const ProductList = () => {
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white p-4 rounded-lg shadow">
                             <p className="text-sm text-gray-700">
                                 {isLoading ? 'Loading...' : `${pagination.total} products found`}
+                                <Link href="/products/ended" className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 underline underline-offset-4 ml-2">
+                                    View Ended Auctions
+                                </Link>
                             </p>
 
                             <div className="flex items-center gap-4">

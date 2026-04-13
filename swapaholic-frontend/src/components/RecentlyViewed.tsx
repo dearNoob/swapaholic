@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { FaClock, FaCamera } from 'react-icons/fa';
+import AuctionTimer from './AuctionTimer';
 
 interface Product {
     id: string;
@@ -33,21 +34,7 @@ export default function RecentlyViewed() {
         }
     }, []);
 
-    const getTimeRemaining = (endTime: string) => {
-        const now = new Date().getTime();
-        const end = new Date(endTime).getTime();
-        const diff = end - now;
-
-        if (diff <= 0) return 'Ended';
-
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-
-        if (days > 0) return `${days}d ${hours}h`;
-        return `${hours}h`;
-    };
-
-    if (recentlyViewed.length === 0) return null;
+    if (!isMounted || recentlyViewed.length === 0) return null;
 
     const sectionClass = "md:sticky md:top-0 md:h-[100dvh] w-full relative overflow-y-auto overflow-x-hidden scrollbar-hide";
 
@@ -89,9 +76,12 @@ export default function RecentlyViewed() {
                                 </h3>
                                 <div className="mt-auto pt-2 border-t border-slate-50 dark:border-slate-800 flex justify-between items-end">
                                     <p className="text-lg font-bold text-indigo-600">৳{product.currentBid?.toLocaleString()}</p>
-                                    <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
-                                        {getTimeRemaining(product.auctionEndTime)}
-                                    </span>
+                                    <AuctionTimer 
+                                        endTime={product.auctionEndTime} 
+                                        variant="compact" 
+                                        className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full text-[10px]" 
+                                        showLabel={false}
+                                    />
                                 </div>
                             </div>
                         </Link>

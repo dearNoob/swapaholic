@@ -75,8 +75,18 @@ const placeBid = async (req, res) => {
     // Verify product exists and is active or bidden (actively accepting bids)
     const product = await Product.findById(productId);
     if (!product) return res.status(404).json({ message: 'Product not found' });
+
     if (!['active', 'bidden'].includes(product.status)) {
       return res.status(400).json({ message: 'Product is not available for bidding' });
+    }
+
+    // Strict Enforcement: Prevent bidding if auction has ended (even if scheduler hasn't run)
+    if (product.bidEndDate && new Date() > product.bidEndDate) {
+      // Sync status lazily
+      product.status = 'auction_ended';
+      product.auctionEndedAt = new Date();
+      await product.save();
+      return res.status(400).json({ message: 'Auction for this product has ended' });
     }
 
     // Prevent seller from bidding on their own product
@@ -84,11 +94,12 @@ const placeBid = async (req, res) => {
       return res.status(400).json({ message: 'Cannot bid on your own product' });
     }
 
-    // Check bid amount is at least 15% of base price
-    const minBidAmount = product.basePrice * 0.15;
+    // Minimum bid must be 5% higher than current highest bid or base price
+    const currentPrice = product.highestBidAmount || product.basePrice;
+    const minBidAmount = currentPrice * 1.05;
     if (bidAmount < minBidAmount) {
       return res.status(400).json({
-        message: `Bid must be at least ৳${minBidAmount.toFixed(2)} (15% of base price ৳${product.basePrice})`
+        message: `Your bid must be at least ৳${minBidAmount.toFixed(2)} (5% higher than the current price)`
       });
     }
 
@@ -312,11 +323,19 @@ const updateBid = async (req, res) => {
     const product = await Product.findById(bid.productId);
     if (!product) return res.status(404).json({ message: 'Product not found' });
 
-    // New bid must be higher than current bid and >= 15% of base price
-    const minBidAmount = product.basePrice * 0.15;
-    if (bidAmount <= bid.bidAmount || bidAmount < minBidAmount) {
+    // Strict Enforcement: Prevent bidding if auction has ended
+    if (product.bidEndDate && new Date() > product.bidEndDate) {
+      product.status = 'auction_ended';
+      await product.save();
+      return res.status(400).json({ message: 'Auction for this product has ended' });
+    }
+
+    // New bid must be 5% higher than the current highest bid/base price
+    const currentPrice = product.highestBidAmount || product.basePrice;
+    const minBidAmount = currentPrice * 1.05;
+    if (bidAmount < minBidAmount) {
       return res.status(400).json({
-        message: `New bid must be higher than current bid (৳${bid.bidAmount}) and at least ৳${minBidAmount.toFixed(2)} (15% of base price)`
+        message: `Your updated bid must be at least ৳${minBidAmount.toFixed(2)} (5% higher than the current price)`
       });
     }
 
@@ -696,10 +715,21 @@ async function triggerAutoBidding(productId, lastBidderId) {
 
         // If the top auto-bid can beat the current price
         if (topAutoBid.maxAmount > currentHighest) {
-            let nextBidAmount = currentHighest + (topAutoBid.incrementAmount || 10);
+            // New rule: must be at least 5% higher than current price
+            const minNextBid = currentHighest * 1.05;
             
-            // Don't exceed max
+            // Calculate proposed bid using increment or 5% minimum
+            let nextBidAmount = Math.max(
+                currentHighest + (topAutoBid.incrementAmount || 10),
+                minNextBid
+            );
+            
+            // Don't exceed max allowed by user
             if (nextBidAmount > topAutoBid.maxAmount) {
+                // If the required 5% jump exceeds their max, they can't bid anymore
+                if (minNextBid > topAutoBid.maxAmount) {
+                    return; // Max amount reached/exceeded by required increment
+                }
                 nextBidAmount = topAutoBid.maxAmount;
             }
 

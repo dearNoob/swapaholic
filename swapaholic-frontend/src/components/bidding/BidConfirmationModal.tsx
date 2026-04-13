@@ -11,7 +11,7 @@ interface BidConfirmationModalProps {
     currentBid: number;
     productName: string;
     productImage?: string;
-    minimumIncrement: number;
+    minBid: number;
 }
 
 export default function BidConfirmationModal({
@@ -22,7 +22,7 @@ export default function BidConfirmationModal({
     currentBid,
     productName,
     productImage,
-    minimumIncrement
+    minBid
 }: BidConfirmationModalProps) {
     const [isConfirming, setIsConfirming] = useState(false);
 
@@ -34,7 +34,7 @@ export default function BidConfirmationModal({
         setIsConfirming(false);
     };
 
-    const isValidBid = bidAmount >= currentBid + minimumIncrement;
+    const isValidBid = bidAmount >= minBid;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -68,7 +68,7 @@ export default function BidConfirmationModal({
                         )}
                         <div>
                             <h4 className="font-semibold text-gray-900">{productName}</h4>
-                            <p className="text-sm text-gray-600">Current bid: ${currentBid}</p>
+                            <p className="text-sm text-gray-600">Current bid: ৳{currentBid}</p>
                         </div>
                     </div>
 
@@ -84,7 +84,7 @@ export default function BidConfirmationModal({
                                 <FaExclamationTriangle className="text-red-600 flex-shrink-0 mt-0.5" />
                                 <div className="text-sm text-red-800">
                                     <p className="font-semibold">Invalid Bid Amount</p>
-                                    <p>Minimum bid must be at least ${currentBid + minimumIncrement}</p>
+                                    <p>Minimum bid must be at least ৳{minBid.toFixed(2)}</p>
                                 </div>
                             </div>
                         )}

@@ -15,6 +15,7 @@ import BiddingInterface from '../../../components/BiddingInterface';
 import BidHistory from '../../../components/BidHistory';
 import SellerInfo from '../../../components/SellerInfo';
 import { ReviewList } from '../../../components/reviews/ReviewList';
+import AuctionTimer from '../../../components/AuctionTimer';
 
 interface SellerSummary {
     _id?: string;
@@ -337,12 +338,12 @@ export default function ProductDetailPage() {
                                     <p className="text-lg font-semibold text-gray-900">৳{getStartingPrice(product)}</p>
                                 </div>
                                 {getAuctionEndTime(product) && (
-                                    <div>
-                                        <p className="text-sm text-gray-600">Auction Ends</p>
-                                        <p className="text-lg font-semibold text-gray-900 flex items-center gap-1">
-                                            <FaClock className="text-orange-500" />
-                                            {new Date(getAuctionEndTime(product)!).toLocaleDateString()}
-                                        </p>
+                                    <div className="col-span-2 sm:col-span-1">
+                                        <AuctionTimer 
+                                            endTime={getAuctionEndTime(product)} 
+                                            variant="full" 
+                                            className="w-full"
+                                        />
                                     </div>
                                 )}
                             </div>

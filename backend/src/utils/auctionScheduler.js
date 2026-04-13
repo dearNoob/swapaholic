@@ -46,6 +46,17 @@ async function checkAuctionExpiry() {
           product.auctionEndedAt = new Date();
           await product.save();
           logger.info(`Auction ended with no bids for product ${product._id}, re-listed`);
+          
+          // Notify seller no bids
+          try {
+            await notificationService.notifyAuctionEndedNoBids(
+              product._id,
+              product.title,
+              product.sellerId
+            );
+          } catch (notifErr) {
+            logger.error('Error sending no-bids notification to seller:', notifErr);
+          }
           continue;
         }
 
@@ -93,6 +104,20 @@ async function checkAuctionExpiry() {
           );
         } catch (notifErr) {
           logger.error('Error sending auction won notification:', notifErr);
+        }
+
+        // Send in-app notification to seller
+        try {
+          const bidderName = `${buyer.firstName || ''} ${buyer.lastName || ''}`.trim() || 'A buyer';
+          await notificationService.notifyAuctionEndedSeller(
+            product._id,
+            product.title,
+            highestBid.bidAmount,
+            bidderName,
+            product.sellerId
+          );
+        } catch (notifErr) {
+          logger.error('Error sending auction ended notification to seller:', notifErr);
         }
 
         logger.info(`Auction ended for product ${product._id}. Winner: ${buyer.email}, Amount: ৳${highestBid.bidAmount}`);

@@ -357,6 +357,25 @@ const getProducts = async (req, res) => {
       }
     });
     pipeline.push({ $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } });
+
+    // Lookup bidCount
+    pipeline.push({
+      $lookup: {
+        from: 'bids',
+        let: { pId: '$_id' },
+        pipeline: [
+          { $match: { $expr: { $and: [ { $eq: ['$productId', '$$pId'] }, { $eq: ['$status', 'active'] } ] } } },
+          { $count: 'count' }
+        ],
+        as: 'bidCountObj'
+      }
+    });
+    pipeline.push({
+      $addFields: {
+        bidCount: { $ifNull: [ { $arrayElemAt: ['$bidCountObj.count', 0] }, 0 ] }
+      }
+    });
+
     pipeline.push({
       $addFields: {
         'sellerId': {
@@ -439,6 +458,24 @@ const getProductById = async (req, res) => {
 
     // Increment view count
     product.viewCount = (product.viewCount || 0) + 1;
+
+    // Lazy Sync: If auction ended but status is still active/bidden
+    if (['active', 'bidden'].includes(product.status) && product.bidEndDate && new Date() > product.bidEndDate) {
+      // Check for bids to decide between auction_ended or re-list
+      const Bid = require('../models/Bid');
+      const bidCount = await Bid.countDocuments({ productId: product._id, status: 'active' });
+      
+      if (bidCount > 0) {
+        product.status = 'auction_ended';
+        product.auctionEndedAt = new Date();
+      } else {
+        // No bids — re-list item as active with no deadline (matching scheduler logic)
+        product.status = 'active';
+        product.bidEndDate = undefined;
+        product.auctionEndedAt = new Date();
+      }
+    }
+
     await product.save();
 
     // Socket.IO notification to seller
@@ -459,7 +496,10 @@ const getProductById = async (req, res) => {
 
     res.json({
       status: 'success',
-      data: product
+      data: {
+        ...product.toObject(),
+        bidCount: bidCount || 0
+      }
     });
   } catch (error) {
     logger.error('Get product by ID error:', error);

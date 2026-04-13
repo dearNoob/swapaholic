@@ -601,6 +601,44 @@ class NotificationService {
         });
     }
   }
+
+  /**
+   * Notification helper: Auction ended (Seller - Win)
+   */
+  async notifyAuctionEndedSeller(productId, productTitle, winningPrice, bidderName, sellerId) {
+    await this.createAndSend({
+      recipientId: sellerId,
+      type: 'auction_ended_seller',
+      title: '🏷️ Auction Ended Successfully',
+      message: `Your auction for "${productTitle}" has ended. Final bid: ৳${winningPrice} by ${bidderName}.`,
+      data: {
+        productId,
+        productTitle,
+        winningPrice,
+        bidderName
+      },
+      priority: 'high',
+      actionUrl: `/products/${productId}`
+    });
+  }
+
+  /**
+   * Notification helper: Auction ended (Seller - No Bids)
+   */
+  async notifyAuctionEndedNoBids(productId, productTitle, sellerId) {
+    await this.createAndSend({
+      recipientId: sellerId,
+      type: 'auction_ended_no_bids',
+      title: '⌛ Auction Ended (No Bids)',
+      message: `Your auction for "${productTitle}" has ended without any bidders. The item has been re-listed with no deadline.`,
+      data: {
+        productId,
+        productTitle
+      },
+      priority: 'normal',
+      actionUrl: `/products/${productId}`
+    });
+  }
 }
 
 // Export singleton instance
