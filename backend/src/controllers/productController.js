@@ -40,20 +40,26 @@ const analyzeProduct = async (req, res) => {
 
     try {
       if (imageBase64) {
-        const prompt = `Analyze this product image in detail. 
+        const prompt = `Analyze this product image in detail and provide a COMPREHENSIVE, professional e-commerce listing for a platform called Swapaholic. 
         Product Context - Title: ${title}, Category: ${category}, Condition: ${mappedCondition}. 
         
-        Tasks:
-        1. Identify specific features, materials, and textures visible in the image.
-        2. Detect any visible wear, scratches, or defects to verify condition.
-        3. Provide a substantial, detailed professional product description in ${language} (Target: 100-200 words).
-        4. The description MUST be an extensive bulleted list of key features, specifications, and layout.
-        5. Provide a quality score (0-100) based on visible condition.
-        6. Suggest a fair resale price in USD.
+        STRICT REQUIREMENTS:
+        1. DESCRIPTION LENGTH: Your generated description MUST be between 150 and 300 words. Do not provide a short summary.
+        2. FORMATTING: Use a professional introduction paragraph (3-4 sentences), followed by an EXTENSIVE BULLETED LIST of features, materials, specifications, and layout details.
+        3. CONTENT: 
+           - Identify specific features, brand markings, and textures visible in the image.
+           - Detect any visible wear, scratches, or defects to justify the condition.
+           - Describe potential usage scenarios or styling tips to make it attractive to buyers.
+        4. LANGUAGE: Generate the text entirely in ${language}.
+        
+        TASKS:
+        - Provide the detailed description in the required format.
+        - Provide a quality score (0-100) based on visible condition.
+        - Suggest a fair resale price in USD.
         
         Format your response ONLY as this JSON structure: 
         { 
-          "description": "• Feature 1\n• Feature 2...", 
+          "description": "[Paragraph overview here]\n\n• Feature 1: [Detail]\n• Feature 2: [Detail]\n• Material: [Detail]\n• Condition Note: [Detail]...", 
           "score": 85, 
           "price": 100 
         }`;
@@ -101,14 +107,18 @@ const regenerateDescription = async (req, res) => {
     const { title, category, condition, description, language = 'English' } = req.body;
     
     
-    const prompt = `Rewrite this product description in ${language} to be highly professional, detailed, and attractive for buyers. 
+    const prompt = `Rewrite this product description in ${language} to be highly professional, persuasive, and detailed for an e-commerce marketplace. 
     Current Title: ${title}
     Category: ${category}
     Condition: ${condition}
     Current Description: ${description}
     
-    The output MUST be a detailed professional bulleted list of features with a total length of 100-200 words.
-    Provide ONLY the rewritten description text without any extra chat or labels.`;
+    STRICT REQUIREMENTS:
+    1. EXPANSION: The new description MUST be between 150 and 300 words. Expand on the original details significantly.
+    2. FORMATTING: Use a professional opening paragraph followed by an extensive bulleted list of features and benefits.
+    3. TONE: Persuasive, professional, and descriptive.
+    
+    Provide ONLY the rewritten description text without any extra chat, labels, or JSON wrappers.`;
 
 
     const result = await model.generateContent(prompt);
