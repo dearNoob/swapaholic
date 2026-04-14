@@ -12,22 +12,34 @@ import { ChatConversation, ConversationMessage } from '../../types/messages';
 
 interface ChatWindowProps {
     conversation: ChatConversation;
-    onSendMessage: (content: string, attachments?: File[]) => void;
+    onSendMessage: (content: string, attachments?: File[]) => Promise<ConversationMessage | null>;
+    isRecipientBlocked?: boolean;
+    onBlockStatusChanged?: () => Promise<void> | void;
 }
 
-export default function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
+export default function ChatWindow({
+    conversation,
+    onSendMessage,
+    isRecipientBlocked = false,
+    onBlockStatusChanged,
+}: ChatWindowProps) {
     const [messages, setMessages] = useState<ConversationMessage[]>([]);
     const [messageInput, setMessageInput] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [showMenu, setShowMenu] = useState(false);
+    const [isUpdatingBlockStatus, setIsUpdatingBlockStatus] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const { user } = useAppSelector((state) => state.auth);
+    const { user, isAuthenticated, isLoading: isAuthLoading } = useAppSelector((state) => state.auth);
     const currentUserId = user?.id || '';
 
     // Message enhancements
     const { typingUsers, notifyTyping } = useTypingIndicator(conversation.id, currentUserId, socketService);
 
     useEffect(() => {
+        if (isAuthLoading || !isAuthenticated) {
+            return;
+        }
+
         // Connect socket if not connected
         if (!socketService.isConnected()) {
             socketService.connect();
@@ -62,7 +74,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
             socketService.off(`reaction:${conversation.id}`);
             socketService.off(`read:${conversation.id}`);
         };
-    }, [conversation.id, currentUserId]);
+    }, [conversation.id, currentUserId, isAuthenticated, isAuthLoading]);
 
     useEffect(() => {
         scrollToBottom();
@@ -125,8 +137,18 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
 
             try {
                 // Call parent handler which calls API
-                await onSendMessage(content);
-                // The socket will receive the real message and append it cleanly without duplicates!
+                const sentMessage = await onSendMessage(content);
+
+                if (sentMessage) {
+                    setMessages((prev) => {
+                        const sentId = sentMessage.id || sentMessage._id;
+                        if (sentId && prev.some((message) => (message.id || message._id) === sentId)) {
+                            return prev;
+                        }
+
+                        return [...prev, sentMessage];
+                    });
+                }
             } catch {
                 toast.error('Failed to send message');
                 setMessageInput(content); // Restore input on failure
@@ -169,15 +191,37 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
         }
     };
 
-    const handleBlock = async () => {
-        if (confirm(`Are you sure you want to block ${conversation.recipientName}?`)) {
-            try {
+    const handleToggleBlock = async () => {
+        if (isUpdatingBlockStatus) {
+            return;
+        }
+
+        const action = isRecipientBlocked ? 'unblock' : 'block';
+        const confirmationText = isRecipientBlocked
+            ? `Are you sure you want to unblock ${conversation.recipientName}?`
+            : `Are you sure you want to block ${conversation.recipientName}?`;
+
+        if (!confirm(confirmationText)) {
+            return;
+        }
+
+        try {
+            setIsUpdatingBlockStatus(true);
+
+            if (isRecipientBlocked) {
+                await messagesApi.unblockUser(conversation.recipientId);
+                toast.success('User unblocked');
+            } else {
                 await messagesApi.blockUser(conversation.recipientId);
                 toast.success('User blocked');
-                setShowMenu(false);
-            } catch {
-                toast.error('Failed to block user');
             }
+
+            setShowMenu(false);
+            await onBlockStatusChanged?.();
+        } catch {
+            toast.error(`Failed to ${action} user`);
+        } finally {
+            setIsUpdatingBlockStatus(false);
         }
     };
 
@@ -209,7 +253,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-lg h-full flex flex-col">
+        <div className="bg-white rounded-lg shadow-lg h-full min-h-0 flex flex-col">
             {/* Chat Header */}
             <div className="p-4 border-b flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -244,10 +288,12 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                     {showMenu && (
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border z-10">
                             <button
-                                onClick={handleBlock}
+                                onClick={handleToggleBlock}
+                                disabled={isUpdatingBlockStatus}
                                 className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-red-600"
                             >
-                                <FaBan /> Block User
+                                <FaBan />
+                                {isRecipientBlocked ? 'Unblock User' : 'Block User'}
                             </button>
                             <button
                                 onClick={handleReport}
@@ -261,7 +307,7 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
                 {isLoading ? (
                     <div className="text-center py-8">
                         <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
@@ -335,25 +381,29 @@ export default function ChatWindow({ conversation, onSendMessage }: ChatWindowPr
                     </button>
                     <textarea
                         value={messageInput}
+                        disabled={isRecipientBlocked}
                         onChange={(e) => {
                             setMessageInput(e.target.value);
                             notifyTyping();
                         }}
                         onKeyPress={handleKeyPress}
-                        placeholder="Type a message..."
+                        placeholder={isRecipientBlocked ? 'Unblock this user to send messages' : 'Type a message...'}
                         rows={1}
-                        className="flex-1 px-4 py-3 text-gray-900 dark:text-blue-600 bg-white dark:bg-slate-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none" style={{color:"black"}}
+                        className="flex-1 px-4 py-3 text-gray-900 dark:text-blue-600 bg-white dark:bg-slate-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        style={{color:"black"}}
                     />
                     <button
                         onClick={handleSend}
-                        disabled={!messageInput.trim()}
+                        disabled={!messageInput.trim() || isRecipientBlocked}
                         className="p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <FaPaperPlane className="text-xl" />
                     </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                    Press Enter to send, Shift+Enter for new line
+                    {isRecipientBlocked
+                        ? 'You have blocked this user. Unblock them to send messages.'
+                        : 'Press Enter to send, Shift+Enter for new line'}
                 </p>
             </div>
         </div>

@@ -44,6 +44,7 @@ function MessagesPageContent() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [unreadCount, setUnreadCount] = useState(0);
+    const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
 
     const fetchConversations = useCallback(async () => {
         try {
@@ -66,6 +67,15 @@ function MessagesPageContent() {
             setUnreadCount(count);
         } catch (err) {
             console.error('Error fetching unread count:', err);
+        }
+    }, []);
+
+    const fetchBlockedUsers = useCallback(async () => {
+        try {
+            const blockedUsers = await messagesApi.getBlockedUsers();
+            setBlockedUserIds(blockedUsers.map((user) => user.id));
+        } catch (err) {
+            console.error('Error fetching blocked users:', err);
         }
     }, []);
 
@@ -102,6 +112,7 @@ function MessagesPageContent() {
 
         void fetchConversations();
         void fetchUnreadCount();
+        void fetchBlockedUsers();
 
         if (!socketService.isConnected()) {
             socketService.connect();
@@ -142,16 +153,19 @@ function MessagesPageContent() {
             socketService.off('new-message', handleNewMessage);
             socketService.off('message-read', handleMessageRead);
         };
-    }, [fetchConversations, fetchUnreadCount, isAuthenticated, isAuthLoading, selectedConversation?.id]);
+    }, [fetchBlockedUsers, fetchConversations, fetchUnreadCount, isAuthenticated, isAuthLoading, selectedConversation?.id]);
 
-    const handleSendMessage = async (content: string, attachments?: File[]) => {
-        if (!selectedConversation) return;
+    const handleSendMessage = async (content: string, attachments?: File[]): Promise<ConversationMessage | null> => {
+        if (!selectedConversation) return null;
 
         try {
-            await messagesApi.sendMessage(selectedConversation.id, content, attachments);
-            // Socket will handle updating the UI
+            const sentMessage = await messagesApi.sendMessage(selectedConversation.id, content, attachments);
+            void fetchConversations();
+            void fetchUnreadCount();
+            return sentMessage;
         } catch {
             toast.error('Failed to send message');
+            return null;
         }
     };
 
@@ -190,9 +204,9 @@ function MessagesPageContent() {
                 </div>
 
                 {/* Chat Container */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-250px)] relative">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-250px)] min-h-0 relative">
                     {/* Conversations Sidebar */}
-                    <div className={`lg:col-span-1 bg-white rounded-lg shadow-lg overflow-hidden flex-col h-full ${selectedConversation ? 'hidden lg:flex' : 'flex'}`}>
+                    <div className={`lg:col-span-1 bg-white rounded-lg shadow-lg overflow-hidden flex-col h-full min-h-0 ${selectedConversation ? 'hidden lg:flex' : 'flex'}`}>
                         {/* Search */}
                         <div className="p-4 border-b">
                             <div className="relative">
@@ -217,9 +231,9 @@ function MessagesPageContent() {
                     </div>
 
                     {/* Chat Window */}
-                    <div className={`lg:col-span-2 bg-white rounded-lg shadow-lg h-full overflow-hidden flex-col ${!selectedConversation ? 'hidden lg:flex' : 'flex'}`}>
+                    <div className={`lg:col-span-2 bg-white rounded-lg shadow-lg h-full min-h-0 overflow-hidden flex-col ${!selectedConversation ? 'hidden lg:flex' : 'flex'}`}>
                         {selectedConversation ? (
-                            <div className="flex flex-col h-full">
+                            <div className="flex flex-col h-full min-h-0">
                                 {/* Mobile Back Button */}
                                 <div className="lg:hidden p-3 border-b border-gray-100 bg-gray-50/50 flex items-center">
                                     <button 
@@ -232,10 +246,15 @@ function MessagesPageContent() {
                                         Back to Messages
                                     </button>
                                 </div>
-                                <div className="flex-1 relative">
+                                <div className="flex-1 min-h-0 relative">
                                     <ChatWindow
                                         conversation={selectedConversation}
                                         onSendMessage={handleSendMessage}
+                                        isRecipientBlocked={blockedUserIds.includes(selectedConversation.recipientId)}
+                                        onBlockStatusChanged={async () => {
+                                            await fetchBlockedUsers();
+                                            await fetchConversations();
+                                        }}
                                     />
                                 </div>
                             </div>
