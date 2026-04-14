@@ -44,6 +44,9 @@ router.put('/:notificationId/read', authMiddleware, notificationController.markA
 // @access  Private
 router.put('/read/all', authMiddleware, notificationController.markAllAsRead);
 
+// Backward-compatible alias used by older frontend builds
+router.put('/read-all', authMiddleware, notificationController.markAllAsRead);
+
 // @route   POST /api/notifications/read/batch
 // @desc    Mark multiple notifications as read
 // @access  Private

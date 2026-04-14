@@ -65,8 +65,8 @@ export const messagesApi = {
     },
 
     // Start a new conversation
-    startConversation: async (recipientId: string, orderId?: string): Promise<{ conversationId: string; existing: boolean }> => {
-        const response = await api.post('/messages/conversations/start', { recipientId, orderId });
+    startConversation: async (recipientId: string, orderId?: string, productId?: string): Promise<{ conversationId: string; existing: boolean }> => {
+        const response = await api.post('/messages/conversations/start', { recipientId, orderId, productId });
         return response.data.data;
     },
 

@@ -28,14 +28,14 @@ const toErrorLike = (error: unknown): ErrorLike => {
 export const handleApiError = (error: unknown): string => {
     const normalizedError = toErrorLike(error);
 
-    // Check if it's our standardized ApiError
-    if (normalizedError.message && typeof normalizedError.message === 'string') {
-        return normalizedError.message;
-    }
-
     // Check for axios error response
     if (normalizedError.response?.data?.message) {
         return normalizedError.response.data.message;
+    }
+
+    // Check if it's our standardized ApiError
+    if (normalizedError.message && typeof normalizedError.message === 'string') {
+        return normalizedError.message;
     }
 
     // Check for validation errors

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { notificationApi, Notification } from '../api/notifications';
+import { notificationApi, Notification, normalizeNotificationPayload } from '../api/notifications';
 import { socketService as socket } from '../utils/socket';
 import { notificationHelper } from '../utils/notifications';
 
@@ -15,7 +15,7 @@ export const NotificationCenter = () => {
         fetchUnreadCount();
 
         // Socket.IO listeners
-        socket.on('new_notification', handleNewNotification);
+        socket.on('notification', handleNewNotification);
 
         // Click outside to close
         const handleClickOutside = (event: MouseEvent) => {
@@ -26,7 +26,7 @@ export const NotificationCenter = () => {
         document.addEventListener('mousedown', handleClickOutside);
 
         return () => {
-            socket.off('new_notification');
+            socket.off('notification');
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, []);
@@ -52,12 +52,13 @@ export const NotificationCenter = () => {
         }
     };
 
-    const handleNewNotification = (notification: Notification) => {
-        setNotifications(prev => [notification, ...prev]);
+    const handleNewNotification = (notification: unknown) => {
+        const normalized = normalizeNotificationPayload(notification);
+        setNotifications(prev => [normalized, ...prev]);
         setUnreadCount(prev => prev + 1);
 
         // Show toast notification
-        notificationHelper.info(notification.message);
+        notificationHelper.info(normalized.message);
     };
 
     const handleMarkAsRead = async (id: string) => {

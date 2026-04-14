@@ -12,6 +12,7 @@ import ProductCard from '../../../components/ProductCard';
 import { ReviewList } from '../../../components/reviews/ReviewList';
 import { messagesApi } from '../../../api/messages';
 import { useAuth } from '../../../hooks/useAuth';
+import { handleApiError } from '../../../utils/errorHandler';
 
 export default function PublicProfilePage() {
     const params = useParams();
@@ -68,8 +69,9 @@ export default function PublicProfilePage() {
                 router.push('/messages');
             }
         } catch (error) {
-            console.error('Failed to start conversation:', error);
-            toast.error('Failed to start conversation. Please try again.');
+            const errorMessage = handleApiError(error);
+            console.error('Failed to start conversation:', errorMessage);
+            toast.error(errorMessage);
         }
     };
 

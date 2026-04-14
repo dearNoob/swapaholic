@@ -9,14 +9,14 @@ import { useAppSelector } from '../../store/hooks';
 
 export default function MessageBadge() {
     const [unreadCount, setUnreadCount] = useState(0);
-    const { isAuthenticated, isLoading } = useAppSelector((state) => state.auth);
+    const { isAuthenticated, isLoading, accessToken } = useAppSelector((state) => state.auth);
 
     useEffect(() => {
         if (isLoading) {
             return;
         }
 
-        if (!isAuthenticated) {
+        if (!isAuthenticated || !accessToken) {
             return;
         }
 
@@ -66,7 +66,7 @@ export default function MessageBadge() {
             socketService.off('new-message', handleNewMessage);
             socketService.off('message-read', handleMessageRead);
         };
-    }, [isAuthenticated, isLoading]);
+    }, [isAuthenticated, isLoading, accessToken]);
 
     if (isLoading || !isAuthenticated) return null;
 

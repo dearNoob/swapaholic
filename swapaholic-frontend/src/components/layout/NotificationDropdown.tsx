@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { FaBell, FaDollarSign, FaTruck, FaGavel, FaExclamation, FaCheckCircle } from 'react-icons/fa';
 import { useAppSelector } from '../../store/hooks';
 import { socketService } from '../../utils/socket';
-import { notificationApi, Notification } from '../../api/notifications';
+import { notificationApi, Notification, normalizeNotificationPayload } from '../../api/notifications';
 import { toast } from 'react-toastify';
 
 export default function NotificationDropdown() {
-    const { user } = useAppSelector((state) => state.auth);
+    const { user, accessToken, isAuthenticated, isLoading: isAuthLoading } = useAppSelector((state) => state.auth);
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -19,10 +19,12 @@ export default function NotificationDropdown() {
 
     // Initial fetch for count and notifications on load
     useEffect(() => {
-        if (user) {
-            fetchUnreadCount();
+        if (!user || !accessToken || isAuthLoading || !isAuthenticated) {
+            return;
         }
-    }, [user]);
+
+        void fetchUnreadCount();
+    }, [user, accessToken, isAuthLoading, isAuthenticated]);
 
     const fetchUnreadCount = async () => {
         try {
@@ -35,10 +37,12 @@ export default function NotificationDropdown() {
 
     // Fetch notifications
     useEffect(() => {
-        if (user && isOpen) {
-            fetchNotifications();
+        if (!isOpen || !user || !accessToken || isAuthLoading || !isAuthenticated) {
+            return;
         }
-    }, [user, isOpen]);
+
+        void fetchNotifications();
+    }, [user, accessToken, isAuthLoading, isAuthenticated, isOpen]);
 
     const fetchNotifications = async () => {
         try {
@@ -81,28 +85,20 @@ export default function NotificationDropdown() {
 
     // Listen for real-time notifications
     useEffect(() => {
-        if (!user?.id) return;
+        if (!user?.id || !accessToken || isAuthLoading || !isAuthenticated) return;
 
-        const handleNewNotification = (data: any) => {
-            const newNotification: Notification = {
-                id: data.id || Date.now().toString(),
-                title: data.title || 'New Notification',
-                message: data.message || '',
-                type: data.type || 'system',
-                isRead: false,
-                createdAt: new Date().toISOString(),
-                metadata: data.metadata,
-            };
+        const handleNewNotification = (data: unknown) => {
+            const newNotification: Notification = normalizeNotificationPayload(data);
 
             setNotifications((prev) => [newNotification, ...prev].slice(0, 5));
             setUnreadCount((prev) => prev + 1);
             
-            if (data.type === 'outbid') {
-                toast.warn(data.message || data.title || "You've been outbid!", {
+            if (newNotification.type === 'outbid') {
+                toast.warn(newNotification.message || newNotification.title || "You've been outbid!", {
                     icon: <FaGavel className="text-orange-600" />
                 });
             } else {
-                toast.info(data.title || 'New Notification');
+                toast.info(newNotification.title || 'New Notification');
             }
         };
 
@@ -115,7 +111,7 @@ export default function NotificationDropdown() {
         return () => {
             socketService.off('notification', handleNewNotification);
         };
-    }, [user]);
+    }, [user, accessToken, isAuthLoading, isAuthenticated]);
 
     const handleMarkAsRead = async (id: string) => {
         try {

@@ -3,12 +3,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FaHome, FaChevronRight, FaShare, FaFlag, FaCheckCircle, FaClock } from 'react-icons/fa';
+import { FaHome, FaChevronRight, FaShare, FaFlag, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { productsApi, Product } from '../../../api/products';
 import { bidsApi, Bid } from '../../../api/bids';
 import { messagesApi } from '../../../api/messages';
 import { useAuth } from '../../../hooks/useAuth';
+import { handleApiError } from '../../../utils/errorHandler';
 import { socketService } from '../../../utils/socket';
 import ImageCarousel from '../../../components/ImageCarousel';
 import BiddingInterface from '../../../components/BiddingInterface';
@@ -193,7 +194,7 @@ export default function ProductDetailPage() {
         }
 
         try {
-            const response = await messagesApi.startConversation(sellerId);
+            const response = await messagesApi.startConversation(sellerId, undefined, productId);
             const conversationId = response.conversationId;
 
             if (conversationId) {
@@ -202,8 +203,9 @@ export default function ProductDetailPage() {
                 router.push('/messages');
             }
         } catch (conversationError) {
-            console.error('Failed to start conversation:', conversationError);
-            toast.error('Failed to start conversation. Please try again.');
+            const errorMessage = handleApiError(conversationError);
+            console.error('Failed to start conversation:', errorMessage);
+            toast.error(errorMessage);
         }
     };
 

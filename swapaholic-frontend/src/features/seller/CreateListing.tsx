@@ -403,6 +403,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
             formData.append('category', data.category);
             formData.append('condition', data.condition);
             formData.append('price', data.price.toString());
+            formData.append('basePrice', data.price.toString());
             formData.append('auctionDuration', data.auctionDuration.toString());
             if (data.location) formData.append('location', data.location);
             if (data.lat && data.lng) {

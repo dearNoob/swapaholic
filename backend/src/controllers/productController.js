@@ -1464,16 +1464,63 @@ const updateProduct = async (req, res) => {
       return sendErrorResponse(res, 403, 'Access denied');
     }
 
-    const updates = { ...req.body };
+    const {
+      title,
+      description,
+      category,
+      basePrice,
+      price,
+      condition,
+      geometry,
+      location,
+      aiQualityScore,
+      aiSuggestedPrice,
+      remainingImages,
+      existingImages
+    } = req.body;
 
-    if (updates.condition) {
-      updates.condition = normalizeConditionValue(updates.condition);
+    const updates = {};
+
+    if (title !== undefined) updates.title = title;
+    if (description !== undefined) updates.description = description;
+    if (category !== undefined) updates.category = category;
+    if (location !== undefined) updates.location = location;
+    if (condition !== undefined) updates.condition = normalizeConditionValue(condition);
+
+    const resolvedBasePrice = basePrice ?? price;
+    if (resolvedBasePrice !== undefined && resolvedBasePrice !== null && resolvedBasePrice !== '') {
+      const parsedBasePrice = parseFloat(resolvedBasePrice);
+      if (!Number.isFinite(parsedBasePrice) || parsedBasePrice <= 0) {
+        return sendErrorResponse(res, 400, 'Invalid base price');
+      }
+      updates.basePrice = parsedBasePrice;
+    }
+
+    if (aiQualityScore !== undefined && aiQualityScore !== null && aiQualityScore !== '') {
+      const parsedScore = parseFloat(aiQualityScore);
+      if (Number.isFinite(parsedScore)) {
+        updates.aiQualityScore = parsedScore;
+      }
+    }
+
+    if (aiSuggestedPrice !== undefined && aiSuggestedPrice !== null && aiSuggestedPrice !== '') {
+      const parsedSuggestedPrice = parseFloat(aiSuggestedPrice);
+      if (Number.isFinite(parsedSuggestedPrice)) {
+        updates.aiSuggestedPrice = parsedSuggestedPrice;
+      }
+    }
+
+    if (geometry !== undefined) {
+      const parsedGeometry = parseJsonField(geometry, null);
+      if (parsedGeometry) {
+        updates.geometry = parsedGeometry;
+      }
     }
 
     let finalImages = product.images || [];
 
-    if (req.body.remainingImages || req.body.existingImages) {
-      const existingImgs = req.body.remainingImages || req.body.existingImages;
+    if (remainingImages || existingImages) {
+      const existingImgs = remainingImages || existingImages;
       const parsedImages = parseJsonField(existingImgs, finalImages);
       finalImages = Array.isArray(parsedImages) ? parsedImages : finalImages;
     }

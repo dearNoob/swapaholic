@@ -242,7 +242,8 @@ const getNotificationsByType = async (req, res) => {
       'seller_banned', 'product_listed', 'product_sold', 'support_notice',
       'auction_won', 'auction_confirmation_reminder',
       'auction_confirmation_expired', 'auction_second_chance',
-      'seller_payout', 'outbid'
+      'seller_payout', 'outbid',
+      'auction_ended_seller', 'auction_ended_no_bids'
     ];
 
     if (!validTypes.includes(type)) {

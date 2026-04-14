@@ -155,12 +155,16 @@ class NotificationService {
       // Send via Socket.io if user is online
       const sent = this.sendToUser(notification.recipientId.toString(), notification.type, {
         id: notification._id,
+        _id: notification._id,
         title: notification.title,
         message: notification.message,
         type: notification.type,
         data: notification.data,
         priority: notification.priority,
-        actionUrl: notification.actionUrl
+        actionUrl: notification.actionUrl,
+        read: notification.read,
+        createdAt: notification.createdAt,
+        metadata: notification.metadata
       });
 
       if (!sent) {

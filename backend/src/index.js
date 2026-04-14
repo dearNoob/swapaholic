@@ -91,6 +91,20 @@ const isAllowedLanDevOrigin = (origin) => {
   }
 };
 
+const isAllowedLocalhostDevOrigin = (origin) => {
+  if (process.env.NODE_ENV === 'production') return false;
+
+  try {
+    const url = new URL(origin);
+    const isWebProtocol = url.protocol === 'http:' || url.protocol === 'https:';
+    const isLoopbackHost = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+
+    return isWebProtocol && isLoopbackHost;
+  } catch (error) {
+    return false;
+  }
+};
+
 const buildAllowedOrigins = () => {
   const configuredOrigins = [
     process.env.FRONTEND_URL,
@@ -119,6 +133,7 @@ const isAllowedOrigin = (origin) => {
 
   const normalizedOrigin = normalizeOrigin(origin);
   if (allowedOrigins.has(normalizedOrigin)) return true;
+  if (isAllowedLocalhostDevOrigin(normalizedOrigin)) return true;
   if (isAllowedLanDevOrigin(normalizedOrigin)) return true;
   
   if (normalizedOrigin && normalizedOrigin.endsWith('.vercel.app')) {

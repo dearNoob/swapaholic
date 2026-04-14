@@ -47,7 +47,9 @@ const notificationSchema = new mongoose.Schema(
         'auction_confirmation_expired',  // Confirmation time expired
         'auction_second_chance',         // 2nd/3rd bidder selected
         'seller_payout',      // Seller payout completed
-        'outbid'              // User outbid on auction
+        'outbid',             // User outbid on auction
+        'auction_ended_seller',
+        'auction_ended_no_bids'
       ],
       required: true
     },

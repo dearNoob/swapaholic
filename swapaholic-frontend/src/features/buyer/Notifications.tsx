@@ -2,34 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { useAppSelector } from '../../store/hooks';
 import { FaBell, FaDollarSign, FaTruck, FaGavel, FaExclamation, FaCheckCircle, FaFilter, FaTrash, FaCheck } from 'react-icons/fa';
-import { notificationApi, Notification } from '../../api/notifications';
+import { notificationApi, Notification, normalizeNotificationPayload } from '../../api/notifications';
 import { socketService } from '../../utils/socket';
 import { Button } from '../../components/ui/Button';
 
 export const Notifications = () => {
-    const { user } = useAppSelector((state) => state.auth);
+    const { user, accessToken, isAuthenticated, isLoading: isAuthLoading } = useAppSelector((state) => state.auth);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'unread' | Notification['type']>('all');
 
     useEffect(() => {
-        fetchNotifications();
-    }, []);
+        if (!isAuthenticated || isAuthLoading || !accessToken) {
+            return;
+        }
+
+        void fetchNotifications();
+    }, [accessToken, isAuthLoading, isAuthenticated]);
 
     // Listen for real-time notifications
     useEffect(() => {
-        if (!user?.id) return;
+        if (!user?.id || !accessToken || isAuthLoading || !isAuthenticated) return;
 
-        const handleNewNotification = (data: any) => {
-            const newNotification: Notification = {
-                id: data.id || Date.now().toString(),
-                title: data.title || 'New Notification',
-                message: data.message || '',
-                type: data.type || 'system',
-                isRead: false,
-                createdAt: new Date().toISOString(),
-                metadata: data.metadata,
-            };
+        const handleNewNotification = (data: unknown) => {
+            const newNotification: Notification = normalizeNotificationPayload(data);
 
             setNotifications((prev) => [newNotification, ...prev]);
         };
@@ -39,7 +35,7 @@ export const Notifications = () => {
         return () => {
             socketService.off('notification', handleNewNotification);
         };
-    }, [user]);
+    }, [user, accessToken, isAuthLoading, isAuthenticated]);
 
     const fetchNotifications = async () => {
         try {
