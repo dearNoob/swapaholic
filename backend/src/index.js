@@ -64,6 +64,33 @@ const normalizeOrigin = (origin) => {
   }
 };
 
+const isPrivateIpv4 = (hostname) => {
+  const parts = hostname.split('.').map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+};
+
+const isAllowedLanDevOrigin = (origin) => {
+  if (process.env.NODE_ENV === 'production') return false;
+
+  try {
+    const url = new URL(origin);
+    const isWebProtocol = url.protocol === 'http:' || url.protocol === 'https:';
+    const isDevPort = ['3000', '3001', '5173', '4173'].includes(url.port || '');
+    return isWebProtocol && isDevPort && isPrivateIpv4(url.hostname);
+  } catch (error) {
+    return false;
+  }
+};
+
 const buildAllowedOrigins = () => {
   const configuredOrigins = [
     process.env.FRONTEND_URL,
@@ -92,6 +119,7 @@ const isAllowedOrigin = (origin) => {
 
   const normalizedOrigin = normalizeOrigin(origin);
   if (allowedOrigins.has(normalizedOrigin)) return true;
+  if (isAllowedLanDevOrigin(normalizedOrigin)) return true;
   
   if (normalizedOrigin && normalizedOrigin.endsWith('.vercel.app')) {
     return true;

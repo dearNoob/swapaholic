@@ -96,12 +96,8 @@ apiClient.interceptors.response.use(
     async (error: AxiosError) => {
         const errorPayload = getErrorPayload(error);
         const originalRequest = error.config as RetriableRequestConfig | undefined;
-        // If unauthorized, attempt token refresh unless request is for analyze endpoint
+        // If unauthorized, attempt token refresh
         if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-            // Skip redirect for analyze endpoint; let UI handle error
-            if (originalRequest.url && originalRequest.url.includes('/products/analyze')) {
-                return Promise.reject(error);
-            }
             if (isRefreshing) {
                 return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });

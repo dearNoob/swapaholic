@@ -84,11 +84,12 @@ class SocketService {
     }
 
     on<TArgs extends unknown[]>(event: string, callback: (...args: TArgs) => void) {
-        if (!this.socket) {
-            console.warn('Socket not connected. Call connect() first');
+        const activeSocket = this.socket ?? this.connect();
+        if (!activeSocket) {
+            console.warn(`Socket not available for listener: ${event}`);
             return;
         }
-        this.socket.on(event, callback);
+        activeSocket.on(event, callback);
     }
 
     off<TArgs extends unknown[]>(event: string, callback?: (...args: TArgs) => void) {
@@ -101,11 +102,12 @@ class SocketService {
     }
 
     emit(event: string, data: unknown) {
-        if (!this.socket) {
-            console.warn('Socket not connected. Cannot emit event');
+        const activeSocket = this.socket ?? this.connect();
+        if (!activeSocket) {
+            console.warn(`Socket not available. Cannot emit event: ${event}`);
             return;
         }
-        this.socket.emit(event, data);
+        activeSocket.emit(event, data);
     }
 
     isConnected() {

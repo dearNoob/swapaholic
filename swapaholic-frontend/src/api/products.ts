@@ -205,7 +205,11 @@ export const productsApi = {
      * Analyze product images with AI
      */
     async analyzeProduct(formData: FormData): Promise<{ description: string; score: number }> {
-        const response = await apiClient.post<{ description: string; score: number }>('/products/analyze', formData);
+        const response = await apiClient.post<{ description: string; score: number }>('/products/analyze', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
         return response.data;
     },
 

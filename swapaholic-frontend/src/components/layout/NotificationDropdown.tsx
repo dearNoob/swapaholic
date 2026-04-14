@@ -106,6 +106,10 @@ export default function NotificationDropdown() {
             }
         };
 
+        if (!socketService.isConnected()) {
+            socketService.connect();
+        }
+
         socketService.on('notification', handleNewNotification);
 
         return () => {

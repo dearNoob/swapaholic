@@ -163,6 +163,11 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
         const title = watch('title');
         const category = watch('category');
         const condition = watch('condition');
+        const predictionCategory = watch('predictionCategory');
+        const brand = watch('brand');
+        const deviceModel = watch('deviceModel');
+        const originalPrice = watch('originalPrice');
+        const productAge = watch('productAge');
 
         if (!title || !category || !condition) {
             toast.error('Please fill in Title, Category and Condition first.');
@@ -177,10 +182,17 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
         try {
             setIsAnalyzing(true);
             const formData = new FormData();
+            const startingPrice = watch('price');
             formData.append('title', title);
             formData.append('category', category);
             formData.append('condition', condition);
             formData.append('language', aiLanguage);
+            if (predictionCategory) formData.append('predictionCategory', String(predictionCategory));
+            if (brand) formData.append('brand', String(brand));
+            if (deviceModel) formData.append('deviceModel', String(deviceModel));
+            if (originalPrice !== undefined && originalPrice !== null) formData.append('originalPrice', String(originalPrice));
+            if (startingPrice !== undefined && startingPrice !== null) formData.append('price', String(startingPrice));
+            if (productAge !== undefined && productAge !== null) formData.append('productAge', String(productAge));
 
 
             // Append first image

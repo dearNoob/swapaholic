@@ -13,6 +13,7 @@ const parsedApiOrigin = (() => {
 
 const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
+  allowedDevOrigins: ['192.168.56.1'],
   turbopack: {
     root: path.resolve(__dirname),
   },
