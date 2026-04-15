@@ -804,6 +804,7 @@ export const CreateListing = ({ listingId }: CreateListingProps) => {
                                             <option value="Tablet">Tablet / iPad</option>
                                             <option value="Desktop PC">Desktop PC</option>
                                             <option value="Smartwatch">Smartwatch / Apple Watch</option>
+                                            <option value="Camera">Camera</option>
                                         </select>
                                     </div>
                                 </div>
