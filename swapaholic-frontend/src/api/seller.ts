@@ -13,6 +13,12 @@ export const sellerApi = {
         return response.data;
     },
 
+    // Delete one of the seller's listings using the same authenticated client
+    deleteListing: async (id: string) => {
+        const response = await api.delete(`/products/${id}`);
+        return response.data;
+    },
+
     // Get sales analytics by period
     getSalesAnalytics: async (period: '7d' | '30d' | '90d' = '30d') => {
         const response = await api.get(`/seller/analytics?period=${period}`);

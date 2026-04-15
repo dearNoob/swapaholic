@@ -13,7 +13,6 @@ import QuickActions from '../../../components/seller/QuickActions';
 import EarningsSummary from '../../../components/seller/EarningsSummary';
 import RecentBids from '../../../components/seller/RecentBids';
 import { sellerApi } from '../../../api/seller';
-import { productsApi } from '../../../api/products';
 import { useAppSelector } from '../../../store/hooks';
 import { socketService } from '../../../utils/socket';
 import { handleApiError } from '../../../utils/errorHandler';
@@ -375,7 +374,7 @@ export default function SellerDashboardPage() {
 
     const handleDeleteListing = async (id: string) => {
         try {
-            await productsApi.deleteProduct(id);
+            await sellerApi.deleteListing(id);
             toast.success('Listing deleted successfully');
 
             const response = await sellerApi.getListings();

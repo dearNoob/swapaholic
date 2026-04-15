@@ -103,7 +103,7 @@ export const productsApi = {
      */
     async deleteProduct(id: string): Promise<{ message: string }> {
         const response = await apiClient.delete<ApiResponse<{ message: string }>>(`/products/${id}`);
-        return response.data.data;
+        return (response.data.data ?? response.data) as { message: string };
     },
 
     /**

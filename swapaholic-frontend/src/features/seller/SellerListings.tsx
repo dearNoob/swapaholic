@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { toast } from 'react-toastify';
 import { FaEdit, FaTrash, FaEye, FaPlus, FaSearch, FaFilter } from 'react-icons/fa';
 import { sellerApi } from '../../api/seller';
-import { productsApi } from '../../api/products';
 import { Button } from '../../components/ui/Button';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import { handleApiError } from '../../utils/errorHandler';
 
 interface Listing {
     id: string;
@@ -59,13 +59,13 @@ export const SellerListings = () => {
 
         try {
             setIsDeleting(true);
-            await productsApi.deleteProduct(listingToDelete);
+            await sellerApi.deleteListing(listingToDelete);
             toast.success('Listing deleted successfully');
             fetchListings(); // Refresh list
             setIsDeleteModalOpen(false);
         } catch (error) {
             console.error('Error deleting listing:', error);
-            toast.error('Failed to delete listing');
+            toast.error(handleApiError(error));
         } finally {
             setIsDeleting(false);
             setListingToDelete(null);
