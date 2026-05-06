@@ -1,456 +1,312 @@
-<div align="center">
+# Swapaholic
 
-<h1>🔄 Swapaholic</h1>
+[![Frontend](https://img.shields.io/badge/Frontend-Next.js_16-black?style=for-the-badge&logo=next.js)](https://swapaholic.vercel.app/)
+[![Backend](https://img.shields.io/badge/Backend-Express.js-000000?style=for-the-badge&logo=express)](https://swapaholic-api-service.onrender.com)
+[![Database](https://img.shields.io/badge/Database-MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Realtime](https://img.shields.io/badge/Realtime-Socket.IO-010101?style=for-the-badge&logo=socket.io)](https://socket.io/)
+[![Language](https://img.shields.io/badge/Language-TypeScript_+_JavaScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](#tech-stack)
 
-<p><strong>A Full-Stack P2P Marketplace & Service Exchange Platform</strong></p>
+Swapaholic is a capstone full-stack re-commerce platform built for buying and selling second-hand products through direct listing and live auction workflows. The project combines marketplace operations, secure authentication, payments, quality-control checks, logistics handling, and role-based dashboards inside a single web application.
 
-<p>
-  <a href="#"><img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/Node.js-Express-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/MongoDB-Mongoose-47A248?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/Socket.io-Real--Time-010101?style=for-the-badge&logo=socket.io" alt="Socket.io" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/Tests-214%20Passing-brightgreen?style=for-the-badge&logo=jest&logoColor=white" alt="Tests" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" /></a>
-</p>
+The repository includes a Next.js frontend, an Express API, MongoDB data models, Socket.IO-powered realtime updates, and deployment-ready configuration for Vercel and Render.
 
-<p><em>An end-to-end peer-to-peer marketplace where users can buy, sell, and bid on products — and discover verified local service providers — all in one platform.</em></p>
+## Table of Contents
 
-</div>
+- [Live Demo](#live-demo)
+- [Project Status](#project-status)
+- [Core Capabilities](#core-capabilities)
+- [Verified End-to-End Flow](#verified-end-to-end-flow)
+- [Repository Snapshot](#repository-snapshot)
+- [Architecture Overview](#architecture-overview)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Environment Variables](#environment-variables)
+- [Local Docker Setup](#local-docker-setup)
+- [Testing and Verification](#testing-and-verification)
+- [Deployment Notes](#deployment-notes)
+- [Screenshots](#screenshots)
 
----
-
-## 📋 Table of Contents
-
-- [Overview](#-overview)
-- [Live Demo](#-live-demo)
-- [Key Features](#-key-features)
-- [Tech Stack](#-tech-stack)
-- [System Architecture](#-system-architecture)
-- [Project Structure](#-project-structure)
-- [Database Models](#-database-models)
-- [API Reference](#-api-reference)
-- [User Roles](#-user-roles)
-- [Getting Started](#-getting-started)
-- [Environment Variables](#-environment-variables)
-- [Running with Docker](#-running-with-docker)
-- [Running Tests](#-running-tests)
-- [Deployment](#-deployment)
-- [Screenshots](#-screenshots)
-- [Contributing](#-contributing)
-
----
-
-## 🌐 Overview
-
-**Swapaholic** is a comprehensive **peer-to-peer (P2P) marketplace** built as a Capstone project. It enables users to list pre-owned products for direct sale or live auction, hire and offer local services, and complete the entire transaction lifecycle — from discovery to payment to delivery — within a single, unified platform.
-
-The platform is designed with the Bangladeshi market in mind, supporting local mobile financial services (bKash, Rocket, Nagad) alongside international card payments via Stripe.
-
-### What makes Swapaholic different?
-
-| Feature | Description |
-|---|---|
-| 🤖 **AI-Powered Listings** | Google Gemini AI generates product descriptions & suggests fair prices |
-| 🏷️ **Live Auction System** | Real-time bidding with auto-bid support and a 5% minimum increment rule |
-| 🔍 **QC Verification** | Dedicated Quality Controllers verify product condition before listing goes live |
-| 🗺️ **Geospatial Search** | Find nearby products and services using map-based discovery (Leaflet + MongoDB 2dsphere) |
-| 💬 **Real-Time Messaging** | In-app Socket.io chat between buyers and sellers |
-| 🔐 **Enterprise Security** | JWT auth, 2FA (TOTP), OTP via email, rate limiting, Helmet, input sanitization |
-
----
-
-## 🚀 Live Demo
+## Live Demo
 
 | Service | URL |
-|---|---|
-| 🌍 **Frontend** | Deployed on **Vercel** |
-| ⚙️ **Backend API** | Deployed on **Render** |
-| 📘 **API Health** | `GET /health` |
+| --- | --- |
+| Frontend | [https://swapaholic.vercel.app/](https://swapaholic.vercel.app/) |
+| Backend API | [https://swapaholic-api-service.onrender.com](https://swapaholic-api-service.onrender.com) |
+| Health Check | [https://swapaholic-api-service.onrender.com/health](https://swapaholic-api-service.onrender.com/health) |
 
----
+## Project Status
 
-## ✨ Key Features
+Swapaholic is an active capstone and portfolio project. The repository already contains substantial implementation across marketplace flows, authentication, payment handling, QC, logistics, and dashboards, but some parts of the product are still being refined and stabilized.
 
-### 🛍️ Marketplace & Auction
-- Browse, search, and filter products with full-text search
-- Sell products via **fixed price** or **live auction**
-- Real-time bidding with **auto-bid** and minimum 5% bid increment enforcement
-- Auction scheduler via cron jobs — automatically closes ended auctions
-- AI-suggested pricing from Google Gemini based on product images
-- Product condition grading: Brand New → Like New → Excellent → Good → Fair
+This README intentionally focuses on repo-verified behavior and checked project structure rather than broad product claims.
 
-### 🧑‍🔧 Service Marketplace
-- List and discover local services across 11 categories (Repair, Cleaning, Tech Support, Tutoring, etc.)
-- Service provider scheduling with weekly availability calendar
-- Provider ratings, reviews, and booking count tracking
-- Service verification and certification system
+## Core Capabilities
 
-### 🔐 Authentication & Security
-- JWT-based access tokens + refresh token rotation
-- Two-Factor Authentication (2FA) with TOTP (QR code based)
-- OTP email verification for login, password reset, and phone verify
-- Login history tracking with device fingerprinting
-- Rate limiting: 1000 req/15min global, 30 req/15min on auth routes
-- Helmet.js security headers, CORS with allowlist, input sanitization
+### Marketplace and Auction
 
-### 👤 User & Role Management
-- 9 distinct roles: `user`, `buyer`, `seller`, `quality_controller`, `delivery_person`, `admin`, `logistics_officer`, `verifier`, `delivery`
-- KYC verification with NID document upload
-- Seller onboarding flow with profile completion scoring
-- Admin panel for user management, suspensions, and bans
-- Follower/following social graph
+- Product listing, browsing, search, and detail pages
+- Fixed-price and auction-oriented product flows
+- Realtime bidding with Socket.IO updates
+- Auto-bid endpoints and bid tracking models
+- Wishlist support and recently viewed product history
 
-### 💳 Payments
-- **Stripe** card payments (international)
-- **bKash / Rocket / Nagad / Bank** (local Bangladeshi MFS)
-- Mock payment gateway for development/testing
-- Stripe webhook integration for payment event handling
-- Secure payment method storage with masked card details
+### Authentication and Account Security
 
-### 📦 Orders & Logistics
-- Full order lifecycle: placed → confirmed → shipped → delivered
-- Dedicated logistics officer dashboard
-- Delivery person assignment and tracking
-- Shipping address book management
+- JWT-based authentication
+- OTP verification flows for phone verification, password reset, and login support
+- Two-factor authentication with TOTP
+- Role-based access across buyer, seller, admin, logistics, QC, and delivery-related flows
+- Login history and account status tracking in the user model
 
-### 🔔 Notifications & Messaging
-- Real-time push notifications via Socket.io
-- In-app notification center with read/unread state
-- Buyer-seller direct messaging with conversation threads
-- Message blocking support
+### Payments, QC, and Logistics
 
-### 🛠️ Admin Panel
-- Platform analytics dashboard (users, revenue, orders, products)
-- Product & service moderation
-- Dispute resolution management
-- QC verification queue management
-- Content management
+- Stripe-backed payment flow plus local payment method modeling
+- Mock gateway support for development and smoke testing
+- Quality-control verification records and approval workflows
+- Logistics task handling, delivery status updates, and payout release flow
+- Admin oversight for moderation, analytics, and operational actions
 
-### 🌟 Additional Features
-- Wishlist management
-- Product review & rating system (with buyer rating)
-- Support ticket system
-- User report & block system
-- Recently viewed products
-- Seller analytics dashboard
-- Buyer order history dashboard
-- Price prediction via AI model
-- Responsive design with Tailwind CSS
+### Realtime and Operational Visibility
 
----
+- Socket.IO notifications for bid, order, payout, and delivery events
+- Seller, buyer, admin, and logistics dashboards
+- Backend health endpoint and dashboard smoke-test script
+- Deployment guidance for Vercel and Render
 
-## 🧰 Tech Stack
+### AI-Assisted Product Workflow
+
+- Gemini-backed listing assistance in the product controller
+- Hugging Face integration for image and product-analysis fallback logic
+- AI-oriented product description and pricing support in backend flow design
+
+## Verified End-to-End Flow
+
+The repository contains a live smoke workflow in `backend/src/scripts/live-dashboard-smoke.js` that exercises a multi-role journey across the application. At a high level, that script validates this operational path:
+
+1. A seller account is created and verified.
+2. A buyer account is created and verified.
+3. A logistics officer is registered, approved, and authenticated through admin flow.
+4. The seller creates listings and the buyer places bids.
+5. The seller accepts the highest bid and the buyer confirms the auction win.
+6. A payment record is created and processed through the mock payment path.
+7. QC is initiated and approved.
+8. Logistics pickup, in-transit, and delivery completion steps are executed.
+9. An admin releases payout to the seller.
+10. Buyer, seller, admin, and logistics dashboards and notifications are checked for expected updates.
+
+This is one of the strongest repo-backed indicators that Swapaholic is designed around an end-to-end marketplace operations workflow rather than only isolated UI pages.
+
+## Repository Snapshot
+
+| Area | Verified Count |
+| --- | ---: |
+| Backend route modules | 22 |
+| Backend controllers | 27 |
+| Mongoose models | 17 |
+| Frontend `page.tsx` routes | 71 |
+
+### Important directories
+
+```text
+swapaholic/
+|-- backend/
+|   |-- src/
+|   |   |-- config/
+|   |   |-- controllers/
+|   |   |-- middleware/
+|   |   |-- models/
+|   |   |-- routes/
+|   |   |-- scripts/
+|   |   |-- services/
+|   |   `-- utils/
+|   |-- tests/
+|   |-- .env.example
+|   `-- package.json
+|-- swapaholic-frontend/
+|   |-- src/
+|   |   |-- api/
+|   |   |-- app/
+|   |   |-- components/
+|   |   |-- features/
+|   |   |-- hooks/
+|   |   |-- lib/
+|   |   |-- store/
+|   |   |-- styles/
+|   |   |-- types/
+|   |   `-- utils/
+|   |-- public/
+|   |-- .env.example
+|   `-- package.json
+|-- deployment/
+|   |-- docker-compose.prod.yml
+|   `-- nginx.conf
+|-- docs/
+|   `-- DEPLOYMENT.md
+|-- docker-compose.yml
+`-- README.md
+```
+
+## Architecture Overview
+
+```text
+Browser
+  |
+  v
+Next.js frontend (App Router, Redux Toolkit, TypeScript)
+  |
+  +--> REST requests to Express API
+  +--> Socket.IO client for realtime events
+  |
+  v
+Express backend
+  |
+  +--> Auth, validation, rate limiting, error handling
+  +--> Route modules for products, bids, orders, payments, QC, logistics, messages, admin, and more
+  +--> Cron-driven auction lifecycle handling
+  |
+  v
+MongoDB via Mongoose
+  |
+  +--> Product, Bid, AutoBid, Order, Payment
+  +--> User, Review, Notification, Delivery, SupportTicket
+  +--> QC, reporting, messaging, and content models
+  |
+  +--> External services
+       - Stripe
+       - Gemini
+       - Hugging Face
+       - Nodemailer
+       - Cloudinary-backed storage flow
+```
+
+## Tech Stack
 
 ### Frontend
-| Technology | Purpose |
-|---|---|
-| **Next.js 16** (React 19) | Full-stack React framework with App Router |
-| **TypeScript 5** | Type safety across the codebase |
-| **Tailwind CSS 4** | Utility-first styling |
-| **Redux Toolkit** | Global state management |
-| **Socket.io Client** | Real-time bidding & messaging |
-| **Stripe.js** | Client-side payment UI |
-| **React Leaflet** | Interactive maps |
-| **GSAP** | Smooth animations |
-| **TipTap** | Rich text editor for descriptions |
-| **Recharts** | Analytics charts and graphs |
-| **React Hook Form + Yup** | Form validation |
-| **React Toastify** | Toast notifications |
+
+- Next.js 16
+- React 19
+- TypeScript
+- Redux Toolkit
+- Tailwind CSS 4
+- React Hook Form and Yup
+- Recharts
+- React Leaflet
+- GSAP
+- Stripe client libraries
+- Socket.IO client
 
 ### Backend
-| Technology | Purpose |
-|---|---|
-| **Node.js + Express.js** | REST API server |
-| **MongoDB + Mongoose** | Primary database with 2dsphere geospatial indexing |
-| **Socket.io** | WebSocket real-time communication |
-| **JWT** | Stateless authentication |
-| **Bcrypt.js** | Password hashing |
-| **Stripe** | Payment processing |
-| **Nodemailer** | Transactional email (OTP, notifications) |
-| **Google Gemini AI** | AI-generated descriptions & price suggestions |
-| **Google Cloud Vision** | Image analysis for quality scoring |
-| **HuggingFace Inference** | ML-based price prediction |
-| **Node-Cron** | Scheduled auction closing jobs |
-| **Helmet** | HTTP security headers |
-| **express-rate-limit** | API rate limiting |
-| **Winston** | Structured logging |
-| **Multer** | File upload handling |
 
-### DevOps & Testing
-| Technology | Purpose |
-|---|---|
-| **Docker + Docker Compose** | Containerized local development |
-| **Jest + Supertest** | Unit & integration testing (214 tests, 100% pass rate) |
-| **MongoDB Memory Server** | In-memory DB for test isolation |
-| **Nodemon** | Dev server auto-reload |
-| **Vercel** | Frontend deployment |
-| **Render** | Backend deployment |
-| **Cloudinary** | Production image storage |
+- Node.js
+- Express
+- MongoDB with Mongoose
+- Socket.IO
+- JWT
+- bcryptjs
+- nodemailer
+- node-cron
+- multer
+- winston
+- Helmet
+- express-rate-limit
 
----
+### AI and Integrations
 
-## 🏛️ System Architecture
+- Google Gemini
+- Hugging Face Inference
+- Stripe
+- Cloudinary-backed upload flow
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      CLIENT (Browser)                   │
-│              Next.js 16 + React 19 + TypeScript          │
-│         Redux Store │ Socket.io Client │ Stripe.js       │
-└──────────────────────────┬──────────────────────────────┘
-                           │ HTTPS / WSS
-┌──────────────────────────▼──────────────────────────────┐
-│                    BACKEND (Node.js)                     │
-│  Express REST API  │  Socket.io Server  │  Cron Jobs     │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  Middleware: CORS │ Helmet │ Rate Limit │ Auth    │   │
-│  └──────────────────────────────────────────────────┘   │
-│  ┌─────────────┐  ┌────────────┐  ┌──────────────────┐  │
-│  │  REST Routes │  │  Socket.io │  │  Cron Scheduler  │  │
-│  │  (22 modules)│  │  Handlers  │  │  (Auction close) │  │
-│  └──────┬───────┘  └─────┬──────┘  └──────────────────┘  │
-│         └────────────────┘                               │
-└──────────────────────────┬──────────────────────────────┘
-                           │
-        ┌──────────────────┼──────────────────┐
-        │                  │                  │
-┌───────▼──────┐  ┌────────▼──────┐  ┌────────▼──────┐
-│   MongoDB     │  │  Cloudinary   │  │  External APIs │
-│  (Mongoose)   │  │  (Images)     │  │  Stripe / Gemini│
-│  17 Models    │  │               │  │  Vision / HF   │
-└───────────────┘  └───────────────┘  └────────────────┘
-```
+### DevOps and Deployment
 
----
+- Docker and Docker Compose
+- Vercel for the frontend deployment target
+- Render for the backend deployment target
 
-## 📁 Project Structure
-
-```
-swapaholic/
-├── backend/                     # Node.js + Express API
-│   ├── src/
-│   │   ├── index.js             # App entry, middleware, route mounting
-│   │   ├── config/              # MongoDB connection, env validation
-│   │   ├── controllers/         # Business logic (27 controllers)
-│   │   ├── models/              # Mongoose schemas (17 models)
-│   │   ├── routes/              # Route definitions (22 route files)
-│   │   ├── middleware/          # Auth, error handling, validation
-│   │   ├── services/            # External service integrations
-│   │   └── utils/               # Logger, notifications, auction scheduler
-│   ├── tests/                   # Jest test suites (214 tests)
-│   ├── Dockerfile
-│   └── package.json
-│
-├── swapaholic-frontend/         # Next.js 16 App Router frontend
-│   ├── src/
-│   │   ├── app/                 # Pages & layouts (29 routes)
-│   │   │   ├── page.tsx         # Landing page
-│   │   │   ├── admin/           # Admin dashboard
-│   │   │   ├── seller/          # Seller dashboard
-│   │   │   ├── buyer/           # Buyer dashboard
-│   │   │   ├── products/        # Product detail & listing
-│   │   │   ├── messages/        # Real-time chat
-│   │   │   ├── payment/         # Checkout flow
-│   │   │   └── ...              # 20+ more pages
-│   │   ├── components/          # Reusable UI components (40+ components)
-│   │   ├── features/            # Feature-specific components
-│   │   ├── store/               # Redux slices & store
-│   │   ├── hooks/               # Custom React hooks
-│   │   ├── api/                 # Axios API layer
-│   │   ├── types/               # TypeScript type definitions
-│   │   └── utils/               # Helper functions
-│   ├── Dockerfile
-│   └── package.json
-│
-├── docker-compose.yml           # Multi-service local dev setup
-└── README.md
-```
-
----
-
-## 🗄️ Database Models
-
-| Model | Description |
-|---|---|
-| `User` | Core user with roles, KYC, 2FA, addresses, wishlist, payment methods |
-| `Product` | Marketplace listing with auction fields, AI scores, geolocation |
-| `Bid` | Individual bid records linked to product and bidder |
-| `AutoBid` | Auto-bidding configuration per user per product |
-| `Order` | Order lifecycle from purchase to delivery |
-| `Payment` | Payment records across all gateways (Stripe, MFS) |
-| `Service` | Service listings with availability, certifications, geolocation |
-| `Conversation` | Messaging thread between two users |
-| `Message` | Individual messages within a conversation |
-| `Notification` | Platform notifications (bid won, order status, etc.) |
-| `Delivery` | Delivery assignments and tracking |
-| `Review` | Product and seller ratings |
-| `QCVerification` | Quality control inspection records |
-| `SupportTicket` | Customer support tickets |
-| `Report` | User/product abuse reports |
-| `BlockedUser` | User blocking relationships |
-| `Content` | Admin-managed platform content |
-
----
-
-## 📡 API Reference
-
-The backend exposes **60+ REST API endpoints** across 22 route modules:
-
-| Route Prefix | Module | Key Endpoints |
-|---|---|---|
-| `/api/auth` | Authentication | Register, Login, OTP, 2FA, Password Reset |
-| `/api/users` | Users | Profile, Avatar, Follow, Settings |
-| `/api/products` | Products | CRUD, Search, Filter, AI Description |
-| `/api/bids` | Bidding | Place Bid, Auto-Bid, Bid History |
-| `/api/orders` | Orders | Place Order, Track, Cancel |
-| `/api/payments` | Payments | Stripe, MFS, Webhook |
-| `/api/messages` | Messaging | Conversations, Send, Mark Read |
-| `/api/notifications` | Notifications | List, Mark Read, Preferences |
-| `/api/seller` | Seller | Dashboard, Analytics, Listings |
-| `/api/admin` | Admin | User Mgmt, Disputes, Analytics |
-| `/api/services` | Services | Browse, Book, Manage |
-| `/api/qc` | Quality Control | Review Queue, Approve/Reject |
-| `/api/logistics` | Logistics | Assignments, Tracking |
-| `/api/delivery` | Delivery | Agent Dashboard, Status Updates |
-| `/api/reviews` | Reviews | Submit, List, Rating Breakdown |
-| `/api/support` | Support | Tickets, Replies |
-| `/api/wishlist` | Wishlist | Add, Remove, List |
-| `/api/reports` | Reports | Submit, Admin Review |
-| `/api/shipping` | Shipping | Address Management |
-| `/api/products/price` | AI Prediction | Price Recommendation |
-| `/api/public` | Public | Unauthenticated endpoints |
-
-**Health Check:**
-```http
-GET /health
-```
-```json
-{
-  "status": "API is running",
-  "service": "swapaholic-backend",
-  "environment": "production",
-  "version": "1.0.0",
-  "uptimeSeconds": 3600,
-  "timestamp": "2026-05-06T12:00:00.000Z"
-}
-```
-
----
-
-## 👥 User Roles
-
-| Role | Description |
-|---|---|
-| `user` | Default role on registration |
-| `buyer` | Can browse, bid, and purchase products |
-| `seller` | Can list products and offer services |
-| `quality_controller` | Verifies product condition before listing |
-| `logistics_officer` | Manages shipments and logistics assignments |
-| `delivery_person` | Handles last-mile delivery |
-| `verifier` | Handles KYC and identity verification |
-| `admin` | Full platform access and management |
-
----
-
-## 🚦 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- **Node.js** v18+
-- **npm** v9+
-- **MongoDB** v6+ (local or Atlas)
-- **Git**
+- Node.js 18 or newer
+- npm
+- MongoDB local instance or MongoDB Atlas
 
-### 1. Clone the Repository
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/swapaholic.git
+git clone https://github.com/dearNoob/swapaholic.git
 cd swapaholic
 ```
 
-### 2. Set Up the Backend
+### 2. Start the backend
 
 ```bash
 cd backend
-
-# Install dependencies
 npm install
-
-# Copy environment variables
 cp .env.example .env
-# → Fill in your values (see Environment Variables section below)
-
-# Start the development server
 npm run dev
 ```
 
-The backend will start on **http://localhost:5000**
+Backend development server:
 
-### 3. Set Up the Frontend
+```text
+http://localhost:5000
+```
+
+### 3. Start the frontend
 
 ```bash
 cd ../swapaholic-frontend
-
-# Install dependencies
 npm install
-
-# Copy environment variables
 cp .env.example .env.local
-# → Set NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
-
-# Start the development server
 npm run dev
 ```
 
-The frontend will start on **http://localhost:3000**
+Frontend development server:
 
----
+```text
+http://localhost:3000
+```
 
-## 🔑 Environment Variables
+## Environment Variables
 
-### Backend (`backend/.env`)
+### Backend
+
+Source of truth:
+
+```text
+backend/.env.example
+```
+
+Important values include:
 
 ```env
-# Server
 NODE_ENV=development
 PORT=5000
 FRONTEND_URL=http://localhost:3000
 CORS_ALLOWED_ORIGINS=http://localhost:3000
-
-# Database
 MONGODB_URI=mongodb://localhost:27017/swapaholic_db
-
-# JWT
-JWT_SECRET=your-super-secret-32-char-key
-JWT_REFRESH_SECRET=your-refresh-secret-32-char-key
+JWT_SECRET=change-me-to-a-random-32-character-secret
+JWT_REFRESH_SECRET=change-me-to-a-different-random-32-character-secret
 JWT_EXPIRES_IN=7d
-
-# Stripe Payments
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_PUBLISHABLE_KEY=pk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-
-# Email (Nodemailer)
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-
-# File Storage
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+SMTP_USER=your-email@example.com
+SMTP_PASS=your-email-app-password
 FILE_STORAGE_PROVIDER=local
-# For production (Cloudinary):
-# FILE_STORAGE_PROVIDER=cloudinary
-# CLOUDINARY_CLOUD_NAME=...
-# CLOUDINARY_API_KEY=...
-# CLOUDINARY_API_SECRET=...
-
-# AI Services
-GEMINI_API_KEY=your-google-gemini-key
-GOOGLE_CLOUD_VISION_KEY=your-vision-api-key
-
-# Logging
 LOG_LEVEL=info
 ```
 
-### Frontend (`swapaholic-frontend/.env.local`)
+### Frontend
+
+Source of truth:
+
+```text
+swapaholic-frontend/.env.example
+```
+
+Typical local values:
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
@@ -458,160 +314,110 @@ NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
----
+## Local Docker Setup
 
-## 🐳 Running with Docker
-
-The easiest way to run the full stack locally is with Docker Compose:
+For a multi-service local environment, the repo includes a root-level `docker-compose.yml`.
 
 ```bash
-# From the root of the project
 docker-compose up --build
 ```
 
-This starts **4 services** automatically:
+The local stack includes:
 
-| Service | Port | Description |
-|---|---|---|
-| `frontend` | 3000 | Next.js frontend |
-| `backend` | 5000 | Express API + Socket.io |
-| `mongo` | 27017 | MongoDB database |
-| `redis` | 6379 | Redis (caching layer) |
+- `frontend` on port `3000`
+- `backend` on port `5000`
+- `mongo` on port `27017`
+- `redis` on port `6379`
 
-To stop:
+Redis is present in the local Compose stack, but this README does not treat it as a guaranteed production dependency or a fully documented active caching layer.
+
+To stop the stack:
+
 ```bash
 docker-compose down
 ```
 
-To reset the database volume:
-```bash
-docker-compose down -v
-```
+## Testing and Verification
 
----
+### Backend scripts
 
-## 🧪 Running Tests
+Verified in `backend/package.json`:
 
 ```bash
-cd backend
-
-# Run all tests
+npm start
+npm run dev
 npm test
-
-# Run tests with coverage report
-npm test -- --coverage
-
-# Run a specific test file
-npm test -- authController
+npm run smoke:dashboards
 ```
 
-**Test Results:**
+### Frontend scripts
+
+Verified in `swapaholic-frontend/package.json`:
+
+```bash
+npm run dev
+npm run build
+npm start
+npm run lint
 ```
-Test Suites: 11 passed, 11 total
-Tests:       214 passed, 214 total
-Pass Rate:   100% ✅
+
+### Notes
+
+- The backend test suite uses Jest, Supertest, and MongoMemoryServer.
+- The dashboard smoke script is a valuable operational verification path for multi-role workflows.
+- This README does not claim that the full automated suite is currently passing in every environment.
+
+### Health endpoint
+
+`GET /health`
+
+Example response shape from the backend:
+
+```json
+{
+  "status": "API is running",
+  "service": "swapaholic-backend",
+  "environment": "development",
+  "version": "1.0.0",
+  "storageProvider": "local",
+  "uptimeSeconds": 1234,
+  "timestamp": "2026-05-06T12:00:00.000Z"
+}
 ```
 
-Tests use **MongoDB Memory Server** for full isolation — no external DB needed.
+## Deployment Notes
 
----
+Production-oriented deployment guidance already exists in:
 
-## 🚀 Deployment
+- `docs/DEPLOYMENT.md`
+- `deployment/docker-compose.prod.yml`
 
-### Frontend → Vercel
+Current public deployment targets:
 
-1. Push the repository to GitHub
-2. Import the project on [Vercel](https://vercel.com)
-3. Set **Root Directory** to `swapaholic-frontend`
-4. Add environment variables in the Vercel dashboard
-5. Deploy
+- Frontend: Vercel
+- Backend: Render
 
-### Backend → Render
+If you deploy your own copy, make sure the frontend and backend environment variables reference each other correctly, especially:
 
-1. Create a new **Web Service** on [Render](https://render.com)
-2. Connect your GitHub repository
-3. Set **Root Directory** to `backend`
-4. Set **Build Command**: `npm install`
-5. Set **Start Command**: `npm start`
-6. Add all environment variables in the Render dashboard
-7. Deploy
+- `FRONTEND_URL`
+- `CORS_ALLOWED_ORIGINS`
+- `NEXT_PUBLIC_API_BASE_URL`
+- `NEXT_PUBLIC_SOCKET_URL`
 
-> **Tip:** Set `NODE_ENV=production` and configure `FRONTEND_URL` to your Vercel domain.
+## Screenshots
 
----
+TBD
 
-## 🛡️ Security Highlights
+Suggested future additions:
 
-- 🔒 **JWT + Refresh Tokens** — short-lived access tokens with secure rotation
-- 📱 **Two-Factor Authentication** — TOTP via authenticator apps (QR code)
-- 📧 **OTP Verification** — email-based OTP for login and password reset
-- 🚦 **Rate Limiting** — 30 auth attempts / 1000 API calls per 15 minutes
-- 🪖 **Helmet.js** — 15+ HTTP security headers configured
-- 🧹 **Input Sanitization** — all incoming data sanitized before processing
-- 🌐 **CORS Allowlist** — explicit origin validation with production enforcement
-- 🔑 **Password Hashing** — bcryptjs with salt rounds = 10
-- 📋 **Login History** — IP and device fingerprint tracking per user
+- Landing page
+- Product detail page
+- Seller dashboard
+- Admin dashboard
+- Logistics dashboard
 
----
+## Closing Note
 
-## 📱 Application Pages
+Swapaholic is best understood as a substantial capstone marketplace system with real operational depth already present in the codebase. It is suitable both as a portfolio project and as a foundation for continued product development.
 
-| Page | Route | Description |
-|---|---|---|
-| Landing | `/` | Hero, featured products, categories |
-| Browse | `/browse` | Full marketplace with filters |
-| Product Detail | `/products/[id]` | Listing, auction timer, bidding interface |
-| Search | `/search` | Full-text product search |
-| Seller Dashboard | `/seller` | My listings, analytics, earnings |
-| Buyer Dashboard | `/buyer` | Orders, bids, wishlist |
-| Messages | `/messages` | Real-time chat interface |
-| Notifications | `/notifications` | Notification center |
-| Admin | `/admin` | Platform management (admin only) |
-| Logistics | `/logistics` | Logistics officer dashboard |
-| Delivery | `/delivery` | Delivery agent dashboard |
-| My Bids | `/my-bids` | Active and past bids |
-| Orders | `/orders` | Order history and tracking |
-| Profile | `/profile` | User profile and settings |
-| Auth | `/auth`, `/login`, `/register` | Authentication flows |
-| Verification | `/verification` | KYC verification |
-| Wishlist | `/wishlist` | Saved products |
-| Disputes | `/disputes` | Raise and manage disputes |
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. **Fork** the repository
-2. Create a new branch: `git checkout -b feature/your-feature-name`
-3. Make your changes and write tests if applicable
-4. Commit your changes: `git commit -m "feat: add your feature"`
-5. Push to your fork: `git push origin feature/your-feature-name`
-6. Open a **Pull Request** against the `main` branch
-
-### Commit Convention
-
-| Prefix | Use case |
-|---|---|
-| `feat:` | New feature |
-| `fix:` | Bug fix |
-| `docs:` | Documentation update |
-| `refactor:` | Code refactoring |
-| `test:` | Adding or fixing tests |
-| `chore:` | Build, config, tooling |
-
----
-
-## 📄 License
-
-This project is developed as a **Capstone academic project**. All rights reserved.
-
----
-
-<div align="center">
-  <p>Built with ❤️ as a Capstone Project</p>
-  <p>
-    <strong>Swapaholic</strong> — Buy, Sell, Swap. Smarter.
-  </p>
-</div>
+No standalone open-source license file is currently included in this repository.
